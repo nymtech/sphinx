@@ -21,6 +21,7 @@ struct Host {
 }
 
 struct KeyMaterial {
+    alpha0: SharedSecret,
     shared_keys: Vec<SharedKey>,
 }
 
@@ -29,6 +30,7 @@ pub struct SphinxPacket {
     header: SphinxHeader,
     payload: Vec<u8>,
 }
+type SharedSecret = MontgomeryPoint;
 type SharedKey = MontgomeryPoint;
 
 // TODO: a utility function to turn this into properly concatenated bytes
@@ -87,7 +89,10 @@ fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
         let blinding_factor = compute_keyed_hmac(alpha.to_bytes(), shared_key.to_bytes());
         tmp = tmp * blinding_factor;
     }
-    KeyMaterial { shared_keys }
+    KeyMaterial {
+        shared_keys,
+        alpha0,
+    }
 }
 
 fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
