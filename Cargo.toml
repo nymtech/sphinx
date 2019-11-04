@@ -8,5 +8,6 @@ edition = "2018"
 
 [dependencies]
 curve25519-dalek = "1.2.3"
+hmac = "0.7.1"
 rand_os = "0.1"
 sha2 = "0.8.0"
