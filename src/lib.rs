@@ -1,5 +1,7 @@
+use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use rand_os;
+use sha2::{Digest, Sha256, Sha512};
 
 struct Address {}
 struct Delay {}
@@ -12,16 +14,19 @@ pub struct Hop {
 
 struct Host {
     address: Address,
-    pub_key: String,
+    pub_key: MontgomeryPoint,
 }
 
-pub struct SenderSecret {}
+struct KeyMaterial {
+    shared_keys: Vec<SharedKey>,
+}
+
 struct SphinxHeader {}
 pub struct SphinxPacket {
     header: SphinxHeader,
     payload: Vec<u8>,
 }
-struct SharedKey {}
+type SharedKey = MontgomeryPoint;
 
 // TODO: a utility function to turn this into properly concatenated bytes
 pub fn create_packet(message: Vec<u8>, route: Vec<Hop>) -> SphinxPacket {
@@ -45,29 +50,47 @@ fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
         Hop {
             host: Host {
                 address: Address {},
-                pub_key: String::from(""),
+                pub_key: MontgomeryPoint([0u8; 32]),
             },
             delay: Delay {},
         },
     );
 }
 
-// header: SphinxHeader, enc_payload: Vec<u8>
-
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
 fn create_header(route: Vec<Hop>) -> (SphinxHeader, Vec<SharedKey>) {
-    // let secret: SenderSecret = gen_sender_secret();
-
-    // derive shared keys, group elements, blinding factors
-    // computer filler strings
+    let key_material = derive_key_material(&route);
+    // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, vec![])
+}
+
+// derive shared keys, group elements, blinding factors
+fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
+    let secret = generate_secret();
+
+    // do group element 0
+    let alpha0 = curve25519_dalek::constants::X25519_BASEPOINT * secret;
+    // generate first shared key 0
+    let hop_key0 = route[0].host.pub_key;
+    let shared_key0 = hop_key0 * secret;
+    let mut hasher = Sha256::new();
+    hasher.input(alpha0.to_bytes());
+    hasher.input(shared_key0.to_bytes());
+    let blinding_factor0 = hasher.result();
+    KeyMaterial {
+        shared_keys: vec![shared_key0],
+    }
 }
 
 fn generate_secret() -> Scalar {
     let mut rng = rand_os::OsRng::new().unwrap();
     Scalar::random(&mut rng)
+}
+
+fn generate_curve_point() -> MontgomeryPoint {
+    curve25519_dalek::constants::X25519_BASEPOINT * generate_secret()
 }
 
 // We may be able to switch from Vec to array types as an optimization,
@@ -82,8 +105,33 @@ mod tests {
     use super::*;
 
     #[test]
-    fn gen_sender_secret_returns_a_scalar() {
+    fn generate_secret_returns_a_scalar() {
         let secret = generate_secret();
-        assert_eq!(secret.to_bytes().len(), 32);
+        assert_eq!(32, secret.to_bytes().len());
+    }
+
+    #[test]
+    fn generate_curve_point_multiplies_the_seed() {
+        let secret = generate_curve_point();
+        assert_eq!(32, secret.to_bytes().len())
+    }
+    #[test]
+    fn derive_key_material_shared_keys_count_equals_hops_count() {
+        let key1 = generate_curve_point();
+        let key2 = generate_curve_point();
+        let key3 = generate_curve_point();
+        let route = vec![new_hop(key1), new_hop(key2), new_hop(key3)];
+        let key_material = derive_key_material(&route);
+        assert_eq!(1, key_material.shared_keys.len());
+    }
+
+    fn new_hop(pub_key: MontgomeryPoint) -> Hop {
+        Hop {
+            host: Host {
+                address: Address {},
+                pub_key,
+            },
+            delay: Delay {},
+        }
     }
 }
