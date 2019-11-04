@@ -65,7 +65,7 @@ fn create_header(route: Vec<Hop>) -> (SphinxHeader, Vec<SharedKey>) {
     (SphinxHeader {}, vec![])
 }
 
-fn gen_sender_secret() -> Scalar {
+fn generate_secret() -> Scalar {
     let mut rng = rand_os::OsRng::new().unwrap();
     Scalar::random(&mut rng)
 }
@@ -83,7 +83,7 @@ mod tests {
 
     #[test]
     fn gen_sender_secret_returns_a_scalar() {
-        let secret = gen_sender_secret();
-        assert!(secret.to_bytes().len() == 32);
+        let secret = generate_secret();
+        assert_eq!(secret.to_bytes().len() == 32);
     }
 }
