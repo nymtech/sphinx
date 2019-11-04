@@ -72,45 +72,30 @@ fn create_header(route: Vec<Hop>) -> (SphinxHeader, Vec<SharedKey>) {
 // derive shared keys, group elements, blinding factors
 fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
     let secret = generate_secret();
+    let mut shared_keys: Vec<SharedKey> = vec![];
 
-    // do group element 0
     let alpha0 = curve25519_dalek::constants::X25519_BASEPOINT * secret;
-    // generate first shared key 0
-    let hop_key0 = route[0].host.pub_key;
-    let shared_key0 = hop_key0 * secret;
+    let mut tmp = secret;
 
-    let mut mac =
-        HmacSha256::new_varkey(&alpha0.to_bytes()).expect("HMAC can take key of any size");
-    mac.input(&shared_key0.to_bytes());
-    let mut output = [0u8; 32];
-    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
-    let blinding_factor0 = Scalar::from_bytes_mod_order(output);
+    for hop in route.iter() {
+        // compute the shared key
+        let shared_key = hop.host.pub_key * tmp;
+        shared_keys.push(shared_key);
 
-    let tmp1 = secret * blinding_factor0;
-    let alpha1 = curve25519_dalek::constants::X25519_BASEPOINT * tmp1;
-    let shared_key1 = route[1].host.pub_key * tmp1;
-
-    let mut mac =
-        HmacSha256::new_varkey(&alpha1.to_bytes()).expect("HMAC can take key of any size");
-    mac.input(&shared_key1.to_bytes());
-    let mut output = [0u8; 32];
-    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
-    let blinding_factor1 = Scalar::from_bytes_mod_order(output);
-
-    let tmp2 = secret * blinding_factor0 * blinding_factor1;
-    let alpha2 = curve25519_dalek::constants::X25519_BASEPOINT * tmp2;
-    let shared_key2 = route[2].host.pub_key * tmp2;
-
-    let mut mac =
-        HmacSha256::new_varkey(&alpha2.to_bytes()).expect("HMAC can take key of any size");
-    mac.input(&shared_key2.to_bytes());
-    let mut output = [0u8; 32];
-    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
-    let blinding_factor2 = Scalar::from_bytes_mod_order(output);
-
-    KeyMaterial {
-        shared_keys: vec![shared_key0, shared_key1, shared_key2],
+        // prepare to blind the group elements
+        let alpha = curve25519_dalek::constants::X25519_BASEPOINT * tmp;
+        let blinding_factor = compute_keyed_hmac(alpha.to_bytes(), shared_key.to_bytes());
+        tmp = tmp * blinding_factor;
     }
+    KeyMaterial { shared_keys }
+}
+
+fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
+    let mut mac = HmacSha256::new_varkey(&alpha).expect("HMAC can take key of any size");
+    mac.input(&data);
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
+    Scalar::from_bytes_mod_order(output)
 }
 
 fn generate_secret() -> Scalar {
