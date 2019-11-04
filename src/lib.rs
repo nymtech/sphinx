@@ -84,6 +84,6 @@ mod tests {
     #[test]
     fn gen_sender_secret_returns_a_scalar() {
         let secret = generate_secret();
-        assert_eq!(secret.to_bytes().len() == 32);
+        assert_eq!(secret.to_bytes().len(), 32);
     }
 }
