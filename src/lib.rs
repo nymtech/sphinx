@@ -21,7 +21,7 @@ struct Host {
 }
 
 struct KeyMaterial {
-    alpha0: SharedSecret,
+    initial_shared_secret: SharedSecret,
     shared_keys: Vec<SharedKey>,
 }
 
@@ -76,7 +76,7 @@ fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
     let secret = generate_secret();
     let mut shared_keys: Vec<SharedKey> = vec![];
 
-    let alpha0 = curve25519_dalek::constants::X25519_BASEPOINT * secret;
+    let initial_shared_secret = curve25519_dalek::constants::X25519_BASEPOINT * secret;
     let mut tmp = secret;
 
     for hop in route.iter() {
@@ -84,14 +84,14 @@ fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
         let shared_key = hop.host.pub_key * tmp;
         shared_keys.push(shared_key);
 
-        // prepare to blind the group elements
-        let alpha = curve25519_dalek::constants::X25519_BASEPOINT * tmp;
-        let blinding_factor = compute_keyed_hmac(alpha.to_bytes(), shared_key.to_bytes());
+        // blind the group element
+        let shared_secret = curve25519_dalek::constants::X25519_BASEPOINT * tmp;
+        let blinding_factor = compute_keyed_hmac(shared_secret.to_bytes(), shared_key.to_bytes());
         tmp = tmp * blinding_factor;
     }
     KeyMaterial {
         shared_keys,
-        alpha0,
+        initial_shared_secret,
     }
 }
 
