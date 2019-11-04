@@ -78,7 +78,17 @@ fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
     let mut hasher = Sha256::new();
     hasher.input(alpha0.to_bytes());
     hasher.input(shared_key0.to_bytes());
-    let blinding_factor0 = hasher.result();
+    let blinding_factor0 = Scalar::from(hasher.result());
+
+    let tmp1 = secret * blinding_factor0;
+    let alpha1 = curve25519_dalek::constants::X25519_BASEPOINT * tmp1;
+    let shared_key1 = route[1].host.pub_key * tmp1;
+
+    let mut hasher1 = Sha256::new();
+    hasher1.input(alpha1.to_bytes());
+    hasher1.input(shared_key1.to_bytes());
+    let blinding_factor1 = Scalar::from(hasher1.result());
+
     KeyMaterial {
         shared_keys: vec![shared_key0],
     }
