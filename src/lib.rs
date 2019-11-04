@@ -1,7 +1,10 @@
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
+use hmac::{Hmac, Mac};
 use rand_os;
-use sha2::{Digest, Sha256, Sha512};
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
 
 struct Address {}
 struct Delay {}
@@ -75,22 +78,38 @@ fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
     // generate first shared key 0
     let hop_key0 = route[0].host.pub_key;
     let shared_key0 = hop_key0 * secret;
-    let mut hasher = Sha256::new();
-    hasher.input(alpha0.to_bytes());
-    hasher.input(shared_key0.to_bytes());
-    let blinding_factor0 = Scalar::from(hasher.result());
+
+    let mut mac =
+        HmacSha256::new_varkey(&alpha0.to_bytes()).expect("HMAC can take key of any size");
+    mac.input(&shared_key0.to_bytes());
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
+    let blinding_factor0 = Scalar::from_bytes_mod_order(output);
 
     let tmp1 = secret * blinding_factor0;
     let alpha1 = curve25519_dalek::constants::X25519_BASEPOINT * tmp1;
     let shared_key1 = route[1].host.pub_key * tmp1;
 
-    let mut hasher1 = Sha256::new();
-    hasher1.input(alpha1.to_bytes());
-    hasher1.input(shared_key1.to_bytes());
-    let blinding_factor1 = Scalar::from(hasher1.result());
+    let mut mac =
+        HmacSha256::new_varkey(&alpha1.to_bytes()).expect("HMAC can take key of any size");
+    mac.input(&shared_key1.to_bytes());
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
+    let blinding_factor1 = Scalar::from_bytes_mod_order(output);
+
+    let tmp2 = secret * blinding_factor0 * blinding_factor1;
+    let alpha2 = curve25519_dalek::constants::X25519_BASEPOINT * tmp2;
+    let shared_key2 = route[2].host.pub_key * tmp2;
+
+    let mut mac =
+        HmacSha256::new_varkey(&alpha2.to_bytes()).expect("HMAC can take key of any size");
+    mac.input(&shared_key2.to_bytes());
+    let mut output = [0u8; 32];
+    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
+    let blinding_factor2 = Scalar::from_bytes_mod_order(output);
 
     KeyMaterial {
-        shared_keys: vec![shared_key0],
+        shared_keys: vec![shared_key0, shared_key1, shared_key2],
     }
 }
 
@@ -132,7 +151,7 @@ mod tests {
         let key3 = generate_curve_point();
         let route = vec![new_hop(key1), new_hop(key2), new_hop(key3)];
         let key_material = derive_key_material(&route);
-        assert_eq!(1, key_material.shared_keys.len());
+        assert_eq!(route.len(), key_material.shared_keys.len());
     }
 
     fn new_hop(pub_key: MontgomeryPoint) -> Hop {
