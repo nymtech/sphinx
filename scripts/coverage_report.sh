@@ -1,27 +1,12 @@
 #!/bin/bash
 
-# Check that the test directory and report path arguments are provided
-if [ $# -lt 2 ] || ! [ -d "$1" ]
-then
-        echo "Usage: $0 <testdir> <outdir> [--batch]"
-        echo "All tests in <testdir> and its subdirectories will be run to measure coverage."
-        echo "The resulting coverage report will be stored in <outdir>."
-        echo "--batch will skip all prompts."
-        exit 1
-fi
 
-# User prompts will be skipped if '--batch' is given as the third argument
-SKIP_PROMPTS=0
-if [ $# -eq 3 ] && [ "$3" == "--batch" ]
-then
-        SKIP_PROMPTS=1
-fi
 
 # Set the directory containing the tests to run (includes subdirectories)
-TEST_DIR=$1
+TEST_DIR=.
 
 # Set the directory to which the report will be saved
-COVERAGE_DIR=$2
+COVERAGE_DIR=coverage
 
 # This needs to run in sphinx
 SPHINX_DIR="$(cd "$( dirname "${BASH_SOURCE[0]}" )" && cd .. && pwd)"
@@ -36,41 +21,31 @@ set -e
 # Check that grcov is installed
 if ! [ -x "$(command -v grcov)" ]; then
         echo "Error: grcov is not installed." >&2
-        if [ $SKIP_PROMPTS -eq 0 ]
+
+        read -p "Install grcov? [yY/*] " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]
         then
-                read -p "Install grcov? [yY/*] " -n 1 -r
-                echo ""
-                if [[ ! $REPLY =~ ^[Yy]$ ]]
-                then
-                        [[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1
-                fi
-                cargo install grcov
-        else
-                exit 1
+                [[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1
         fi
+        cargo install grcov
+
 fi
 
 # Check that lcov is installed
 if ! [ -x "$(command -v lcov)" ]; then
         echo "Error: lcov is not installed." >&2
         echo "Documentation for lcov can be found at http://ltp.sourceforge.net/coverage/lcov.php"
+        echo "If on Linux and using apt, run 'sudo apt install lcov'"
         echo "If on macOS and using homebrew, run 'brew install lcov'"
         exit 1
 fi
 
 # Warn that cargo clean will happen
-if [ $SKIP_PROMPTS -eq 0 ]
-then
-        read -p "Generate coverage report? This will run cargo clean. [yY/*] " -n 1 -r
-        echo ""
-        if [[ ! $REPLY =~ ^[Yy]$ ]]
-        then
-                [[ "$0" = "$BASH_SOURCE" ]] && exit 1 || return 1
-        fi
-fi
+
 
 # Set the flags necessary for coverage output
-export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Coverflow-checks=off -Zno-landing-pads -Cpasses=insert-gcov-profiling"
+export RUSTFLAGS="-Zprofile -Ccodegen-units=1 -Cinline-threshold=0 -Zno-landing-pads -Coverflow-checks=off -Clink-dead-code"
 export CARGO_INCREMENTAL=0
 
 # Clean the project
