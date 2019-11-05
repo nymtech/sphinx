@@ -1,4 +1,4 @@
-use crate::constants::AVERAGE_DELAY;
+use crate::constants::{AVERAGE_DELAY, SECURITY_PARAMETER};
 use crate::crypto::{generate_secret, CURVE_GENERATOR};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
@@ -26,6 +26,7 @@ struct KeyMaterial {
 }
 
 pub struct SphinxHeader {}
+struct FillerString {}
 
 pub type SharedSecret = MontgomeryPoint;
 pub type SharedKey = MontgomeryPoint;
@@ -35,17 +36,41 @@ pub type SharedKey = MontgomeryPoint;
 pub fn create_header(route: &[Host]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
-    let delays = generate_delays(route.len());
+    let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
+
     // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, vec![])
+}
+
+fn create_zero_bytes(length: usize) -> Vec<u8> {
+    vec![0; length]
+}
+
+// TODO: remember about the destination
+fn generate_filler_string(shared_keys: Vec<SharedKey>) -> Vec<u8> {
+    let mut filler_string: Vec<u8> = vec![];
+    for x in 0..(shared_keys.len()) {
+        let zero_bytes = create_zero_bytes(SECURITY_PARAMETER * 2);
+    }
+
+    // start with empty filler string
+    // then have the for loop:
+    // iterate through all hops:
+    // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
+    // then xor the result with output of PRNG seeded with shared key of the iteration
+    // take some bits as specified in the paper...
+    // this gives new filler string.
+    // repeat the loop
+
+    vec![]
 }
 
 fn generate_delays(number: usize) -> Vec<f64> {
     let exp = Exp::new(1.0 / AVERAGE_DELAY).unwrap();
 
     let mut delays: Vec<f64> = vec![];
-    for x in 0..(number - 1) {
+    for x in 0..number {
         delays.push(exp.sample(&mut rand::thread_rng()))
     }
 
@@ -102,7 +127,7 @@ mod tests {
     fn generate_delays_returns_correct_number_of_delays() {
         let delays = generate_delays(3);
 
-        assert_eq!(delays.len(), 2);
+        assert_eq!(delays.len(), 3);
     }
 
     #[test]
