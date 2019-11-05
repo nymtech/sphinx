@@ -13,7 +13,25 @@ pub struct Address {}
 
 pub struct Delay {}
 
-pub struct Destination {}
+pub enum RouteElement {
+    FinalHop(Destination),
+    ForwardHop(Host),
+}
+
+impl RouteElement {
+    fn get_pub_key(&self) -> MontgomeryPoint {
+        use RouteElement::*;
+
+        match self {
+            FinalHop(destination) => destination.pub_key,
+            ForwardHop(host) => host.pub_key,
+        }
+    }
+}
+
+pub struct Destination {
+    pub pub_key: MontgomeryPoint,
+}
 
 pub struct Host {
     pub address: Address,
@@ -33,7 +51,7 @@ pub type SharedKey = MontgomeryPoint;
 
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
-pub fn create_header(route: &[Host]) -> (SphinxHeader, Vec<SharedKey>) {
+pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
@@ -85,13 +103,13 @@ fn compute_blinding_factor(shared_key: MontgomeryPoint, exponent: &Scalar) -> Sc
 }
 
 // derive shared keys, group elements, blinding factors
-fn derive_key_material(route: &[Host], initial_secret: Scalar) -> KeyMaterial {
+fn derive_key_material(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
     let initial_shared_secret = CURVE_GENERATOR * initial_secret;
 
     let shared_keys = route
         .iter()
-        .scan(initial_secret, |accumulator, host| {
-            let shared_key = compute_shared_key(host.pub_key, &accumulator);
+        .scan(initial_secret, |accumulator, hop| {
+            let shared_key = compute_shared_key(hop.get_pub_key(), &accumulator);
 
             // TODO: don't compute those 2 lines for last iteration
             let blinding_factor = compute_blinding_factor(shared_key, &accumulator);
@@ -171,7 +189,7 @@ mod tests {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
-        let route = vec![new_host(key1), new_host(key2), new_host(key3)];
+        let route = vec![new_hop_host(key1), new_hop_host(key2), new_hop_host(key3)];
 
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -183,7 +201,7 @@ mod tests {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
-        let route = vec![new_host(key1), new_host(key2), new_host(key3)];
+        let route = vec![new_hop_host(key1), new_hop_host(key2), new_hop_host(key3)];
 
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -197,7 +215,7 @@ mod tests {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
-        let route = vec![new_host(key1), new_host(key2), new_host(key3)];
+        let route = vec![new_hop_host(key1), new_hop_host(key2), new_hop_host(key3)];
 
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -218,10 +236,10 @@ mod tests {
         assert_eq!(expected_shared_key1, key_material.shared_keys[1]);
     }
 
-    fn new_host(pub_key: MontgomeryPoint) -> Host {
-        Host {
+    fn new_hop_host(pub_key: MontgomeryPoint) -> RouteElement {
+        RouteElement::ForwardHop(Host {
             address: Address {},
             pub_key,
-        }
+        })
     }
 }
