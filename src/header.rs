@@ -108,12 +108,17 @@ fn derive_key_material(route: &[RouteElement], initial_secret: Scalar) -> KeyMat
 
     let shared_keys = route
         .iter()
-        .scan(initial_secret, |accumulator, hop| {
-            let shared_key = compute_shared_key(hop.get_pub_key(), &accumulator);
+        .scan(initial_secret, |accumulator, route_element| {
+            let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
 
-            // TODO: don't compute those 2 lines for last iteration
-            let blinding_factor = compute_blinding_factor(shared_key, &accumulator);
-            *accumulator = *accumulator * blinding_factor;
+            // last element in the route should be the destination and hence don't compute blinding factor
+            // or increment the iterator
+            match route_element {
+                RouteElement::ForwardHop(host) => {
+                    *accumulator = *accumulator * compute_blinding_factor(shared_key, &accumulator)
+                }
+                RouteElement::FinalHop(_) => (),
+            }
 
             Some(shared_key)
         })
