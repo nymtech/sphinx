@@ -1,4 +1,4 @@
-use crate::{generate_secret, CURVE_GENERATOR};
+use crate::crypto::{generate_secret, CURVE_GENERATOR};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
@@ -84,7 +84,7 @@ fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::generate_random_curve_point;
+    use crate::crypto::generate_random_curve_point;
 
     #[test]
     fn generate_secret_returns_a_scalar() {
