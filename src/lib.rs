@@ -33,6 +33,8 @@ pub struct SphinxPacket {
 type SharedSecret = MontgomeryPoint;
 type SharedKey = MontgomeryPoint;
 
+const CURVE_GENERATOR: MontgomeryPoint = curve25519_dalek::constants::X25519_BASEPOINT;
+
 // TODO: a utility function to turn this into properly concatenated bytes
 pub fn create_packet(message: Vec<u8>, route: Vec<Hop>) -> SphinxPacket {
     let (header, shared_keys) = create_header(route);
@@ -65,30 +67,38 @@ fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
 fn create_header(route: Vec<Hop>) -> (SphinxHeader, Vec<SharedKey>) {
-    let key_material = derive_key_material(&route);
+    let initial_secret = generate_secret();
+    let key_material = derive_key_material(&route, initial_secret);
     // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, vec![])
 }
 
+fn compute_shared_key(node_pub_key: MontgomeryPoint, accumulator: &Scalar) -> SharedKey {
+    node_pub_key * accumulator
+}
+
+fn compute_blinding_factor(accumulator: &Scalar, shared_key: MontgomeryPoint) -> Scalar {
+    let shared_secret = CURVE_GENERATOR * accumulator;
+    let blinding_factor = compute_keyed_hmac(shared_secret.to_bytes(), shared_key.to_bytes());
+    blinding_factor
+}
+
 // derive shared keys, group elements, blinding factors
-fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
-    let secret = generate_secret(); // this is going to be hard to test. Can it be isolated from the rest of this method?
+fn derive_key_material(route: &Vec<Hop>, initial_secret: Scalar) -> KeyMaterial {
     let mut shared_keys: Vec<SharedKey> = vec![];
 
-    let initial_shared_secret = curve25519_dalek::constants::X25519_BASEPOINT * secret;
-    let mut tmp = secret;
+    let initial_shared_secret = CURVE_GENERATOR * initial_secret;
+    let mut accumulator = initial_secret;
 
     for hop in route.iter() {
-        // compute the shared key
-        let shared_key = hop.host.pub_key * tmp;
+        let shared_key = compute_shared_key(hop.host.pub_key, &accumulator);
         shared_keys.push(shared_key);
 
-        // blind the group element
-        let shared_secret = curve25519_dalek::constants::X25519_BASEPOINT * tmp;
-        let blinding_factor = compute_keyed_hmac(shared_secret.to_bytes(), shared_key.to_bytes());
-        tmp = tmp * blinding_factor;
+        let blinding_factor = compute_blinding_factor(&accumulator, shared_key);
+        accumulator = accumulator * blinding_factor;
     }
+
     KeyMaterial {
         shared_keys,
         initial_shared_secret,
@@ -109,7 +119,7 @@ fn generate_secret() -> Scalar {
 }
 
 fn generate_curve_point() -> MontgomeryPoint {
-    curve25519_dalek::constants::X25519_BASEPOINT * generate_secret()
+    CURVE_GENERATOR * generate_secret()
 }
 
 // We may be able to switch from Vec to array types as an optimization,
@@ -140,8 +150,10 @@ mod tests {
         let key2 = generate_curve_point();
         let key3 = generate_curve_point();
         let route = vec![new_hop(key1), new_hop(key2), new_hop(key3)];
-        let key_material = derive_key_material(&route);
-        assert_eq!(route.len(), key_material.shared_keys.len());
+
+        let initial_secret = generate_secret();
+        let key_material = derive_key_material(&route, initial_secret);
+        assert_eq!(2, key_material.shared_keys.len());
     }
 
     fn new_hop(pub_key: MontgomeryPoint) -> Hop {
