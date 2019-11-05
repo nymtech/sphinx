@@ -89,18 +89,20 @@ fn compute_blinding_factor(shared_key: MontgomeryPoint, exponent: &Scalar) -> Sc
 
 // derive shared keys, group elements, blinding factors
 fn derive_key_material(route: &Vec<Hop>, initial_secret: Scalar) -> KeyMaterial {
-    let mut shared_keys: Vec<SharedKey> = vec![];
-
     let initial_shared_secret = CURVE_GENERATOR * initial_secret;
-    let mut accumulator = initial_secret;
 
-    for hop in route.iter() {
-        let shared_key = compute_shared_key(hop.host.pub_key, &accumulator);
-        shared_keys.push(shared_key);
+    let shared_keys = route
+        .iter()
+        .scan(initial_secret, |accumulator, hop| {
+            let shared_key = compute_shared_key(hop.host.pub_key, &accumulator);
 
-        let blinding_factor = compute_blinding_factor(shared_key, &accumulator);
-        accumulator = accumulator * blinding_factor;
-    }
+            // TODO: don't compute those 2 lines for last iteration
+            let blinding_factor = compute_blinding_factor(shared_key, &accumulator);
+            *accumulator = *accumulator * blinding_factor;
+
+            Some(shared_key)
+        })
+        .collect();
 
     KeyMaterial {
         shared_keys,
