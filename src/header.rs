@@ -114,7 +114,7 @@ fn derive_key_material(route: &[RouteElement], initial_secret: Scalar) -> KeyMat
             // last element in the route should be the destination and hence don't compute blinding factor
             // or increment the iterator
             match route_element {
-                RouteElement::ForwardHop(host) => {
+                RouteElement::ForwardHop(_) => {
                     *accumulator = *accumulator * compute_blinding_factor(shared_key, &accumulator)
                 }
                 RouteElement::FinalHop(_) => (),
