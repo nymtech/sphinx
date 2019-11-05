@@ -1,0 +1,2 @@
+// SHOULD NEVER BE ZERO!!
+pub const AVERAGE_DELAY: f64 = 10.0;

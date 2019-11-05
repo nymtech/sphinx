@@ -1,6 +1,7 @@
 use crate::header::{create_header, Address, Delay, Host, SphinxHeader};
 use crate::payload::create_enc_payload;
 
+mod constants;
 mod crypto;
 mod header;
 mod payload;

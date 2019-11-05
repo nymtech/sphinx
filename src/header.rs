@@ -1,9 +1,11 @@
+use crate::constants::AVERAGE_DELAY;
+use crate::crypto::{generate_secret, CURVE_GENERATOR};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
+use rand;
+use rand_distr::{Distribution, Exp};
 use sha2::Sha256;
-
-use crate::crypto::{generate_secret, CURVE_GENERATOR};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -33,14 +35,21 @@ pub type SharedKey = MontgomeryPoint;
 pub fn create_header(route: &[Host]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
-    let delays = generate_delays(&route);
+    let delays = generate_delays(route.len());
     // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, vec![])
 }
 
-fn generate_delays(route: &[Host]) -> Vec<u64> {
-    vec![]
+fn generate_delays(number: usize) -> Vec<f64> {
+    let exp = Exp::new(1.0 / AVERAGE_DELAY).unwrap();
+
+    let mut delays: Vec<f64> = vec![];
+    for x in 0..(number - 1) {
+        delays.push(exp.sample(&mut rand::thread_rng()))
+    }
+
+    delays
 }
 
 fn compute_shared_key(node_pub_key: MontgomeryPoint, exponent: &Scalar) -> SharedKey {
@@ -88,6 +97,13 @@ mod tests {
     use crate::crypto::generate_random_curve_point;
 
     use super::*;
+
+    #[test]
+    fn generate_delays_returns_correct_number_of_delays() {
+        let delays = generate_delays(3);
+
+        assert_eq!(delays.len(), 2);
+    }
 
     #[test]
     fn generate_secret_returns_a_scalar() {
