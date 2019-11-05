@@ -114,13 +114,14 @@ mod tests {
 
     #[test]
     fn compute_blinding_factor_returns_correct_hmac() {
+        let exponent = Scalar::from_bytes_mod_order([42u8; 32]);
+        let shared_key = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
+
+        // given the above exponent and shared key, we should see:
         let expected_blinding_factor = Scalar::from_bytes_mod_order([
             65, 236, 88, 7, 186, 168, 172, 170, 90, 46, 49, 164, 225, 73, 145, 77, 181, 151, 37,
             178, 37, 181, 248, 165, 180, 75, 103, 133, 191, 146, 10, 8,
         ]);
-
-        let exponent = Scalar::from_bytes_mod_order([42u8; 32]);
-        let shared_key = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
 
         let blinding_factor = compute_blinding_factor(shared_key, &exponent);
         assert_eq!(expected_blinding_factor, blinding_factor)
@@ -153,7 +154,7 @@ mod tests {
     }
 
     #[test]
-    fn derive_key_material_returns_uses_correct_accumulator() {
+    fn derive_key_material_generates_correct_shared_key() {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
