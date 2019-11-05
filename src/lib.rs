@@ -1,4 +1,4 @@
-use crate::header::{create_header, Address, Delay, Hop, Host, SphinxHeader};
+use crate::header::{create_header, Address, Delay, Host, SphinxHeader};
 use crate::payload::create_enc_payload;
 
 mod crypto;
@@ -11,19 +11,23 @@ pub struct SphinxPacket {
 }
 
 // TODO: a utility function to turn this into properly concatenated bytes
-pub fn create_packet(message: Vec<u8>, route: Vec<Hop>) -> SphinxPacket {
+pub fn create_packet(message: Vec<u8>, route: &[Host]) -> SphinxPacket {
     let (header, shared_keys) = create_header(route);
     let enc_payload = create_enc_payload(message, shared_keys);
-    let packet = SphinxPacket {
+    SphinxPacket {
         header,
         payload: enc_payload,
-    };
-    packet
+    }
+}
+
+pub struct Hop {
+    pub host: Host,
+    pub delay: Delay,
 }
 
 // needs the processor's secret key somehow, figure out where this will come from
 // the return value could also be a message, handle this
-fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
+pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
     (
         SphinxPacket {
             header: SphinxHeader {},

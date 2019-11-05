@@ -1,8 +1,10 @@
-use crate::crypto::{generate_secret, CURVE_GENERATOR};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
+
+use crate::crypto::{generate_secret, CURVE_GENERATOR};
+
 type HmacSha256 = Hmac<Sha256>;
 
 pub struct Address {}
@@ -10,11 +12,6 @@ pub struct Address {}
 pub struct Delay {}
 
 pub struct Destination {}
-
-pub struct Hop {
-    pub host: Host,
-    pub delay: Delay,
-}
 
 pub struct Host {
     pub address: Address,
@@ -28,17 +25,22 @@ struct KeyMaterial {
 
 pub struct SphinxHeader {}
 
-type SharedSecret = MontgomeryPoint;
-type SharedKey = MontgomeryPoint;
+pub type SharedSecret = MontgomeryPoint;
+pub type SharedKey = MontgomeryPoint;
 
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
-pub fn create_header(route: Vec<Hop>) -> (SphinxHeader, Vec<SharedKey>) {
+pub fn create_header(route: &[Host]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
-    let key_material = derive_key_material(&route, initial_secret);
+    let key_material = derive_key_material(route, initial_secret);
+    let delays = generate_delays(&route);
     // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, vec![])
+}
+
+fn generate_delays(route: &[Host]) -> Vec<u64> {
+    vec![]
 }
 
 fn compute_shared_key(node_pub_key: MontgomeryPoint, exponent: &Scalar) -> SharedKey {
@@ -51,13 +53,13 @@ fn compute_blinding_factor(shared_key: MontgomeryPoint, exponent: &Scalar) -> Sc
 }
 
 // derive shared keys, group elements, blinding factors
-fn derive_key_material(route: &Vec<Hop>, initial_secret: Scalar) -> KeyMaterial {
+fn derive_key_material(route: &[Host], initial_secret: Scalar) -> KeyMaterial {
     let initial_shared_secret = CURVE_GENERATOR * initial_secret;
 
     let shared_keys = route
         .iter()
-        .scan(initial_secret, |accumulator, hop| {
-            let shared_key = compute_shared_key(hop.host.pub_key, &accumulator);
+        .scan(initial_secret, |accumulator, host| {
+            let shared_key = compute_shared_key(host.pub_key, &accumulator);
 
             // TODO: don't compute those 2 lines for last iteration
             let blinding_factor = compute_blinding_factor(shared_key, &accumulator);
@@ -83,8 +85,9 @@ fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::crypto::generate_random_curve_point;
+
+    use super::*;
 
     #[test]
     fn generate_secret_returns_a_scalar() {
@@ -128,7 +131,7 @@ mod tests {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
-        let route = vec![new_hop(key1), new_hop(key2), new_hop(key3)];
+        let route = vec![new_host(key1), new_host(key2), new_host(key3)];
 
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -140,7 +143,7 @@ mod tests {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
-        let route = vec![new_hop(key1), new_hop(key2), new_hop(key3)];
+        let route = vec![new_host(key1), new_host(key2), new_host(key3)];
 
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -154,7 +157,7 @@ mod tests {
         let key1 = generate_random_curve_point();
         let key2 = generate_random_curve_point();
         let key3 = generate_random_curve_point();
-        let route = vec![new_hop(key1), new_hop(key2), new_hop(key3)];
+        let route = vec![new_host(key1), new_host(key2), new_host(key3)];
 
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -175,13 +178,10 @@ mod tests {
         assert_eq!(expected_shared_key1, key_material.shared_keys[1]);
     }
 
-    fn new_hop(pub_key: MontgomeryPoint) -> Hop {
-        Hop {
-            host: Host {
-                address: Address {},
-                pub_key,
-            },
-            delay: Delay {},
+    fn new_host(pub_key: MontgomeryPoint) -> Host {
+        Host {
+            address: Address {},
+            pub_key,
         }
     }
 }
