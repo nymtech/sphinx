@@ -73,7 +73,7 @@ fn create_header(route: Vec<Hop>) -> (SphinxHeader, Vec<SharedKey>) {
 
 // derive shared keys, group elements, blinding factors
 fn derive_key_material(route: &Vec<Hop>) -> KeyMaterial {
-    let secret = generate_secret();
+    let secret = generate_secret(); // this is going to be hard to test. Can it be isolated from the rest of this method?
     let mut shared_keys: Vec<SharedKey> = vec![];
 
     let initial_shared_secret = curve25519_dalek::constants::X25519_BASEPOINT * secret;
