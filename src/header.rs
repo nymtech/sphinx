@@ -69,12 +69,10 @@ fn generate_filler_string(shared_keys: Vec<SharedKey>) -> Vec<u8> {
 fn generate_delays(number: usize) -> Vec<f64> {
     let exp = Exp::new(1.0 / AVERAGE_DELAY).unwrap();
 
-    let mut delays: Vec<f64> = vec![];
-    for x in 0..number {
-        delays.push(exp.sample(&mut rand::thread_rng()))
-    }
-
-    delays
+    std::iter::repeat(())
+        .take(number)
+        .map(|_| exp.sample(&mut rand::thread_rng()))
+        .collect()
 }
 
 fn compute_shared_key(node_pub_key: MontgomeryPoint, exponent: &Scalar) -> SharedKey {
