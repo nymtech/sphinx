@@ -1,6 +1,6 @@
 use crate::constants::{
     AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
-    STREAM_CIPHER_KEY_SIZE,
+    STREAM_CIPHER_INIT_VECTOR_SIZE, STREAM_CIPHER_KEY_SIZE,
 };
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
@@ -109,30 +109,49 @@ fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
     RoutingKeys { stream_cipher_key }
 }
 
-// TODO: remember about the destination
-fn generate_filler_string(shared_keys: Vec<SharedKey>) -> Vec<u8> {
+fn generate_filler_string(routing_keys: Vec<RoutingKeys>) -> Vec<u8> {
+    // let filler_string = shared_keys.iter().fold(
+    //     vec![],
+    //     |mut filler_string_accumulator: &[u8], shared_key| {
+    //         let zero_bytes = create_zero_bytes(SECURITY_PARAMETER * 2);
+
+    //         // we concatenate our zero bytes to the current filler
+    //         filler_string_accumulator.into_iter().extend(&zero_bytes);
+
+    //         // generate a random string as an output of a PRNG
+    //         // TODO: which we will implement using stream cipher AES_CTR with shared_key being key and a nonce as data
+
+    //         // we xor it with current filler
+    //         // we return the last 2 * k * x elements of the accumulator
+
+    //         filler_string_accumulator[.. 2 * SECURITY_PARAMETER]
+    //     },
+    // );
+
+    //    _ = generate_pseudorandom_bytes();
     let mut filler_string: Vec<u8> = vec![];
-    for x in 0..(shared_keys.len()) {
+    let init_vector = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    for i in 1..(routing_keys.len() + 1) {
         // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
-        let zero_bytes = create_zero_bytes(SECURITY_PARAMETER * 2);
+        let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
         filler_string.extend(&zero_bytes);
 
-        // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
-        // key for AES_CTR will be shared_keys[x]
-        // we also put into AES a nonce as data. this nonce can be for example a sequence of zeros (or some other fixed string)
-        // after computing the output vector of AES_CTR we take the last 2*k*x elements of the returned vector
+        let pseudorandom_bytes = generate_pseudorandom_bytes(
+            &routing_keys[i - 1].stream_cipher_key,
+            &init_vector,
+            (2 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER,
+        );
+
+        println!("Filler! {:?}", filler_string);
+        filler_string = xor(
+            &filler_string,
+            // after computing the output vector of AES_CTR we take the last 2*k*x elements of the returned vector
+            &pseudorandom_bytes[(2 * (MAX_PATH_LENGTH - i) + 3) * SECURITY_PARAMETER
+                ..(2 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER],
+        )
     }
 
-    // start with empty filler string
-    // then have the for loop:
-    // iterate through all hops:
-    // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
-    // then xor the result with output of PRNG seeded with shared key of the iteration
-    // take some bits as specified in the paper...
-    // this gives new filler string.
-    // repeat the loop
-
-    vec![]
+    filler_string
 }
 
 fn generate_delays(number: usize) -> Vec<f64> {
@@ -200,21 +219,21 @@ speculate! {
             it "returns an empty delays vector" {
                 let delays = generate_delays(0);
                 assert_eq!(0, delays.len());
-    }
+            }
         }
 
         context "for 1 delay" {
             it "returns 1 delay" {
                 let delays = generate_delays(1);
                 assert_eq!(1, delays.len());
-    }
+            }
         }
 
         context "for 3 delays" {
             it "returns 3 delays" {
                 let delays = generate_delays(3);
                 assert_eq!(3, delays.len());
-    }
+            }
         }
     }
 
@@ -226,8 +245,8 @@ speculate! {
             let expected_shared_key = g * x;
             let shared_key = compute_shared_key(g, &x);
 
-        assert_eq!(expected_shared_key, shared_key);
-    }
+            assert_eq!(expected_shared_key, shared_key);
+        }
     }
 
     describe "computing blinding factor" {
@@ -247,8 +266,8 @@ speculate! {
         ]);
 
             let blinding_factor = compute_blinding_factor(y, &x);
-        assert_eq!(expected_blinding_factor, blinding_factor)
-    }
+            assert_eq!(expected_blinding_factor, blinding_factor)
+        }
     }
 
     // I've included so many contexts as we might change behaviour based on RouteElement being
@@ -300,7 +319,7 @@ speculate! {
             it "returns correctly generated initial shared secret g^x,
                 where g is the curve generator and x is initial secret" {
                 assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
-    }
+            }
 
             it "generates correct routing keys" {
                 // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
@@ -325,8 +344,8 @@ speculate! {
                     new_route_forward_hop(generate_random_curve_point()),
                     new_route_final_hop(generate_random_curve_point())
                 ];
-        let initial_secret = generate_secret();
-        let key_material = derive_key_material(&route, initial_secret);
+                let initial_secret = generate_secret();
+                let key_material = derive_key_material(&route, initial_secret);
             }
 
             it "returns number of routing keys equal to length of entire route" {
@@ -336,7 +355,7 @@ speculate! {
             it "returns correctly generated initial shared secret g^x,
                 where g is the curve generator and x is initial secret" {
                 assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
-    }
+            }
 
             it "generates correct routing keys" {
                 // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
@@ -363,8 +382,8 @@ speculate! {
                     new_route_forward_hop(generate_random_curve_point()),
                     new_route_final_hop(generate_random_curve_point())
                 ];
-        let initial_secret = generate_secret();
-        let key_material = derive_key_material(&route, initial_secret);
+                let initial_secret = generate_secret();
+                let key_material = derive_key_material(&route, initial_secret);
             }
 
             it "returns number of routing keys equal to length of entire route" {
@@ -377,11 +396,11 @@ speculate! {
             }
 
             it "generates correct routing keys" {
-                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
-                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
-                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
-                // on each run through the loop.
-        let mut expected_accumulator = initial_secret;
+            // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
+            // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
+            // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
+            // on each run through the loop.
+            let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
                     let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
@@ -414,10 +433,10 @@ speculate! {
             }
 
             it "generates correct routing keys" {
-        // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
-        // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
-        // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
-        // on each run through the loop.
+                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
+                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
+                // on each run through the loop.
                 let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
@@ -428,7 +447,7 @@ speculate! {
                     assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
-    }
+        }
     }
 
     describe "xor" {
@@ -494,6 +513,53 @@ speculate! {
             let routing_keys1 = key_derivation_function(shared_key);
             let routing_keys2 = key_derivation_function(shared_key);
             assert_eq!(routing_keys1, routing_keys2);
+        }
+    }
+
+    describe "creating filler string" {
+        context "for no keys" {
+            it "generates empty filler string" {
+                let routing_keys: Vec<RoutingKeys> = vec![];
+                let filler_string = generate_filler_string(routing_keys);
+
+                assert_eq!(0, filler_string.len());
+            }
+        }
+
+        context "for one key" {
+            it "generates filler string of length 1 * 2 * SECURITY_PARAMETER" {
+                let shared_keys: Vec<SharedKey> = vec![generate_random_curve_point()];
+                let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
+                let filler_string = generate_filler_string(routing_keys);
+
+                assert_eq!(2 * SECURITY_PARAMETER, filler_string.len());
+            }
+        }
+
+        context "for three keys" {
+            it "generates filler string of length 3 * 2 * SECURITY_PARAMETER" {
+                let shared_keys: Vec<SharedKey> = vec![
+                    generate_random_curve_point(),
+                    generate_random_curve_point(),
+                    generate_random_curve_point()
+                ];
+                let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
+                let filler_string = generate_filler_string(routing_keys);
+
+                assert_eq!(3 * 2 * SECURITY_PARAMETER, filler_string.len());
+            }
+        }
+
+        context "more keys than the maximum path length" {
+            #[should_panic]
+            it "panics" {
+                let shared_keys: Vec<SharedKey> = std::iter::repeat(())
+                    .take(MAX_PATH_LENGTH + 1)
+                    .map(|_| generate_random_curve_point())
+                    .collect();
+                let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
+                let filler_string = generate_filler_string(routing_keys);
+            }
         }
     }
 }
