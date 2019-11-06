@@ -45,7 +45,7 @@ pub struct Host {
 
 struct KeyMaterial {
     initial_shared_secret: SharedSecret,
-    shared_keys: Vec<SharedKey>,
+    routing_keys: Vec<RoutingKeys>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -157,7 +157,7 @@ fn compute_blinding_factor(shared_key: MontgomeryPoint, exponent: &Scalar) -> Sc
 fn derive_key_material(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
     let initial_shared_secret = CURVE_GENERATOR * initial_secret;
 
-    let shared_keys = route
+    let routing_keys = route
         .iter()
         .scan(initial_secret, |accumulator, route_element| {
             let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
@@ -173,10 +173,11 @@ fn derive_key_material(route: &[RouteElement], initial_secret: Scalar) -> KeyMat
 
             Some(shared_key)
         })
+        .map(|key| key_derivation_function(key))
         .collect();
 
     KeyMaterial {
-        shared_keys,
+        routing_keys,
         initial_shared_secret,
     }
 }
@@ -273,8 +274,8 @@ speculate! {
                 let key_material = derive_key_material(&empty_route, initial_secret);
             }
 
-            it "returns no shared keys" {
-                assert_eq!(0, key_material.shared_keys.len())
+            it "returns no routing keys" {
+                assert_eq!(0, key_material.routing_keys.len())
             }
 
             it "returns correctly generated initial shared secret g^x,
@@ -293,7 +294,7 @@ speculate! {
             }
 
             it "returns number of shared keys equal to length of entire route" {
-                assert_eq!(route.len(), key_material.shared_keys.len())
+                assert_eq!(route.len(), key_material.routing_keys.len())
             }
 
             it "returns correctly generated initial shared secret g^x,
@@ -301,7 +302,7 @@ speculate! {
                 assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
     }
 
-            it "generates correct shared keys" {
+            it "generates correct routing keys" {
                 // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
                 // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
                 // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
@@ -311,8 +312,9 @@ speculate! {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
                     let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
                     expected_accumulator = expected_accumulator * expected_blinder;
+                    let expected_routing_keys = key_derivation_function(expected_shared_key);
 
-                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                    assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
         }
@@ -327,8 +329,8 @@ speculate! {
         let key_material = derive_key_material(&route, initial_secret);
             }
 
-            it "returns number of shared keys equal to length of entire route" {
-                assert_eq!(route.len(), key_material.shared_keys.len())
+            it "returns number of routing keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.routing_keys.len())
             }
 
             it "returns correctly generated initial shared secret g^x,
@@ -336,7 +338,7 @@ speculate! {
                 assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
     }
 
-            it "generates correct shared keys" {
+            it "generates correct routing keys" {
                 // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
                 // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
                 // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
@@ -346,8 +348,9 @@ speculate! {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
                     let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
                     expected_accumulator = expected_accumulator * expected_blinder;
+                    let expected_routing_keys = key_derivation_function(expected_shared_key);
 
-                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                    assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
         }
@@ -364,8 +367,8 @@ speculate! {
         let key_material = derive_key_material(&route, initial_secret);
             }
 
-            it "returns number of shared keys equal to length of entire route" {
-                assert_eq!(route.len(), key_material.shared_keys.len())
+            it "returns number of routing keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.routing_keys.len())
             }
 
             it "returns correctly generated initial shared secret g^x,
@@ -373,7 +376,7 @@ speculate! {
                 assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
             }
 
-            it "generates correct shared keys" {
+            it "generates correct routing keys" {
                 // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
                 // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
                 // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
@@ -383,8 +386,9 @@ speculate! {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
                     let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
                     expected_accumulator = expected_accumulator * expected_blinder;
+                    let expected_routing_keys = key_derivation_function(expected_shared_key);
 
-                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                    assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
         }
@@ -400,8 +404,8 @@ speculate! {
                 let key_material = derive_key_material(&route, initial_secret);
             }
 
-            it "returns number of shared keys equal to length of entire route" {
-                assert_eq!(route.len(), key_material.shared_keys.len())
+            it "returns number of routing keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.routing_keys.len())
             }
 
             it "returns correctly generated initial shared secret g^x,
@@ -409,7 +413,7 @@ speculate! {
                 assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
             }
 
-            it "generates correct shared keys" {
+            it "generates correct routing keys" {
         // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
         // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
         // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
@@ -419,8 +423,9 @@ speculate! {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
                     let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
                     expected_accumulator = expected_accumulator * expected_blinder;
+                    let expected_routing_keys = key_derivation_function(expected_shared_key);
 
-                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                    assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
     }
