@@ -1,5 +1,7 @@
-use crate::constants::{AVERAGE_DELAY, SECURITY_PARAMETER};
+use crate::constants::{AVERAGE_DELAY, MAX_PATH_LENGTH, SECURITY_PARAMETER};
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
+use aes_ctr::stream_cipher::generic_array::GenericArray;
+use aes_ctr::Aes128Ctr;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
@@ -73,7 +75,14 @@ fn create_zero_bytes(length: usize) -> Vec<u8> {
 fn generate_filler_string(shared_keys: Vec<SharedKey>) -> Vec<u8> {
     let mut filler_string: Vec<u8> = vec![];
     for x in 0..(shared_keys.len()) {
+        // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
         let zero_bytes = create_zero_bytes(SECURITY_PARAMETER * 2);
+        filler_string.extend(&zero_bytes);
+
+        // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
+        // key for AES_CTR will be shared_keys[x]
+        // we also put into AES a nonce as data. this nonce can be for example a sequence of zeros (or some other fixed string)
+        // after computing the output vector of AES_CTR we take the last 2*k*x elements of the returned vector
     }
 
     // start with empty filler string
