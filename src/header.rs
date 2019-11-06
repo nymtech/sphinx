@@ -59,6 +59,12 @@ pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     (SphinxHeader {}, vec![])
 }
 
+fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
+    assert_eq!(a.len(), b.len());
+
+    a.iter().zip(b.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
+}
+
 fn create_zero_bytes(length: usize) -> Vec<u8> {
     vec![0; length]
 }
@@ -371,5 +377,37 @@ speculate! {
                 }
             }
     }
+    }
+
+    describe "xor" {
+        context "for empty inputs" {
+            it "returns an empty vector" {
+                let a: Vec<u8> = vec![];
+                let b: Vec<u8> = vec![];
+                let c = xor(&a, &b);
+                assert_eq!(0, c.len());
+            }
+        }
+
+        context "for non-zero inputs of same length" {
+            it "returns the expected xor of the vectors" {
+                let a: Vec<u8> = vec![1, 2, 3];
+                let b: Vec<u8> = vec![4, 5, 6];
+                let c = xor(&a, &b);
+                assert_eq!(a.len(), c.len());
+                for i in 0..c.len() {
+                    assert_eq!(c[i], a[i] ^ b[i])
+                }
+            }
+        }
+
+        context "for inputs of different lengths" {
+            #[should_panic]
+            it "panics" {
+                let a: Vec<u8> = vec![1, 2, 3];
+                let b: Vec<u8> = vec![4, 5];
+                let c = xor(&a, &b);
+            }
+        }
     }
 }
