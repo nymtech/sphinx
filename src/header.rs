@@ -71,6 +71,22 @@ fn create_zero_bytes(length: usize) -> Vec<u8> {
     vec![0; length]
 }
 
+fn generate_pseudorandom_bytes(
+    key: &[u8; STREAM_CIPHER_KEY_SIZE],
+    iv: &[u8; STREAM_CIPHER_KEY_SIZE],
+    length: usize,
+) -> Vec<u8> {
+    let cipher_key = GenericArray::from_slice(&key[..]);
+    let cipher_nonce = GenericArray::from_slice(&iv[..]);
+
+    // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
+    let mut cipher = Aes128Ctr::new(cipher_key, cipher_nonce);
+    let mut data = vec![0u8; length];
+
+    cipher.apply_keystream(&mut data);
+
+    data
+}
 // TODO: remember about the destination
 fn generate_filler_string(shared_keys: Vec<SharedKey>) -> Vec<u8> {
     let mut filler_string: Vec<u8> = vec![];
@@ -427,6 +443,16 @@ speculate! {
             for i in 0..zeroes.len() {
                 assert_eq!(0, zeroes[i]);
             }
+        }
+    }
+
+    describe "generating pseudorandom bytes" {
+        it "generates outputs of expected length" {
+            let key: [u8; STREAM_CIPHER_KEY_SIZE] = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
+            let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+
+            let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
+            assert_eq!(10000, rand_bytes.len());
         }
     }
 }
