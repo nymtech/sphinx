@@ -1,4 +1,4 @@
-use crate::header::{create_header, Address, Delay, Host, RouteElement, SphinxHeader};
+use crate::header::{create_header, Address, Host, RouteElement, SphinxHeader};
 use crate::payload::create_enc_payload;
 
 mod constants;
@@ -24,7 +24,7 @@ pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
 // TODO: rethink
 pub struct Hop {
     pub host: RouteElement,
-    pub delay: Delay,
+    pub delay: f64,
 }
 
 // needs the processor's secret key somehow, figure out where this will come from
@@ -40,7 +40,7 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
                 address: Address {},
                 pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
             }),
-            delay: Delay {},
+            delay: 0.0,
         },
     )
 }

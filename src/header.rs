@@ -11,8 +11,6 @@ type HmacSha256 = Hmac<Sha256>;
 
 pub struct Address {}
 
-pub struct Delay {}
-
 pub enum RouteElement {
     FinalHop(Destination),
     ForwardHop(Host),
