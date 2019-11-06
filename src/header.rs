@@ -537,7 +537,7 @@ speculate! {
         }
 
         context "for three keys" {
-            it "generates filler string of length 3 * 2 * SECURITY_PARAMETER" {
+            before {
                 let shared_keys: Vec<SharedKey> = vec![
                     generate_random_curve_point(),
                     generate_random_curve_point(),
@@ -545,8 +545,15 @@ speculate! {
                 ];
                 let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
                 let filler_string = generate_filler_string(routing_keys);
+            }
+            it "generates filler string of length 3 * 2 * SECURITY_PARAMETER" {
+               assert_eq!(3 * 2 * SECURITY_PARAMETER, filler_string.len());
+            }
 
-                assert_eq!(3 * 2 * SECURITY_PARAMETER, filler_string.len());
+            it "filler string is non-zero because it was XOR'd with PRNG output" {
+                for i in 0..filler_string.len() {
+                    assert_ne!(0, filler_string[i])
+                }
             }
         }
 
