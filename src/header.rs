@@ -1,9 +1,14 @@
-use crate::constants::{AVERAGE_DELAY, MAX_PATH_LENGTH, SECURITY_PARAMETER};
+use crate::constants::{
+    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
+    STREAM_CIPHER_KEY_SIZE,
+};
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
+use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes128Ctr;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
+use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use rand;
 use rand_distr::{Distribution, Exp};
@@ -43,8 +48,12 @@ struct KeyMaterial {
     shared_keys: Vec<SharedKey>,
 }
 
+#[derive(Debug, PartialEq)]
+pub struct RoutingKeys {
+    stream_cipher_key: [u8; STREAM_CIPHER_KEY_SIZE],
+}
+
 pub struct SphinxHeader {}
-struct FillerString {}
 
 pub type SharedSecret = MontgomeryPoint;
 pub type SharedKey = MontgomeryPoint;
@@ -87,6 +96,19 @@ fn generate_pseudorandom_bytes(
 
     data
 }
+
+fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
+    let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
+
+    let mut output = [0u8; ROUTING_KEYS_LENGTH];
+    hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
+
+    let mut stream_cipher_key: [u8; STREAM_CIPHER_KEY_SIZE] = Default::default();
+    stream_cipher_key.copy_from_slice(&output[..STREAM_CIPHER_KEY_SIZE]);
+
+    RoutingKeys { stream_cipher_key }
+}
+
 // TODO: remember about the destination
 fn generate_filler_string(shared_keys: Vec<SharedKey>) -> Vec<u8> {
     let mut filler_string: Vec<u8> = vec![];
@@ -453,6 +475,20 @@ speculate! {
 
             let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
             assert_eq!(10000, rand_bytes.len());
+        }
+    }
+
+    describe "key derivation function" {
+        it "expands the seed key to expected length" {
+            let shared_key = generate_random_curve_point();
+            let routing_keys = key_derivation_function(shared_key);
+            assert_eq!(STREAM_CIPHER_KEY_SIZE, routing_keys.stream_cipher_key.len());
+        }
+        it "returns the same output for two equal inputs" {
+            let shared_key = generate_random_curve_point();
+            let routing_keys1 = key_derivation_function(shared_key);
+            let routing_keys2 = key_derivation_function(shared_key);
+            assert_eq!(routing_keys1, routing_keys2);
         }
     }
 }

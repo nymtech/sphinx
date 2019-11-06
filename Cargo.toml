@@ -14,6 +14,7 @@ rand = "0.7.2"
 rand_distr = "0.2.2"
 sha2 = "0.8.0"
 aes-ctr = "0.3.0"
+hkdf = "0.8.0"
 
 [dev-dependencies]
 speculate = "0.1.2"
