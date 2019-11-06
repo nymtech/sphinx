@@ -1,5 +1,5 @@
 use crate::constants::{AVERAGE_DELAY, SECURITY_PARAMETER};
-use crate::crypto::{generate_secret, CURVE_GENERATOR};
+use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
@@ -137,45 +137,54 @@ fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
 }
 
 #[cfg(test)]
-mod tests {
-    use crate::crypto::generate_random_curve_point;
+use speculate::speculate;
 
-    use super::*;
+#[cfg(test)]
+speculate! {
+    describe "generating delays" {
+        context "for 0 delays" {
+            it "returns an empty delays vector" {
+                let delays = generate_delays(0);
+                assert_eq!(0, delays.len());
+    }
+        }
 
-    #[test]
-    fn generate_delays_returns_correct_number_of_delays() {
-        let delays = generate_delays(3);
+        context "for 1 delay" {
+            it "returns 1 delay" {
+                let delays = generate_delays(1);
+                assert_eq!(1, delays.len());
+    }
+        }
 
-        assert_eq!(delays.len(), 3);
+        context "for 3 delays" {
+            it "returns 3 delays" {
+                let delays = generate_delays(3);
+                assert_eq!(3, delays.len());
+    }
+        }
     }
 
-    #[test]
-    fn generate_secret_returns_a_scalar() {
-        let secret = generate_secret();
-        assert_eq!(32, secret.to_bytes().len());
-    }
+    describe "computing shared key" {
+        it "returns g^x for predefined g and x, where g is a point on the curve and x is an exponent" {
+            let x = Scalar::from_bytes_mod_order([42u8; 32]);
+            let g = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
 
-    #[test]
-    fn generate_curve_point_multiplies_the_seed() {
-        let secret = generate_random_curve_point();
-        assert_eq!(32, secret.to_bytes().len())
-    }
-
-    #[test]
-    fn compute_shared_key_returns_correct_shared_key() {
-        let exponent = Scalar::from_bytes_mod_order([42u8; 32]);
-        let sample_pub_key = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
-
-        let expected_shared_key = sample_pub_key * exponent;
-        let shared_key = compute_shared_key(sample_pub_key, &exponent);
+            let expected_shared_key = g * x;
+            let shared_key = compute_shared_key(g, &x);
 
         assert_eq!(expected_shared_key, shared_key);
     }
+    }
 
-    #[test]
-    fn compute_blinding_factor_returns_correct_hmac() {
-        let exponent = Scalar::from_bytes_mod_order([42u8; 32]);
-        let shared_key = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
+    describe "computing blinding factor" {
+        it "returns expected H(g^x, y) for predefined x and y, where
+            H is an HMAC function,
+            g is the curve generator
+            x is a scalar
+            y is a shared key (g^z), where z is a scalar"
+        {
+            let x = Scalar::from_bytes_mod_order([42u8; 32]);
+            let y = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
 
         // given the above exponent and shared key, we should see:
         let expected_blinding_factor = Scalar::from_bytes_mod_order([
@@ -183,66 +192,184 @@ mod tests {
             178, 37, 181, 248, 165, 180, 75, 103, 133, 191, 146, 10, 8,
         ]);
 
-        let blinding_factor = compute_blinding_factor(shared_key, &exponent);
+            let blinding_factor = compute_blinding_factor(y, &x);
         assert_eq!(expected_blinding_factor, blinding_factor)
     }
-
-    #[test]
-    fn derive_key_material_shared_keys_count_equals_hops_count() {
-        let key1 = generate_random_curve_point();
-        let key2 = generate_random_curve_point();
-        let key3 = generate_random_curve_point();
-        let route = vec![new_hop_host(key1), new_hop_host(key2), new_hop_host(key3)];
-
-        let initial_secret = generate_secret();
-        let key_material = derive_key_material(&route, initial_secret);
-        assert_eq!(route.len(), key_material.shared_keys.len());
     }
 
-    #[test]
-    fn derive_key_material_returns_correct_initial_shared_secret() {
-        let key1 = generate_random_curve_point();
-        let key2 = generate_random_curve_point();
-        let key3 = generate_random_curve_point();
-        let route = vec![new_hop_host(key1), new_hop_host(key2), new_hop_host(key3)];
+    // I've included so many contexts as we might change behaviour based on RouteElement being
+    // ForwardHop or FinalHop. We want the tests to break in that case.
+    describe "deriving key material" {
+        fn new_route_forward_hop(pub_key: MontgomeryPoint) -> RouteElement {
+            RouteElement::ForwardHop(Host {
+                address: Address {},
+                pub_key,
+            })
+        }
 
+        fn new_route_final_hop(pub_key: MontgomeryPoint) -> RouteElement {
+            RouteElement::FinalHop(Destination {
+                pub_key,
+            })
+        }
+
+        context "with an empty route" {
+            before {
+                let empty_route: Vec<RouteElement> = vec![];
+                let initial_secret = generate_secret();
+                let key_material = derive_key_material(&empty_route, initial_secret);
+            }
+
+            it "returns no shared keys" {
+                assert_eq!(0, key_material.shared_keys.len())
+            }
+
+            it "returns correctly generated initial shared secret g^x,
+                where g is the curve generator and x is initial secret" {
+                assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
+            }
+        }
+
+        context "with a route with no forward hops and a destination" {
+            before {
+                let route: Vec<RouteElement> = vec![
+                    new_route_final_hop(generate_random_curve_point())
+                ];
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
+            }
 
-        let expected_initial_secret = CURVE_GENERATOR * initial_secret;
-        assert_eq!(expected_initial_secret, key_material.initial_shared_secret);
+            it "returns number of shared keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.shared_keys.len())
+            }
+
+            it "returns correctly generated initial shared secret g^x,
+                where g is the curve generator and x is initial secret" {
+                assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
     }
 
-    #[test]
-    fn derive_key_material_generates_correct_shared_key() {
-        let key1 = generate_random_curve_point();
-        let key2 = generate_random_curve_point();
-        let key3 = generate_random_curve_point();
-        let route = vec![new_hop_host(key1), new_hop_host(key2), new_hop_host(key3)];
+            it "generates correct shared keys" {
+                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
+                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
+                // on each run through the loop.
+                let mut expected_accumulator = initial_secret;
+                for i in 0..route.len() {
+                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    expected_accumulator = expected_accumulator * expected_blinder;
 
+                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                }
+            }
+        }
+
+        context "with a route with 1 forward hop and a destination" {
+            before {
+                let route: Vec<RouteElement> = vec![
+                    new_route_forward_hop(generate_random_curve_point()),
+                    new_route_final_hop(generate_random_curve_point())
+                ];
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
+            }
 
-        // this is unwrapping first iteration of the for loop in derive_key_material function
+            it "returns number of shared keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.shared_keys.len())
+            }
+
+            it "returns correctly generated initial shared secret g^x,
+                where g is the curve generator and x is initial secret" {
+                assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
+    }
+
+            it "generates correct shared keys" {
+                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
+                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
+                // on each run through the loop.
+                let mut expected_accumulator = initial_secret;
+                for i in 0..route.len() {
+                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    expected_accumulator = expected_accumulator * expected_blinder;
+
+                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                }
+            }
+        }
+
+        context "with a route with 3 forward hops and a destination" {
+            before {
+                let route: Vec<RouteElement> = vec![
+                    new_route_forward_hop(generate_random_curve_point()),
+                    new_route_forward_hop(generate_random_curve_point()),
+                    new_route_forward_hop(generate_random_curve_point()),
+                    new_route_final_hop(generate_random_curve_point())
+                ];
+        let initial_secret = generate_secret();
+        let key_material = derive_key_material(&route, initial_secret);
+            }
+
+            it "returns number of shared keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.shared_keys.len())
+            }
+
+            it "returns correctly generated initial shared secret g^x,
+                where g is the curve generator and x is initial secret" {
+                assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
+            }
+
+            it "generates correct shared keys" {
+                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
+                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
+                // on each run through the loop.
         let mut expected_accumulator = initial_secret;
-        let s1 = compute_shared_key(key1, &expected_accumulator);
-        let b1 = compute_blinding_factor(s1, &expected_accumulator);
-        expected_accumulator = expected_accumulator * b1;
-        // we could loop further, but if it works once it should work more times
+                for i in 0..route.len() {
+                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    expected_accumulator = expected_accumulator * expected_blinder;
 
-        let expected_shared_key1 = compute_shared_key(key2, &expected_accumulator);
+                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                }
+            }
+        }
 
+        context "with a route with 3 forward hops and no destination" {
+            before {
+                let route: Vec<RouteElement> = vec![
+                    new_route_forward_hop(generate_random_curve_point()),
+                    new_route_forward_hop(generate_random_curve_point()),
+                    new_route_forward_hop(generate_random_curve_point())
+                ];
+                let initial_secret = generate_secret();
+                let key_material = derive_key_material(&route, initial_secret);
+            }
+
+            it "returns number of shared keys equal to length of entire route" {
+                assert_eq!(route.len(), key_material.shared_keys.len())
+            }
+
+            it "returns correctly generated initial shared secret g^x,
+                where g is the curve generator and x is initial secret" {
+                assert_eq!(CURVE_GENERATOR * initial_secret, key_material.initial_shared_secret)
+            }
+
+            it "generates correct shared keys" {
         // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
         // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
         // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
         // on each run through the loop.
-        assert_eq!(expected_shared_key1, key_material.shared_keys[1]);
-    }
+                let mut expected_accumulator = initial_secret;
+                for i in 0..route.len() {
+                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    expected_accumulator = expected_accumulator * expected_blinder;
 
-    fn new_hop_host(pub_key: MontgomeryPoint) -> RouteElement {
-        RouteElement::ForwardHop(Host {
-            address: Address {},
-            pub_key,
-        })
+                    assert_eq!(expected_shared_key, key_material.shared_keys[i])
+                }
+            }
+    }
     }
 }

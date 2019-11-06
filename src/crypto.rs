@@ -12,3 +12,23 @@ pub fn generate_secret() -> Scalar {
 pub fn generate_random_curve_point() -> MontgomeryPoint {
     CURVE_GENERATOR * generate_secret()
 }
+
+#[cfg(test)]
+use speculate::speculate;
+
+#[cfg(test)]
+speculate! {
+    describe "secret generation" {
+        it "returns a 32 byte scalar" {
+            let secret = generate_secret();
+            assert_eq!(32, secret.to_bytes().len());
+        }
+    }
+
+    describe "generating a random curve point" {
+        it "returns a 32 byte Montgomery point" {
+            let secret = generate_random_curve_point();
+            assert_eq!(32, secret.to_bytes().len())
+        }
+    }
+}
