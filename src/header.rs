@@ -1,6 +1,6 @@
 use crate::constants::{
     AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
-    STREAM_CIPHER_INIT_VECTOR_SIZE, STREAM_CIPHER_KEY_SIZE,
+    STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
@@ -64,12 +64,13 @@ pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
-
+    let filler_string = generate_filler_string(key_material.routing_keys);
     // compute filler strings
     // encapsulate routing information, compute MACs
-    (SphinxHeader {}, vec![])
+    (SphinxHeader {}, Vec::new())
 }
 
+// xor produces new Vector with the result
 fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
     assert_eq!(a.len(), b.len());
 
@@ -120,48 +121,35 @@ fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
 }
 
 fn generate_filler_string(routing_keys: Vec<RoutingKeys>) -> Vec<u8> {
-    // let filler_string = shared_keys.iter().fold(
-    //     vec![],
-    //     |mut filler_string_accumulator: &[u8], shared_key| {
-    //         let zero_bytes = create_zero_bytes(SECURITY_PARAMETER * 2);
+    routing_keys
+        .iter()
+        .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
+        .map(|cipher_key| {
+            generate_pseudorandom_bytes(
+                &cipher_key,
+                &STREAM_CIPHER_INIT_VECTOR,
+                STREAM_CIPHER_OUTPUT_LENGTH,
+            )
+        }) // the actual cipher key is only used to generate the pseudorandom bytes
+        .enumerate() // we need to know index of each element to take correct slice of the PRNG output
+        .fold(
+            Vec::new(),
+            |mut filler_string_accumulator, (i, pseudorandom_bytes)| {
+                // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
+                let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
+                filler_string_accumulator.extend(&zero_bytes);
 
-    //         // we concatenate our zero bytes to the current filler
-    //         filler_string_accumulator.into_iter().extend(&zero_bytes);
+                // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
+                // and xor it with the current filler string
+                xor_with(
+                    &mut filler_string_accumulator,
+                    &pseudorandom_bytes
+                        [(2 * (MAX_PATH_LENGTH - (i + 1)) + 3) * SECURITY_PARAMETER..],
+                );
 
-    //         // generate a random string as an output of a PRNG
-    //         // TODO: which we will implement using stream cipher AES_CTR with shared_key being key and a nonce as data
-
-    //         // we xor it with current filler
-    //         // we return the last 2 * k * x elements of the accumulator
-
-    //         filler_string_accumulator[.. 2 * SECURITY_PARAMETER]
-    //     },
-    // );
-
-    //    _ = generate_pseudorandom_bytes();
-    let mut filler_string: Vec<u8> = vec![];
-    let init_vector = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
-    for i in 1..(routing_keys.len() + 1) {
-        // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
-        let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
-        filler_string.extend(&zero_bytes);
-
-        let pseudorandom_bytes = generate_pseudorandom_bytes(
-            &routing_keys[i - 1].stream_cipher_key,
-            &init_vector,
-            (2 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER,
-        );
-
-        println!("Filler! {:?}", filler_string);
-        filler_string = xor(
-            &filler_string,
-            // after computing the output vector of AES_CTR we take the last 2*k*x elements of the returned vector
-            &pseudorandom_bytes[(2 * (MAX_PATH_LENGTH - i) + 3) * SECURITY_PARAMETER
-                ..(2 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER],
+                filler_string_accumulator
+            },
         )
-    }
-
-    filler_string
 }
 
 fn generate_delays(number: usize) -> Vec<f64> {
@@ -202,7 +190,7 @@ fn derive_key_material(route: &[RouteElement], initial_secret: Scalar) -> KeyMat
 
             Some(shared_key)
         })
-        .map(|key| key_derivation_function(key))
+        .map(key_derivation_function)
         .collect();
 
     KeyMaterial {
