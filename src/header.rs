@@ -451,10 +451,11 @@ speculate! {
             }
 
             it "generates correct routing keys" {
-                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
-                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
-                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
-                // on each run through the loop.
+                // The accumulator is the key to our blinding factors working.
+                // If the accumulator value isn't incremented correctly, we risk passing an
+                // incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented
+                // properly on each run through the loop.
                 let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
