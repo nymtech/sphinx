@@ -2,6 +2,7 @@ use crate::constants::{
     AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
     STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE, STREAM_CIPHER_OUTPUT_LENGTH,
 };
+use crate::crypto;
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
@@ -68,23 +69,6 @@ pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, Vec::new())
-}
-
-// xor produces new Vector with the result
-fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
-    assert_eq!(a.len(), b.len());
-
-    a.iter().zip(b.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
-}
-
-// xor_with xors assigns the result of xor to the first argument
-fn xor_with(a: &mut [u8], b: &[u8]) {
-    assert_eq!(a.len(), b.len());
-
-    a.iter_mut()
-        .zip(b.iter())
-        .map(|(x1, &x2)| *x1 ^= x2)
-        .collect()
 }
 
 fn create_zero_bytes(length: usize) -> Vec<u8> {
@@ -158,7 +142,7 @@ fn generate_filler_string(
 
     // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
     // and xor it with the current filler string
-    xor_with(
+    crypto::xor_with(
         &mut filler_string_accumulator,
         &pseudorandom_bytes[(2 * (MAX_PATH_LENGTH - (i + 1)) + 3) * SECURITY_PARAMETER..],
     );
@@ -465,70 +449,6 @@ speculate! {
 
                     assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
-            }
-        }
-    }
-
-    describe "xor" {
-        context "for empty inputs" {
-            it "returns an empty vector" {
-                let a: Vec<u8> = vec![];
-                let b: Vec<u8> = vec![];
-                let c = xor(&a, &b);
-                assert_eq!(0, c.len());
-            }
-        }
-
-        context "for non-zero inputs of same length" {
-            it "returns the expected xor of the vectors" {
-                let a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5, 6];
-                let c = xor(&a, &b);
-                assert_eq!(a.len(), c.len());
-                for i in 0..c.len() {
-                    assert_eq!(c[i], a[i] ^ b[i])
-                }
-            }
-        }
-
-        context "for inputs of different lengths" {
-            #[should_panic]
-            it "panics" {
-                let a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5];
-                let c = xor(&a, &b);
-            }
-        }
-    }
-
-    describe "xor_with" {
-        context "for empty inputs" {
-            it "does not change initial value" {
-                let mut a: Vec<u8> = vec![];
-                let b: Vec<u8> = vec![];
-                xor_with(&mut a, &b);
-                assert_eq!(0, a.len());
-            }
-        }
-
-        context "for non-zero inputs of same length" {
-            it "returns the expected xor of the vectors" {
-                let mut a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5, 6];
-                xor_with(&mut a, &b);
-                assert_eq!(1^4, a[0]);
-                assert_eq!(2^5, a[1]);
-                assert_eq!(3^6, a[2]);
-
-            }
-        }
-
-        context "for inputs of different lengths" {
-            #[should_panic]
-            it "panics" {
-                let mut a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5];
-                xor_with(&mut a, &b);
             }
         }
     }
