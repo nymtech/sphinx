@@ -64,7 +64,7 @@ pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
-    let filler_string = generate_filler_string(key_material.routing_keys);
+    let filler_string = generate_pseudorandom_filler_bytes(key_material.routing_keys);
     // compute filler strings
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, Vec::new())
@@ -120,7 +120,7 @@ fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
     RoutingKeys { stream_cipher_key }
 }
 
-fn generate_filler_string(routing_keys: Vec<RoutingKeys>) -> Vec<u8> {
+fn generate_pseudorandom_filler_bytes(routing_keys: Vec<RoutingKeys>) -> Vec<u8> {
     routing_keys
         .iter()
         .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
@@ -134,22 +134,36 @@ fn generate_filler_string(routing_keys: Vec<RoutingKeys>) -> Vec<u8> {
         .enumerate() // we need to know index of each element to take correct slice of the PRNG output
         .fold(
             Vec::new(),
-            |mut filler_string_accumulator, (i, pseudorandom_bytes)| {
-                // take current filler string then concatenate with string of zeroes of size 2*k (k is the security parameter)
-                let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
-                filler_string_accumulator.extend(&zero_bytes);
-
-                // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
-                // and xor it with the current filler string
-                xor_with(
-                    &mut filler_string_accumulator,
-                    &pseudorandom_bytes
-                        [(2 * (MAX_PATH_LENGTH - (i + 1)) + 3) * SECURITY_PARAMETER..],
-                );
-
-                filler_string_accumulator
+            |filler_string_accumulator, (i, pseudorandom_bytes)| {
+                generate_filler_string(filler_string_accumulator, i, pseudorandom_bytes)
             },
         )
+}
+
+fn generate_filler_string(
+    mut filler_string_accumulator: Vec<u8>,
+    i: usize,
+    pseudorandom_bytes: Vec<u8>,
+) -> Vec<u8> {
+    assert_eq!(pseudorandom_bytes.len(), STREAM_CIPHER_OUTPUT_LENGTH);
+
+    if i == 0 {
+        assert_eq!(filler_string_accumulator.len(), 0);
+    }
+    if i != 0 {
+        assert_eq!(filler_string_accumulator.len(), 2 * i * SECURITY_PARAMETER);
+    }
+    let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
+    filler_string_accumulator.extend(&zero_bytes);
+
+    // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
+    // and xor it with the current filler string
+    xor_with(
+        &mut filler_string_accumulator,
+        &pseudorandom_bytes[(2 * (MAX_PATH_LENGTH - (i + 1)) + 3) * SECURITY_PARAMETER..],
+    );
+
+    filler_string_accumulator
 }
 
 fn generate_delays(number: usize) -> Vec<f64> {
@@ -362,10 +376,10 @@ speculate! {
                 // on each run through the loop.
                 let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
-                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
-                    expected_accumulator = expected_accumulator * expected_blinder;
-                    let expected_routing_keys = key_derivation_function(expected_shared_key);
+                let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                expected_accumulator = expected_accumulator * expected_blinder;
+                let expected_routing_keys = key_derivation_function(expected_shared_key);
 
                     assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
@@ -546,11 +560,11 @@ speculate! {
         }
     }
 
-    describe "creating filler string" {
+    describe "creating pseudorandom bytes" {
         context "for no keys" {
             it "generates empty filler string" {
                 let routing_keys: Vec<RoutingKeys> = vec![];
-                let filler_string = generate_filler_string(routing_keys);
+                let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
 
                 assert_eq!(0, filler_string.len());
             }
@@ -560,7 +574,7 @@ speculate! {
             it "generates filler string of length 1 * 2 * SECURITY_PARAMETER" {
                 let shared_keys: Vec<SharedKey> = vec![generate_random_curve_point()];
                 let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
-                let filler_string = generate_filler_string(routing_keys);
+                let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
 
                 assert_eq!(2 * SECURITY_PARAMETER, filler_string.len());
             }
@@ -574,16 +588,10 @@ speculate! {
                     generate_random_curve_point()
                 ];
                 let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
-                let filler_string = generate_filler_string(routing_keys);
+                let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
             }
             it "generates filler string of length 3 * 2 * SECURITY_PARAMETER" {
                assert_eq!(3 * 2 * SECURITY_PARAMETER, filler_string.len());
-            }
-
-            it "filler string is non-zero because it was XOR'd with PRNG output" {
-                for i in 0..filler_string.len() {
-                    assert_ne!(0, filler_string[i])
-                }
             }
         }
 
@@ -595,8 +603,36 @@ speculate! {
                     .map(|_| generate_random_curve_point())
                     .collect();
                 let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
-                let filler_string = generate_filler_string(routing_keys);
+                generate_pseudorandom_filler_bytes(routing_keys);
             }
         }
+
+        describe "generating filler bytes" {
+            context "for incorrectly sized pseudorandom bytes vector and accumulator vector"{
+                #[should_panic]
+                it "panics" {
+                    let pseudorandom_bytes = vec![0; 1];
+                    generate_filler_string(vec![], 0, pseudorandom_bytes);
+                }
+                context "when the filler accumulator is not the correct length" {
+                    #[should_panic]
+                    it "panics" {
+                        let good_pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+                        let wrong_accumulator = vec![0; 25];
+                        generate_filler_string(wrong_accumulator, 1, good_pseudorandom_bytes);
+                    }
+
+                }
+            }
+            context "for an empty filler string accumulator"{
+                it "returns a byte vector of length 2 * SECURITY_PARAMETER" {
+                    let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+                    generate_filler_string(vec![], 0, pseudorandom_bytes);
+                }
+            }
+
+
+        }
+
     }
 }
