@@ -1,5 +1,4 @@
-use crate::header::{create_header, Address, Host, RouteElement, SphinxHeader};
-use crate::payload::create_enc_payload;
+use crate::header::{Address, Host, RouteElement, SphinxHeader};
 
 mod constants;
 mod crypto;
@@ -12,8 +11,8 @@ pub struct SphinxPacket {
 }
 
 pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
-    let (header, shared_keys) = create_header(route);
-    let enc_payload = create_enc_payload(message, shared_keys);
+    let (header, shared_keys) = header::create(route);
+    let enc_payload = payload::create(message, shared_keys);
     SphinxPacket {
         header,
         payload: enc_payload,

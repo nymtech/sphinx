@@ -60,7 +60,7 @@ pub type SharedKey = MontgomeryPoint;
 
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
-pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
+pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
