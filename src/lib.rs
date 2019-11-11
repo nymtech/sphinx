@@ -11,7 +11,6 @@ pub struct SphinxPacket {
     payload: Vec<u8>,
 }
 
-// TODO: a utility function to turn this into properly concatenated bytes
 pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
     let (header, shared_keys) = create_header(route);
     let enc_payload = create_enc_payload(message, shared_keys);
