@@ -537,8 +537,8 @@ speculate! {
         it "creates vector containing only zeroes of given length" {
             let zeroes = create_zero_bytes(42);
             assert_eq!(42, zeroes.len());
-            for i in 0..zeroes.len() {
-                assert_eq!(0, zeroes[i]);
+            for zero in zeroes {
+                assert_eq!(0, zero)
             }
         }
     }
