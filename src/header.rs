@@ -1,6 +1,7 @@
 use crate::constants::{
-    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
-    STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE, STREAM_CIPHER_OUTPUT_LENGTH,
+    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
+    SECURITY_PARAMETER, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE,
+    STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
@@ -16,7 +17,7 @@ use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
 
-pub struct Address {}
+pub type Address = Vec<u8>;
 
 pub enum RouteElement {
     FinalHop(Destination),
@@ -35,6 +36,7 @@ impl RouteElement {
 }
 
 pub struct Destination {
+    pub address: Address,
     pub pub_key: MontgomeryPoint,
 }
 
@@ -166,6 +168,57 @@ fn generate_filler_string(
     filler_string_accumulator
 }
 
+fn generate_all_routing_info(
+    route: Vec<RouteElement>,
+    routing_keys: Vec<RoutingKeys>,
+    filler_string: Vec<u8>,
+) {
+    let final_key = match routing_keys.last() {
+        Some(key) => key,
+        None => panic!("The keys should be already initialized"),
+    };
+    let final_hop = match route.last() {
+        Some(hop) => hop,
+        None => panic!("The route should not be empty"),
+    };
+    let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    let pseudorandom_bytes = generate_pseudorandom_bytes(
+        &final_key.stream_cipher_key,
+        &iv,
+        STREAM_CIPHER_OUTPUT_LENGTH,
+    );
+    let final_routing_info = generate_final_routing_info(
+        filler_string,
+        route.len(),
+        final_key,
+        final_hop,
+        pseudorandom_bytes,
+    );
+}
+
+fn generate_final_routing_info(
+    filler: Vec<u8>,
+    route_len: usize,
+    final_key: RoutingKeys,
+    final_hop: RouteElement,
+    pseudorandom_bytes: Vec<u8>,
+) -> Vec<u8> {
+    let final_destination_address = match final_hop {
+        RouteElement::FinalHop(destination) => destination.address,
+        RouteElement::ForwardHop(host) => host.address,
+    };
+
+    let final_destination_bytes = final_destination_address;
+    let zero_padding = create_zero_bytes(
+        (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
+            - final_destination_bytes.len(),
+    );
+
+    let padded_final_destination = [final_destination_bytes, zero_padding].concat();
+    let xored_bytes = xor(&padded_final_destination, &pseudorandom_bytes);
+    [xored_bytes, filler].concat()
+}
+
 fn generate_delays(number: usize) -> Vec<f64> {
     let exp = Exp::new(1.0 / AVERAGE_DELAY).unwrap();
 
@@ -287,14 +340,14 @@ speculate! {
     describe "deriving key material" {
         fn new_route_forward_hop(pub_key: MontgomeryPoint) -> RouteElement {
             RouteElement::ForwardHop(Host {
-                address: Address {},
+                address: fakeHost(),
                 pub_key,
             })
         }
 
-        fn new_route_final_hop(pub_key: MontgomeryPoint) -> RouteElement {
+        fn new_route_final_hop(pub_key: MontgomeryPoint, address: Address) -> RouteElement {
             RouteElement::FinalHop(Destination {
-                pub_key,
+                pub_key,address
             })
         }
 
@@ -318,7 +371,7 @@ speculate! {
         context "with a route with no forward hops and a destination" {
             before {
                 let route: Vec<RouteElement> = vec![
-                    new_route_final_hop(generate_random_curve_point())
+                    new_route_final_hop(generate_random_curve_point(), fakeHost())
                 ];
         let initial_secret = generate_secret();
         let key_material = derive_key_material(&route, initial_secret);
@@ -354,7 +407,7 @@ speculate! {
             before {
                 let route: Vec<RouteElement> = vec![
                     new_route_forward_hop(generate_random_curve_point()),
-                    new_route_final_hop(generate_random_curve_point())
+                    new_route_final_hop(generate_random_curve_point(), fakeHost())
                 ];
                 let initial_secret = generate_secret();
                 let key_material = derive_key_material(&route, initial_secret);
@@ -392,7 +445,7 @@ speculate! {
                     new_route_forward_hop(generate_random_curve_point()),
                     new_route_forward_hop(generate_random_curve_point()),
                     new_route_forward_hop(generate_random_curve_point()),
-                    new_route_final_hop(generate_random_curve_point())
+                    new_route_final_hop(generate_random_curve_point(), fakeHost())
                 ];
                 let initial_secret = generate_secret();
                 let key_material = derive_key_material(&route, initial_secret);
@@ -642,9 +695,24 @@ speculate! {
                     }
                 }
             }
+        }
 
-
+        describe "encapsulation of the final routing information"{
+            context ""
         }
 
     }
+}
+
+// TODO: discuss correct format for serialization of the ip addresses and port numbers so that it
+// works with both IPv4 and IPv6. Is there enough space in the current sphinx format for IPv6
+// addresses + ports?
+pub fn fakeHost() -> Address {
+    //    String::from("192.168.1.1:50000")
+    create_zero_bytes(16)
+}
+
+fn blah() {
+    let addr = std::net::Ipv4Addr::new(127, 0, 0, 1);
+    let bytes = addr.octets().to_vec();
 }
