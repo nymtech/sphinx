@@ -631,6 +631,18 @@ speculate! {
                 }
             }
 
+            context "for valid inputs"{
+                it "returns the xored byte vector of a correct length"{
+                    let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+                    let filler_string_accumulator = vec![0; 32];
+                    let filler_string = generate_filler_string(filler_string_accumulator, 1, pseudorandom_bytes);
+                    assert_eq!(64, filler_string.len());
+                    for x in filler_string {
+                        assert_eq!(0, x); // XOR of 0 + 0 == 0
+                    }
+                }
+            }
+
 
         }
 
