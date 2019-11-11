@@ -320,8 +320,8 @@ speculate! {
                 let route: Vec<RouteElement> = vec![
                     new_route_final_hop(generate_random_curve_point())
                 ];
-        let initial_secret = generate_secret();
-        let key_material = derive_key_material(&route, initial_secret);
+                let initial_secret = generate_secret();
+                let key_material = derive_key_material(&route, initial_secret);
             }
 
             it "returns number of shared keys equal to length of entire route" {
