@@ -26,7 +26,7 @@ type HmacSha256 = Hmac<Sha256>;
 #[derive(Clone)]
 pub enum RouteElement {
     FinalHop(Destination),
-    ForwardHop(Host),
+    ForwardHop(MixNode),
 }
 
 impl RouteElement {
@@ -93,7 +93,7 @@ impl Destination {
 }
 
 #[derive(Clone)]
-pub struct Host {
+pub struct MixNode {
     pub address: SocketAddr,
     pub pub_key: MontgomeryPoint,
 }
@@ -371,7 +371,7 @@ speculate! {
     // ForwardHop or FinalHop. We want the tests to break in that case.
     describe "deriving key material" {
         fn new_route_forward_hop(pub_key: MontgomeryPoint) -> RouteElement {
-            RouteElement::ForwardHop(Host {
+            RouteElement::ForwardHop(MixNode {
                 address: ipv4_host_fixture(),
                 pub_key,
             })
