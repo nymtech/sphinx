@@ -12,11 +12,8 @@ pub struct SphinxPacket {
 
 pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
     let (header, shared_keys) = header::create(route);
-    let enc_payload = payload::create(message, shared_keys);
-    SphinxPacket {
-        header,
-        payload: enc_payload,
-    }
+    let payload = payload::create(message, shared_keys);
+    SphinxPacket { header, payload }
 }
 
 // TODO: rethink
