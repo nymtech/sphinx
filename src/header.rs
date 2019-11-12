@@ -1,13 +1,12 @@
 use crate::constants::{
     AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
-    SECURITY_PARAMETER, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE,
-    STREAM_CIPHER_OUTPUT_LENGTH,
+    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::utils;
-use crate::utils::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
-use aes_ctr::stream_cipher::generic_array::GenericArray;
-use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
-use aes_ctr::Aes128Ctr;
+use crate::utils::crypto::{
+    generate_random_curve_point, generate_secret, CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR,
+    STREAM_CIPHER_KEY_SIZE,
+};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
@@ -121,27 +120,6 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     (SphinxHeader {}, Vec::new())
 }
 
-fn create_zero_bytes(length: usize) -> Vec<u8> {
-    vec![0; length]
-}
-
-fn generate_pseudorandom_bytes(
-    key: &[u8; STREAM_CIPHER_KEY_SIZE],
-    iv: &[u8; STREAM_CIPHER_KEY_SIZE],
-    length: usize,
-) -> Vec<u8> {
-    let cipher_key = GenericArray::from_slice(&key[..]);
-    let cipher_nonce = GenericArray::from_slice(&iv[..]);
-
-    // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
-    let mut cipher = Aes128Ctr::new(cipher_key, cipher_nonce);
-    let mut data = vec![0u8; length];
-
-    cipher.apply_keystream(&mut data);
-
-    data
-}
-
 fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
     let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
 
@@ -159,7 +137,7 @@ fn generate_pseudorandom_filler_bytes(routing_keys: &Vec<RoutingKeys>) -> Vec<u8
         .iter()
         .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
         .map(|cipher_key| {
-            generate_pseudorandom_bytes(
+            crypto::generate_pseudorandom_bytes(
                 &cipher_key,
                 &STREAM_CIPHER_INIT_VECTOR,
                 STREAM_CIPHER_OUTPUT_LENGTH,
@@ -182,7 +160,7 @@ fn generate_filler_string(
     assert_eq!(pseudorandom_bytes.len(), STREAM_CIPHER_OUTPUT_LENGTH);
     assert_eq!(filler_string_accumulator.len(), 2 * i * SECURITY_PARAMETER);
 
-    let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
+    let zero_bytes = vec![0u8; 2 * SECURITY_PARAMETER];
     filler_string_accumulator.extend(&zero_bytes);
 
     // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
@@ -216,7 +194,7 @@ fn generate_all_routing_info(
     // TODO: does this IV correspond to STREAM_CIPHER_INIT_VECTOR?
     // (used in generate_pseudorandom_filler_bytes)
     let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0u8; 16];
-    let pseudorandom_bytes = generate_pseudorandom_bytes(
+    let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
         &final_key.stream_cipher_key,
         &iv,
         STREAM_CIPHER_OUTPUT_LENGTH,
@@ -240,10 +218,11 @@ fn generate_final_routing_info(
             <= (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
     );
 
-    let zero_padding = create_zero_bytes(
+    let zero_padding = vec![
+        0u8;
         (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
-            - final_destination_bytes.len(),
-    );
+            - final_destination_bytes.len()
+    ];
 
     let padded_final_destination = [final_destination_bytes.to_vec(), zero_padding].concat();
     let xored_bytes = utils::bytes::xor(&padded_final_destination, &pseudorandom_bytes);
@@ -305,6 +284,7 @@ fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
     Scalar::from_bytes_mod_order(output)
 }
 
+use crate::utils::crypto;
 #[cfg(test)]
 use speculate::speculate;
 
@@ -550,26 +530,6 @@ speculate! {
                     assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
-        }
-    }
-
-    describe "creating vector of zero bytes" {
-        it "creates vector containing only zeroes of given length" {
-            let zeroes = create_zero_bytes(42);
-            assert_eq!(42, zeroes.len());
-            for zero in zeroes {
-                assert_eq!(0, zero)
-            }
-        }
-    }
-
-    describe "generating pseudorandom bytes" {
-        it "generates outputs of expected length" {
-            let key: [u8; STREAM_CIPHER_KEY_SIZE] = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
-            let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
-
-            let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
-            assert_eq!(10000, rand_bytes.len());
         }
     }
 
