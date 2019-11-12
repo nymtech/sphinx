@@ -37,7 +37,7 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
         },
         Hop {
             host: RouteElement::ForwardHop(Host {
-                address: header::fakeHost(),
+                address: header::ipv4_host_fixture(),
                 pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
             }),
             delay: 0.0,
