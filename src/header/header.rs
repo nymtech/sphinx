@@ -5,12 +5,8 @@ use crate::constants::{
 use crate::header::keys;
 use crate::utils;
 use crate::utils::crypto::{CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
-use curve25519_dalek::scalar::Scalar;
-use hkdf::Hkdf;
-use hmac::{Hmac, Mac};
 use rand;
 use rand_distr::{Distribution, Exp};
-use sha2::Sha256;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 
 #[derive(Clone)]
