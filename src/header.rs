@@ -1,7 +1,3 @@
-use crate::constants::{
-    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
-    STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE, STREAM_CIPHER_OUTPUT_LENGTH,
-};
 use crate::crypto;
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
@@ -14,11 +10,20 @@ use hmac::{Hmac, Mac};
 use rand;
 use rand_distr::{Distribution, Exp};
 use sha2::Sha256;
+use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
+
+#[cfg(test)]
+use speculate::speculate;
+
+use crate::constants::{
+    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
+    SECURITY_PARAMETER, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE,
+    STREAM_CIPHER_OUTPUT_LENGTH,
+};
 
 type HmacSha256 = Hmac<Sha256>;
 
-pub struct Address {}
-
+#[derive(Clone)]
 pub enum RouteElement {
     FinalHop(Destination),
     ForwardHop(Host),
@@ -35,12 +40,61 @@ impl RouteElement {
     }
 }
 
+#[derive(Clone)]
 pub struct Destination {
+    pub address: SocketAddr,
     pub pub_key: MontgomeryPoint,
 }
 
+const IP_VERSION_FIELD_LENGTH: usize = 1;
+const IPV4_BYTE: u8 = 4;
+const IPV6_BYTE: u8 = 6;
+const PUBLIC_KEY_LENGTH: usize = 32;
+const SERIALIZED_DESTINATION_LENGTH: usize = IP_VERSION_FIELD_LENGTH + PUBLIC_KEY_LENGTH + 16 + 2; // 16 bytes for maximum ipv6 + 2 bytes (16bits) for the port
+const IPV4_PADDING: [u8; 12] = [0u8; 12];
+
+impl Destination {
+    fn encode(&self) -> [u8; SERIALIZED_DESTINATION_LENGTH] {
+        let mut bytes_vec: Vec<u8> = vec![];
+        bytes_vec.extend(self.pub_key.to_bytes().iter()); // first 32 bytes for public key
+        bytes_vec.extend(self.address.port().to_ne_bytes().iter()); // next 2 bytes are for the port
+
+        // ipversion || ip
+
+        bytes_vec.extend(&match self.address {
+            SocketAddr::V4(socket_address) => {
+                let mut ip_bytes_vec: Vec<u8> = vec![];
+                let mut ip_bytes = [0u8; 17];
+                ip_bytes_vec.extend([IPV4_BYTE].iter()); // ip version prefix
+                ip_bytes_vec.extend(socket_address.ip().octets().iter()); // actual ip address
+                ip_bytes_vec.extend(IPV4_PADDING.iter()); // pad with 12 zero bytes (to match length of ipv6)
+                ip_bytes.clone_from_slice(&ip_bytes_vec);
+                ip_bytes
+            }
+            SocketAddr::V6(socket_address) => {
+                let mut ip_bytes_vec: Vec<u8> = vec![];
+                let mut ip_bytes = [0u8; 17];
+                ip_bytes_vec.extend([IPV6_BYTE].iter()); // ip version prefix
+                ip_bytes_vec.extend(socket_address.ip().octets().iter()); // actual ip address
+                ip_bytes.clone_from_slice(&ip_bytes_vec);
+                ip_bytes
+            }
+        });
+
+        let mut bytes = [0u8; SERIALIZED_DESTINATION_LENGTH];
+        bytes.clone_from_slice(&bytes_vec);
+        // first 32 bytes will be the public key
+        // next 2 bytes will be the port
+        // next 1 byte will indicate ipv4 vs ipv6
+        // next 16 bytes will represent the address, either ipv6 or ipv4 padded with zeroes
+
+        bytes
+    }
+}
+
+#[derive(Clone)]
 pub struct Host {
-    pub address: Address,
+    pub address: SocketAddr,
     pub pub_key: MontgomeryPoint,
 }
 
@@ -49,7 +103,7 @@ struct KeyMaterial {
     routing_keys: Vec<RoutingKeys>,
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Clone)]
 pub struct RoutingKeys {
     stream_cipher_key: [u8; STREAM_CIPHER_KEY_SIZE],
 }
@@ -65,8 +119,8 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
-    let filler_string = generate_pseudorandom_filler_bytes(key_material.routing_keys);
-    // compute filler strings
+    let filler_string = generate_pseudorandom_filler_bytes(&key_material.routing_keys);
+    let routing_info = generate_all_routing_info(route, &key_material.routing_keys, filler_string);
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, Vec::new())
 }
@@ -104,7 +158,7 @@ fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
     RoutingKeys { stream_cipher_key }
 }
 
-fn generate_pseudorandom_filler_bytes(routing_keys: Vec<RoutingKeys>) -> Vec<u8> {
+fn generate_pseudorandom_filler_bytes(routing_keys: &Vec<RoutingKeys>) -> Vec<u8> {
     routing_keys
         .iter()
         .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
@@ -143,6 +197,61 @@ fn generate_filler_string(
     );
 
     filler_string_accumulator
+}
+
+fn generate_all_routing_info(
+    route: &[RouteElement],
+    routing_keys: &Vec<RoutingKeys>,
+    filler_string: Vec<u8>,
+) {
+    let final_key = routing_keys
+        .last()
+        .cloned()
+        .expect("The keys should be already initialized");
+    let final_route_element = route
+        .last()
+        .cloned()
+        .expect("The route should not be empty");
+    let final_hop = match final_route_element {
+        RouteElement::FinalHop(destination) => destination,
+        _ => panic!("The last route element must be a destination"),
+    };
+
+    // TODO: does this IV correspond to STREAM_CIPHER_INIT_VECTOR?
+    // (used in generate_pseudorandom_filler_bytes)
+    let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0u8; 16];
+    let pseudorandom_bytes = generate_pseudorandom_bytes(
+        &final_key.stream_cipher_key,
+        &iv,
+        STREAM_CIPHER_OUTPUT_LENGTH,
+    );
+    let final_routing_info =
+        generate_final_routing_info(filler_string, route.len(), final_hop, pseudorandom_bytes);
+
+    // loop for other hops
+}
+
+fn generate_final_routing_info(
+    filler: Vec<u8>,
+    route_len: usize,
+    destination: Destination,
+    pseudorandom_bytes: Vec<u8>,
+) -> Vec<u8> {
+    let final_destination_bytes = destination.encode(); // we will convert our address to bytes here
+
+    assert!(
+        final_destination_bytes.len()
+            <= (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
+    );
+
+    let zero_padding = create_zero_bytes(
+        (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
+            - final_destination_bytes.len(),
+    );
+
+    let padded_final_destination = [final_destination_bytes.to_vec(), zero_padding].concat();
+    let xored_bytes = crypto::xor(&padded_final_destination, &pseudorandom_bytes);
+    [xored_bytes, filler].concat()
 }
 
 fn generate_delays(number: usize) -> Vec<f64> {
@@ -199,9 +308,6 @@ fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
     output.copy_from_slice(&mac.result().code().to_vec()[..32]);
     Scalar::from_bytes_mod_order(output)
 }
-
-#[cfg(test)]
-use speculate::speculate;
 
 #[cfg(test)]
 speculate! {
@@ -266,14 +372,14 @@ speculate! {
     describe "deriving key material" {
         fn new_route_forward_hop(pub_key: MontgomeryPoint) -> RouteElement {
             RouteElement::ForwardHop(Host {
-                address: Address {},
+                address: ipv4_host_fixture(),
                 pub_key,
             })
         }
 
-        fn new_route_final_hop(pub_key: MontgomeryPoint) -> RouteElement {
+        fn new_route_final_hop(pub_key: MontgomeryPoint, address: SocketAddr) -> RouteElement {
             RouteElement::FinalHop(Destination {
-                pub_key,
+                pub_key,address
             })
         }
 
@@ -297,7 +403,7 @@ speculate! {
         context "with a route with no forward hops and a destination" {
             before {
                 let route: Vec<RouteElement> = vec![
-                    new_route_final_hop(generate_random_curve_point())
+                    new_route_final_hop(generate_random_curve_point(), ipv4_host_fixture())
                 ];
                 let initial_secret = generate_secret();
                 let key_material = derive_key_material(&route, initial_secret);
@@ -339,7 +445,7 @@ speculate! {
             before {
                 let route: Vec<RouteElement> = vec![
                     new_route_forward_hop(generate_random_curve_point()),
-                    new_route_final_hop(generate_random_curve_point())
+                    new_route_final_hop(generate_random_curve_point(), ipv4_host_fixture())
                 ];
                 let initial_secret = generate_secret();
                 let key_material = derive_key_material(&route, initial_secret);
@@ -377,7 +483,7 @@ speculate! {
                     new_route_forward_hop(generate_random_curve_point()),
                     new_route_forward_hop(generate_random_curve_point()),
                     new_route_forward_hop(generate_random_curve_point()),
-                    new_route_final_hop(generate_random_curve_point())
+                    new_route_final_hop(generate_random_curve_point(), ipv4_host_fixture())
                 ];
                 let initial_secret = generate_secret();
                 let key_material = derive_key_material(&route, initial_secret);
@@ -486,7 +592,7 @@ speculate! {
         context "for no keys" {
             it "generates empty filler string" {
                 let routing_keys: Vec<RoutingKeys> = vec![];
-                let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
+                let filler_string = generate_pseudorandom_filler_bytes(&routing_keys);
 
                 assert_eq!(0, filler_string.len());
             }
@@ -495,7 +601,7 @@ speculate! {
         context "for one key" {
             it "generates filler string of length 1 * 2 * SECURITY_PARAMETER" {
                 let shared_keys: Vec<SharedKey> = vec![generate_random_curve_point()];
-                let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
+                let routing_keys = &shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
                 let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
 
                 assert_eq!(2 * SECURITY_PARAMETER, filler_string.len());
@@ -509,7 +615,7 @@ speculate! {
                     generate_random_curve_point(),
                     generate_random_curve_point()
                 ];
-                let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
+                let routing_keys = &shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
                 let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
             }
             it "generates filler string of length 3 * 2 * SECURITY_PARAMETER" {
@@ -524,7 +630,7 @@ speculate! {
                     .take(MAX_PATH_LENGTH + 1)
                     .map(|_| generate_random_curve_point())
                     .collect();
-                let routing_keys = shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
+                let routing_keys = &shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
                 generate_pseudorandom_filler_bytes(routing_keys);
             }
         }
@@ -564,9 +670,31 @@ speculate! {
                     }
                 }
             }
+        }
 
+        describe "encapsulation of the final routing information" {
+        context "for IPV4" {
+            it "produces result of length filler plus pseudorandom bytes lengths" {
+                let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+                let route_len = 4;
+                let filler = vec![0u8; 25];
+                let destination = Destination {
+                    pub_key: generate_random_curve_point(),
+                    address: ipv4_host_fixture(),
+                };
+//                generate_final_routing_info(filler, route_len, destination, pseudorandom_bytes);
+                assert_eq!(true, true);
+            }
+        }
+        context "for IPV6" {
+
+        }
 
         }
 
     }
+}
+
+pub fn ipv4_host_fixture() -> SocketAddr {
+    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
 }
