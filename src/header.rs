@@ -1,5 +1,10 @@
-use crate::crypto;
-use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
+use crate::constants::{
+    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
+    SECURITY_PARAMETER, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE,
+    STREAM_CIPHER_OUTPUT_LENGTH,
+};
+use crate::utils;
+use crate::utils::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes128Ctr;
@@ -11,15 +16,6 @@ use rand;
 use rand_distr::{Distribution, Exp};
 use sha2::Sha256;
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
-
-#[cfg(test)]
-use speculate::speculate;
-
-use crate::constants::{
-    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
-    SECURITY_PARAMETER, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE,
-    STREAM_CIPHER_OUTPUT_LENGTH,
-};
 
 type HmacSha256 = Hmac<Sha256>;
 
@@ -191,7 +187,7 @@ fn generate_filler_string(
 
     // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
     // and xor it with the current filler string
-    crypto::xor_with(
+    utils::bytes::xor_with(
         &mut filler_string_accumulator,
         &pseudorandom_bytes[(2 * (MAX_PATH_LENGTH - (i + 1)) + 3) * SECURITY_PARAMETER..],
     );
@@ -250,7 +246,7 @@ fn generate_final_routing_info(
     );
 
     let padded_final_destination = [final_destination_bytes.to_vec(), zero_padding].concat();
-    let xored_bytes = crypto::xor(&padded_final_destination, &pseudorandom_bytes);
+    let xored_bytes = utils::bytes::xor(&padded_final_destination, &pseudorandom_bytes);
     [xored_bytes, filler].concat()
 }
 
@@ -308,6 +304,9 @@ fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
     output.copy_from_slice(&mac.result().code().to_vec()[..32]);
     Scalar::from_bytes_mod_order(output)
 }
+
+#[cfg(test)]
+use speculate::speculate;
 
 #[cfg(test)]
 speculate! {

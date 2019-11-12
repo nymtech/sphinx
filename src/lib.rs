@@ -1,9 +1,9 @@
 use crate::header::{MixNode, RouteElement, SphinxHeader};
 
 mod constants;
-mod crypto;
 mod header;
 mod payload;
+mod utils;
 
 pub struct SphinxPacket {
     header: SphinxHeader,
