@@ -6,8 +6,13 @@ use curve25519_dalek::scalar::Scalar;
 use rand_os;
 
 pub const CURVE_GENERATOR: MontgomeryPoint = curve25519_dalek::constants::X25519_BASEPOINT;
+pub const PUBLIC_KEY_LENGTH: usize = 32;
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
+
+pub type PublicKey = MontgomeryPoint;
+pub type SharedSecret = MontgomeryPoint;
+pub type SharedKey = MontgomeryPoint;
 
 pub fn generate_secret() -> Scalar {
     let mut rng = rand_os::OsRng::new().unwrap();

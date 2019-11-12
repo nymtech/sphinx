@@ -4,10 +4,9 @@ use crate::constants::{
 };
 use crate::utils;
 use crate::utils::crypto::{
-    generate_random_curve_point, generate_secret, CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR,
-    STREAM_CIPHER_KEY_SIZE,
+    generate_random_curve_point, generate_secret, PublicKey, CURVE_GENERATOR,
+    STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE,
 };
-use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
@@ -25,7 +24,7 @@ pub enum RouteElement {
 }
 
 impl RouteElement {
-    fn get_pub_key(&self) -> MontgomeryPoint {
+    fn get_pub_key(&self) -> crypto::PublicKey {
         use RouteElement::*;
 
         match self {
@@ -38,14 +37,14 @@ impl RouteElement {
 #[derive(Clone)]
 pub struct Destination {
     pub address: SocketAddr,
-    pub pub_key: MontgomeryPoint,
+    pub pub_key: crypto::PublicKey,
 }
 
 const IP_VERSION_FIELD_LENGTH: usize = 1;
 const IPV4_BYTE: u8 = 4;
 const IPV6_BYTE: u8 = 6;
-const PUBLIC_KEY_LENGTH: usize = 32;
-const SERIALIZED_DESTINATION_LENGTH: usize = IP_VERSION_FIELD_LENGTH + PUBLIC_KEY_LENGTH + 16 + 2; // 16 bytes for maximum ipv6 + 2 bytes (16bits) for the port
+const SERIALIZED_DESTINATION_LENGTH: usize =
+    IP_VERSION_FIELD_LENGTH + crypto::PUBLIC_KEY_LENGTH + 16 + 2; // 16 bytes for maximum ipv6 + 2 bytes (16bits) for the port
 const IPV4_PADDING: [u8; 12] = [0u8; 12];
 
 impl Destination {
@@ -90,11 +89,11 @@ impl Destination {
 #[derive(Clone)]
 pub struct MixNode {
     pub address: SocketAddr,
-    pub pub_key: MontgomeryPoint,
+    pub pub_key: crypto::PublicKey,
 }
 
 struct KeyMaterial {
-    initial_shared_secret: SharedSecret,
+    initial_shared_secret: crypto::SharedSecret,
     routing_keys: Vec<RoutingKeys>,
 }
 
@@ -105,12 +104,9 @@ pub struct RoutingKeys {
 
 pub struct SphinxHeader {}
 
-pub type SharedSecret = MontgomeryPoint;
-pub type SharedKey = MontgomeryPoint;
-
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
-pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
+pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<crypto::SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
@@ -120,7 +116,7 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     (SphinxHeader {}, Vec::new())
 }
 
-fn key_derivation_function(shared_key: SharedKey) -> RoutingKeys {
+fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingKeys {
     let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
 
     let mut output = [0u8; ROUTING_KEYS_LENGTH];
@@ -238,11 +234,11 @@ fn generate_delays(number: usize) -> Vec<f64> {
         .collect()
 }
 
-fn compute_shared_key(node_pub_key: MontgomeryPoint, exponent: &Scalar) -> SharedKey {
+fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
     node_pub_key * exponent
 }
 
-fn compute_blinding_factor(shared_key: MontgomeryPoint, exponent: &Scalar) -> Scalar {
+fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
     let shared_secret = CURVE_GENERATOR * exponent;
     compute_keyed_hmac(shared_secret.to_bytes(), shared_key.to_bytes())
 }
@@ -349,14 +345,14 @@ speculate! {
     // I've included so many contexts as we might change behaviour based on RouteElement being
     // ForwardHop or FinalHop. We want the tests to break in that case.
     describe "deriving key material" {
-        fn new_route_forward_hop(pub_key: MontgomeryPoint) -> RouteElement {
+        fn new_route_forward_hop(pub_key: crypto::PublicKey) -> RouteElement {
             RouteElement::ForwardHop(MixNode {
                 address: ipv4_host_fixture(),
                 pub_key,
             })
         }
 
-        fn new_route_final_hop(pub_key: MontgomeryPoint, address: SocketAddr) -> RouteElement {
+        fn new_route_final_hop(pub_key: crypto::PublicKey, address: SocketAddr) -> RouteElement {
             RouteElement::FinalHop(Destination {
                 pub_key,address
             })
@@ -559,7 +555,7 @@ speculate! {
 
         context "for one key" {
             it "generates filler string of length 1 * 2 * SECURITY_PARAMETER" {
-                let shared_keys: Vec<SharedKey> = vec![generate_random_curve_point()];
+                let shared_keys: Vec<crypto::SharedKey> = vec![generate_random_curve_point()];
                 let routing_keys = &shared_keys.iter().map(|&key| key_derivation_function(key)).collect();
                 let filler_string = generate_pseudorandom_filler_bytes(routing_keys);
 
@@ -569,7 +565,7 @@ speculate! {
 
         context "for three keys" {
             before {
-                let shared_keys: Vec<SharedKey> = vec![
+                let shared_keys: Vec<crypto::SharedKey> = vec![
                     generate_random_curve_point(),
                     generate_random_curve_point(),
                     generate_random_curve_point()
@@ -585,7 +581,7 @@ speculate! {
         context "more keys than the maximum path length" {
             #[should_panic]
             it "panics" {
-                let shared_keys: Vec<SharedKey> = std::iter::repeat(())
+                let shared_keys: Vec<crypto::SharedKey> = std::iter::repeat(())
                     .take(MAX_PATH_LENGTH + 1)
                     .map(|_| generate_random_curve_point())
                     .collect();
