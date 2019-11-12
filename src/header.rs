@@ -130,13 +130,11 @@ fn generate_filler_string(
     pseudorandom_bytes: Vec<u8>,
 ) -> Vec<u8> {
     assert_eq!(pseudorandom_bytes.len(), STREAM_CIPHER_OUTPUT_LENGTH);
+    match filler_string_accumulator.len() {
+        0 => assert_eq!(filler_string_accumulator.len(), 0),
+        _ => assert_eq!(filler_string_accumulator.len(), 2 * i * SECURITY_PARAMETER),
+    }
 
-    if i == 0 {
-        assert_eq!(filler_string_accumulator.len(), 0);
-    }
-    if i != 0 {
-        assert_eq!(filler_string_accumulator.len(), 2 * i * SECURITY_PARAMETER);
-    }
     let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
     filler_string_accumulator.extend(&zero_bytes);
 
