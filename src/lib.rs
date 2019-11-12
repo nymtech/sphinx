@@ -1,4 +1,4 @@
-use crate::header::{create_header, Address, Host, RouteElement, SphinxHeader};
+use crate::header::{create_header, Host, RouteElement, SphinxHeader};
 use crate::payload::create_enc_payload;
 
 mod constants;
