@@ -1,3 +1,4 @@
+use crate::crypto;
 use crate::crypto::{generate_random_curve_point, generate_secret, CURVE_GENERATOR};
 use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
@@ -249,7 +250,7 @@ fn generate_final_routing_info(
     );
 
     let padded_final_destination = [final_destination_bytes.to_vec(), zero_padding].concat();
-    let xored_bytes = xor(&padded_final_destination, &pseudorandom_bytes);
+    let xored_bytes = crypto::xor(&padded_final_destination, &pseudorandom_bytes);
     [xored_bytes, filler].concat()
 }
 

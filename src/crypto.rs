@@ -14,7 +14,7 @@ pub fn generate_random_curve_point() -> MontgomeryPoint {
 }
 
 // xor produces new Vector with the XOR result
-fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
+pub fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
     assert_eq!(a.len(), b.len());
 
     a.iter().zip(b.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
