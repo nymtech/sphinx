@@ -1,4 +1,4 @@
-use crate::header::{MixNode, RouteElement, SphinxHeader};
+use crate::header::header::{MixNode, RouteElement};
 
 mod constants;
 mod header;
@@ -6,7 +6,7 @@ mod payload;
 mod utils;
 
 pub struct SphinxPacket {
-    header: SphinxHeader,
+    header: header::SphinxHeader,
     payload: Vec<u8>,
 }
 
@@ -27,12 +27,12 @@ pub struct Hop {
 pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
     (
         SphinxPacket {
-            header: SphinxHeader {},
+            header: header::SphinxHeader {},
             payload: vec![],
         },
         Hop {
             host: RouteElement::ForwardHop(MixNode {
-                address: header::ipv4_host_fixture(),
+                address: header::header::ipv4_host_fixture(),
                 pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
             }),
             delay: 0.0,
