@@ -114,7 +114,7 @@ pub type SharedKey = MontgomeryPoint;
 
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
-pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
+pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let initial_secret = generate_secret();
     let key_material = derive_key_material(route, initial_secret);
     let delays = generate_delays(route.len() - 1); // we don't generate delay for the destination
@@ -122,23 +122,6 @@ pub fn create_header(route: &[RouteElement]) -> (SphinxHeader, Vec<SharedKey>) {
     let routing_info = generate_all_routing_info(route, &key_material.routing_keys, filler_string);
     // encapsulate routing information, compute MACs
     (SphinxHeader {}, Vec::new())
-}
-
-// xor produces new Vector with the result
-fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
-    assert_eq!(a.len(), b.len());
-
-    a.iter().zip(b.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
-}
-
-// xor_with xors assigns the result of xor to the first argument
-fn xor_with(a: &mut [u8], b: &[u8]) {
-    assert_eq!(a.len(), b.len());
-
-    a.iter_mut()
-        .zip(b.iter())
-        .map(|(x1, &x2)| *x1 ^= x2)
-        .collect()
 }
 
 fn create_zero_bytes(length: usize) -> Vec<u8> {
@@ -200,19 +183,14 @@ fn generate_filler_string(
     pseudorandom_bytes: Vec<u8>,
 ) -> Vec<u8> {
     assert_eq!(pseudorandom_bytes.len(), STREAM_CIPHER_OUTPUT_LENGTH);
+    assert_eq!(filler_string_accumulator.len(), 2 * i * SECURITY_PARAMETER);
 
-    if i == 0 {
-        assert_eq!(filler_string_accumulator.len(), 0);
-    }
-    if i != 0 {
-        assert_eq!(filler_string_accumulator.len(), 2 * i * SECURITY_PARAMETER);
-    }
     let zero_bytes = create_zero_bytes(2 * SECURITY_PARAMETER);
     filler_string_accumulator.extend(&zero_bytes);
 
     // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
     // and xor it with the current filler string
-    xor_with(
+    crypto::xor_with(
         &mut filler_string_accumulator,
         &pseudorandom_bytes[(2 * (MAX_PATH_LENGTH - (i + 1)) + 3) * SECURITY_PARAMETER..],
     );
@@ -426,8 +404,8 @@ speculate! {
                 let route: Vec<RouteElement> = vec![
                     new_route_final_hop(generate_random_curve_point(), ipv4_host_fixture())
                 ];
-        let initial_secret = generate_secret();
-        let key_material = derive_key_material(&route, initial_secret);
+                let initial_secret = generate_secret();
+                let key_material = derive_key_material(&route, initial_secret);
             }
 
             it "returns number of shared keys equal to length of entire route" {
@@ -440,14 +418,20 @@ speculate! {
             }
 
             it "generates correct routing keys" {
-                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
-                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
-                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
-                // on each run through the loop.
+                // The accumulator is the key to our blinding factors working.
+                // If the accumulator value isn't incremented correctly, we risk passing an
+                // incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented
+                // properly on each run through the loop.
                 let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
-                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    let expected_shared_key = compute_shared_key(
+                        route[i].get_pub_key(),
+                        &expected_accumulator
+                    );
+                    let expected_blinder = compute_blinding_factor(
+                        expected_shared_key, &expected_accumulator
+                    );
                     expected_accumulator = expected_accumulator * expected_blinder;
                     let expected_routing_keys = key_derivation_function(expected_shared_key);
 
@@ -476,17 +460,17 @@ speculate! {
             }
 
             it "generates correct routing keys" {
-                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
-                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
-                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
+                // The accumulator is the key to our blinding factors working. If the accumulator
+                // value isn't incremented correctly, we risk passing an incorrectly blinded
+                // shared key through the mixnet in the (unencrypted) Sphinx packet header.
+                // So this test ensures that the accumulator gets incremented properly
                 // on each run through the loop.
                 let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
-                let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
-                expected_accumulator = expected_accumulator * expected_blinder;
-                let expected_routing_keys = key_derivation_function(expected_shared_key);
-
+                    let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                    let expected_blinder = compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    expected_accumulator = expected_accumulator * expected_blinder;
+                    let expected_routing_keys = key_derivation_function(expected_shared_key);
                     assert_eq!(expected_routing_keys, key_material.routing_keys[i])
                 }
             }
@@ -551,10 +535,11 @@ speculate! {
             }
 
             it "generates correct routing keys" {
-                // The accumulator is the key to our blinding factors working. If the accumulator value isn't incremented
-                // correctly, we risk passing an incorrectly blinded shared key through the mixnet in the (unencrypted)
-                // Sphinx packet header. So this test ensures that the accumulator gets incremented properly
-                // on each run through the loop.
+                // The accumulator is the key to our blinding factors working.
+                // If the accumulator value isn't incremented correctly, we risk passing an
+                // incorrectly blinded shared key through the mixnet in the (unencrypted)
+                // Sphinx packet header. So this test ensures that the accumulator gets incremented
+                // properly on each run through the loop.
                 let mut expected_accumulator = initial_secret;
                 for i in 0..route.len() {
                     let expected_shared_key = compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
@@ -568,76 +553,12 @@ speculate! {
         }
     }
 
-    describe "xor" {
-        context "for empty inputs" {
-            it "returns an empty vector" {
-                let a: Vec<u8> = vec![];
-                let b: Vec<u8> = vec![];
-                let c = xor(&a, &b);
-                assert_eq!(0, c.len());
-            }
-        }
-
-        context "for non-zero inputs of same length" {
-            it "returns the expected xor of the vectors" {
-                let a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5, 6];
-                let c = xor(&a, &b);
-                assert_eq!(a.len(), c.len());
-                for i in 0..c.len() {
-                    assert_eq!(c[i], a[i] ^ b[i])
-                }
-            }
-        }
-
-        context "for inputs of different lengths" {
-            #[should_panic]
-            it "panics" {
-                let a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5];
-                let c = xor(&a, &b);
-            }
-        }
-    }
-
-    describe "xor_with" {
-        context "for empty inputs" {
-            it "does not change initial value" {
-                let mut a: Vec<u8> = vec![];
-                let b: Vec<u8> = vec![];
-                xor_with(&mut a, &b);
-                assert_eq!(0, a.len());
-            }
-        }
-
-        context "for non-zero inputs of same length" {
-            it "returns the expected xor of the vectors" {
-                let mut a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5, 6];
-                xor_with(&mut a, &b);
-                assert_eq!(1^4, a[0]);
-                assert_eq!(2^5, a[1]);
-                assert_eq!(3^6, a[2]);
-
-            }
-        }
-
-        context "for inputs of different lengths" {
-            #[should_panic]
-            it "panics" {
-                let mut a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5];
-                xor_with(&mut a, &b);
-            }
-        }
-    }
-
     describe "creating vector of zero bytes" {
         it "creates vector containing only zeroes of given length" {
             let zeroes = create_zero_bytes(42);
             assert_eq!(42, zeroes.len());
-            for i in 0..zeroes.len() {
-                assert_eq!(0, zeroes[i]);
+            for zero in zeroes {
+                assert_eq!(0, zero)
             }
         }
     }
