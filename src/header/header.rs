@@ -11,6 +11,7 @@ use crate::utils;
 use crate::utils::bytes;
 use crate::utils::crypto;
 use crate::utils::crypto::{CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
+use itertools::Itertools;
 
 #[derive(Clone)]
 pub enum RouteElement {
@@ -95,27 +96,59 @@ fn encapsulate_routing_info_and_integrity_macs(
     route: &[RouteElement],
     routing_keys: &Vec<RoutingKeys>,
 ) -> RoutingInfo {
-    let mut routing_info = final_routing_info;
-    for i in (0..route.len() - 1).rev() {
-        let routing_info_mac = generate_routing_info_integrity_mac(
-            routing_keys[i + 1].header_integrity_hmac_key,
-            &routing_info,
-        );
 
-        let next_node_hop_address = match &route[i] {
+    assert_eq!(route.len(), routing_keys.len());
+
+    let routing_info = route
+        .iter()
+        .peekable()
+        .map(|route_element| match route_element {
             RouteElement::ForwardHop(mixnode) => mixnode.address,
             _ => panic!("The next route element must be a mix node"),
-        };
-        let routing_info_components = [
-            next_node_hop_address.to_vec(),
-            routing_info_mac.to_vec(),
-            routing_info,
-        ]
-        .concat()
-        .to_vec();
-        routing_info =
-            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
-    }
+        }) // we only care about 'address' field from the route
+        .rev() // but we work 'from the inside'
+        .zip( // we need both route (i.e. address field) and corresponding keys
+            routing_keys
+                .iter()
+                .rev() // but we work 'from the inside'
+                .tuple_windows() // however, we need current and NEXT (i.e. previous) key
+        )
+        .fold(final_routing_info, // we start from the already created final routing info for destination
+            |routing_info_accumulator, (current_node_hop_address, (current_node_routing_keys, previous_node_routing_keys))| {
+                // compute mac with the keys of the NEXT (i.e. previous node)
+                let routing_info_mac = generate_routing_info_integrity_mac(previous_node_routing_keys.header_integrity_hmac_key, &routing_info_accumulator);
+
+                // concatenate address || hmac || previous routing info
+                let routing_info_components = &current_node_hop_address.iter().cloned().chain(routing_info_mac.iter().cloned()).chain(routing_info_accumulator.iter().cloned()).collect();
+
+                // encrypt (by xor'ing with output of aes keyed with our key)
+                encrypt_routing_info(current_node_routing_keys.stream_cipher_key, routing_info_components)
+            });
+
+    // left for reference sake until we have decent tests for this function
+
+//    let mut routing_info = final_routing_info;
+//
+//    for i in (0..route.len() - 1).rev() {
+//        let routing_info_mac = generate_routing_info_integrity_mac(
+//            routing_keys[i + 1].header_integrity_hmac_key,
+//            &routing_info,
+//        );
+//
+//        let next_node_hop_address = match &route[i] {
+//            RouteElement::ForwardHop(mixnode) => mixnode.address,
+//            _ => panic!("The next route element must be a mix node"),
+//        };
+//        let routing_info_components = [
+//            next_node_hop_address.to_vec(),
+//            routing_info_mac.to_vec(),
+//            routing_info,
+//        ]
+//        .concat()
+//        .to_vec();
+//        routing_info =
+//            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
+//    }
 
     let routing_info_mac = generate_routing_info_integrity_mac(
         routing_keys[0].header_integrity_hmac_key,
