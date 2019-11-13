@@ -53,7 +53,7 @@ pub struct RoutingKeys {
 
 pub struct RoutingInfo {
     pub enc_header: Vec<u8>,
-    pub header_integrity_hmac: Vec<u8>,
+    pub header_integrity_hmac: [u8; INTEGRITY_MAC_SIZE],
 }
 
 pub(crate) fn generate_all_routing_info(
@@ -96,11 +96,10 @@ fn encapsulate_routing_info_and_integrity_macs(
 ) -> RoutingInfo {
     let mut routing_info = final_routing_info;
     for i in (0..route.len() - 1).rev() {
-        let mut routing_info_mac = crypto::compute_keyed_hmac(
-            routing_keys[i + 1].header_integrity_hmac_key.to_vec(),
+        let routing_info_mac = generate_routing_info_integrity_mac(
+            routing_keys[i + 1].header_integrity_hmac_key,
             &routing_info,
         );
-        routing_info_mac.truncate(INTEGRITY_MAC_SIZE);
 
         let next_node_hop_address = match &route[i] {
             RouteElement::ForwardHop(mixnode) => mixnode.address,
@@ -116,11 +115,11 @@ fn encapsulate_routing_info_and_integrity_macs(
         routing_info =
             encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
     }
-    let mut routing_info_mac: Vec<u8> = crypto::compute_keyed_hmac(
-        routing_keys[0].header_integrity_hmac_key.to_vec(),
+
+    let routing_info_mac = generate_routing_info_integrity_mac(
+        routing_keys[0].header_integrity_hmac_key,
         &routing_info,
     );
-    routing_info_mac.truncate(INTEGRITY_MAC_SIZE);
     RoutingInfo {
         enc_header: routing_info,
         header_integrity_hmac: routing_info_mac,
@@ -140,6 +139,16 @@ fn encrypt_routing_info(
         &routing_info_components,
         &pseudorandom_bytes[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER],
     )
+}
+
+fn generate_routing_info_integrity_mac(
+    key: [u8; INTEGRITY_MAC_KEY_SIZE],
+    data: &Vec<u8>,
+) -> [u8; INTEGRITY_MAC_SIZE] {
+    let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), data);
+    let mut integrity_mac = [0u8; INTEGRITY_MAC_SIZE];
+    integrity_mac.copy_from_slice(&routing_info_mac[..INTEGRITY_MAC_SIZE]);
+    integrity_mac
 }
 
 fn generate_final_routing_info(
@@ -249,6 +258,26 @@ speculate! {
             let decryption_key = &decryption_key_source[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER];
             let decrypted_data = utils::bytes::xor(&encrypted_data, decryption_key);
             assert_eq!(data, decrypted_data);
+        }
+    }
+    describe "compute integrity mac"{
+        it "check whether the integrity mac is correct"{
+            let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
+            let data = vec![3u8; 25];
+            let integrity_mac = generate_routing_info_integrity_mac(key, &data);
+
+            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data);
+            computed_mac.truncate(INTEGRITY_MAC_SIZE);
+            assert_eq!(computed_mac, integrity_mac);
+        }
+        it "detects flipped bit in the data"{
+            let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
+            let mut data = vec![3u8; 25];
+            let integrity_mac = generate_routing_info_integrity_mac(key, &data);
+            data[10] = !data[10];
+            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data);
+            computed_mac.truncate(INTEGRITY_MAC_SIZE);
+            assert_ne!(computed_mac, integrity_mac);
         }
     }
 }
