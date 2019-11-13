@@ -4,11 +4,12 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use speculate::speculate;
 
 use crate::constants::{
-    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
-    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    AVERAGE_DELAY, DESTINATION_LENGTH, HKDF_INPUT_SEED, IDENTIFIER_LENGTH, MAX_PATH_LENGTH,
+    ROUTING_KEYS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::keys;
 use crate::utils;
+use crate::utils::bytes;
 use crate::utils::crypto;
 use crate::utils::crypto::{CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
 
@@ -29,11 +30,13 @@ impl RouteElement {
     }
 }
 
-pub type AddressBytes = [u8; 32];
+pub type AddressBytes = [u8; DESTINATION_LENGTH];
+pub type SURBIdentifier = [u8; SECURITY_PARAMETER];
 
 #[derive(Clone)]
 pub struct Destination {
     pub address: AddressBytes,
+    pub identifier: SURBIdentifier,
     pub pub_key: crypto::PublicKey,
 }
 
@@ -75,7 +78,7 @@ pub(crate) fn generate_all_routing_info(
         STREAM_CIPHER_OUTPUT_LENGTH,
     );
     let final_routing_info =
-        generate_final_routing_info(filler_string, route.len(), final_hop, pseudorandom_bytes);
+        generate_final_routing_info(filler_string, route.len(), &final_hop, pseudorandom_bytes);
 
     // loop for other hops
 }
@@ -83,46 +86,108 @@ pub(crate) fn generate_all_routing_info(
 fn generate_final_routing_info(
     filler: Vec<u8>,
     route_len: usize,
-    destination: Destination,
+    destination: &Destination,
     pseudorandom_bytes: Vec<u8>,
 ) -> Vec<u8> {
-    let final_destination_bytes = address_fixture();
+    let address_bytes = destination.address;
+    let surbidentifier = destination.identifier;
+    let final_destination_bytes = [address_bytes.to_vec(), surbidentifier.to_vec()].concat();
 
-    assert!(
-        final_destination_bytes.len()
-            <= (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
+    assert!(address_bytes.len() <= (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER);
+
+    let padding = bytes::random(
+        (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - address_bytes.len(),
     );
 
-    let zero_padding = vec![
-        0u8;
-        (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
-            - final_destination_bytes.len()
-    ];
-
-    let padded_final_destination = [final_destination_bytes.to_vec(), zero_padding].concat();
-    let xored_bytes = utils::bytes::xor(&padded_final_destination, &pseudorandom_bytes);
+    let padded_final_destination = [final_destination_bytes.to_vec(), padding].concat();
+    let xored_bytes = utils::bytes::xor(
+        &padded_final_destination,
+        &pseudorandom_bytes[0..((2 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER)],
+    );
     [xored_bytes, filler].concat()
 }
 
 #[cfg(test)]
 speculate! {
     describe "encapsulation of the final routing information" {
-        context "for IPV4" {
-            it "produces result of length filler plus pseudorandom bytes lengths" {
+        context "for route of length 5"{
+            it "produces result of length filler plus padded concatenated destination and identifier" {
                 let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
-                let route_len = 4;
-                let filler = vec![0u8; 25];
+                let route_len = 5;
+                let filler = filler_fixture(route_len-1);
                 let destination = Destination {
                     pub_key: crypto::generate_random_curve_point(),
                     address: address_fixture(),
+                    identifier: [42u8;SECURITY_PARAMETER]
                 };
-    //                generate_final_routing_info(filler, route_len, destination, pseudorandom_bytes);
-                assert_eq!(true, true);
+                let filler_len = filler.len();
+                let destination_address = &destination.address;
+                let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+                let expected_final_header_len = DESTINATION_LENGTH + IDENTIFIER_LENGTH + (2*(MAX_PATH_LENGTH-route_len)+2)*SECURITY_PARAMETER-DESTINATION_LENGTH + filler_len;
+                assert_eq!(expected_final_header_len, final_header.len());
             }
+        }
+    }
+    context "for route of length 3"{
+        it "produces result of length filler plus padded concatenated destination and identifier" {
+            let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+            let route_len = 3;
+            let filler = filler_fixture(route_len-1);
+            let destination = Destination {
+                pub_key: crypto::generate_random_curve_point(),
+                address: address_fixture(),
+                identifier: [42u8;SECURITY_PARAMETER]
+            };
+            let filler_len = filler.len();
+            let destination_address = &destination.address;
+            let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+            let expected_final_header_len = DESTINATION_LENGTH + IDENTIFIER_LENGTH + (2*(MAX_PATH_LENGTH-route_len)+2)*SECURITY_PARAMETER-DESTINATION_LENGTH + filler_len;
+            assert_eq!(expected_final_header_len, final_header.len());
+        }
+    }
+    context "for route of length 1"{
+        it "produces result of length filler plus padded concatenated destination and identifier" {
+            let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+            let route_len = 1;
+            let filler = filler_fixture(route_len-1);
+            let destination = Destination {
+                pub_key: crypto::generate_random_curve_point(),
+                address: address_fixture(),
+                identifier: [42u8;SECURITY_PARAMETER]
+            };
+            let filler_len = filler.len();
+            let destination_address = &destination.address;
+            let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+            let expected_final_header_len = DESTINATION_LENGTH + IDENTIFIER_LENGTH + (2*(MAX_PATH_LENGTH-route_len)+2)*SECURITY_PARAMETER-DESTINATION_LENGTH + filler_len;
+            assert_eq!(expected_final_header_len, final_header.len());
+        }
+    }
+    context "for route of length 0"{
+        #[should_panic]
+        it "panics" {
+            let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+            let route_len = 0;
+            let filler = filler_fixture(route_len-1);
+            let destination = Destination {
+                pub_key: crypto::generate_random_curve_point(),
+                address: address_fixture(),
+                identifier: [42u8;SECURITY_PARAMETER]
+            };
+            let filler_len = filler.len();
+            let destination_address = &destination.address;
+            let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
         }
     }
 }
 
 pub fn address_fixture() -> AddressBytes {
     [0u8; 32]
+}
+
+pub fn surbidentifier_fixture() -> SURBIdentifier {
+    [0u8; SECURITY_PARAMETER]
+}
+
+fn filler_fixture(i: usize) -> Vec<u8> {
+    vec![0u8; 2 * SECURITY_PARAMETER * i]
 }

@@ -7,5 +7,5 @@ pub const MAX_PATH_LENGTH: usize = 5; // what we refer in the Sphinx paper as r
 pub const ROUTING_KEYS_LENGTH: usize = 2 * crypto::STREAM_CIPHER_KEY_SIZE;
 pub const HKDF_INPUT_SEED: &[u8; 97] = b"Dwste mou enan moxlo arketa makru kai ena upomoxlio gia na ton topothetisw kai tha kinisw thn gh.";
 pub const STREAM_CIPHER_OUTPUT_LENGTH: usize = (2 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER;
-pub const MAX_DESTINATION_LENGTH: usize = 2 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+pub const DESTINATION_LENGTH: usize = 2 * SECURITY_PARAMETER;
 pub const IDENTIFIER_LENGTH: usize = SECURITY_PARAMETER;
