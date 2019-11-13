@@ -124,7 +124,7 @@ speculate! {
 
         fn new_route_final_hop(pub_key: crypto::PublicKey, address: crate::header::header::AddressBytes) -> RouteElement {
             RouteElement::FinalHop(Destination {
-                pub_key,address
+                pub_key, address
             })
         }
 
