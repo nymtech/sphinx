@@ -34,45 +34,6 @@ pub struct Destination {
     pub pub_key: crypto::PublicKey,
 }
 
-impl Destination {
-    fn encode(&self) -> [u8; SERIALIZED_DESTINATION_LENGTH] {
-        let mut bytes_vec: Vec<u8> = vec![];
-        bytes_vec.extend(self.pub_key.to_bytes().iter()); // first 32 bytes for public key
-        bytes_vec.extend(self.address.port().to_ne_bytes().iter()); // next 2 bytes are for the port
-
-        // ipversion || ip
-
-        bytes_vec.extend(&match self.address {
-            SocketAddr::V4(socket_address) => {
-                let mut ip_bytes_vec: Vec<u8> = vec![];
-                let mut ip_bytes = [0u8; 17];
-                ip_bytes_vec.extend([IPV4_BYTE].iter()); // ip version prefix
-                ip_bytes_vec.extend(socket_address.ip().octets().iter()); // actual ip address
-                ip_bytes_vec.extend(IPV4_PADDING.iter()); // pad with 12 zero bytes (to match length of ipv6)
-                ip_bytes.clone_from_slice(&ip_bytes_vec);
-                ip_bytes
-            }
-            SocketAddr::V6(socket_address) => {
-                let mut ip_bytes_vec: Vec<u8> = vec![];
-                let mut ip_bytes = [0u8; 17];
-                ip_bytes_vec.extend([IPV6_BYTE].iter()); // ip version prefix
-                ip_bytes_vec.extend(socket_address.ip().octets().iter()); // actual ip address
-                ip_bytes.clone_from_slice(&ip_bytes_vec);
-                ip_bytes
-            }
-        });
-
-        let mut bytes = [0u8; SERIALIZED_DESTINATION_LENGTH];
-        bytes.clone_from_slice(&bytes_vec);
-        // first 32 bytes will be the public key
-        // next 2 bytes will be the port
-        // next 1 byte will indicate ipv4 vs ipv6
-        // next 16 bytes will represent the address, either ipv6 or ipv4 padded with zeroes
-
-        bytes
-    }
-}
-
 #[derive(Clone)]
 pub struct MixNode {
     pub address: AddressBytes,
