@@ -34,13 +34,6 @@ pub struct Destination {
     pub pub_key: crypto::PublicKey,
 }
 
-const IP_VERSION_FIELD_LENGTH: usize = 1;
-const IPV4_BYTE: u8 = 4;
-const IPV6_BYTE: u8 = 6;
-const SERIALIZED_DESTINATION_LENGTH: usize =
-    IP_VERSION_FIELD_LENGTH + crypto::PUBLIC_KEY_LENGTH + 16 + 2; // 16 bytes for maximum ipv6 + 2 bytes (16bits) for the port
-const IPV4_PADDING: [u8; 12] = [0u8; 12];
-
 impl Destination {
     fn encode(&self) -> [u8; SERIALIZED_DESTINATION_LENGTH] {
         let mut bytes_vec: Vec<u8> = vec![];
