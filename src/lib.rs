@@ -1,5 +1,7 @@
 use crate::header::header::{MixNode, RouteElement};
 
+use constants::INTEGRITY_MAC_SIZE;
+
 mod constants;
 mod header;
 mod payload;
@@ -11,8 +13,8 @@ pub struct SphinxPacket {
 }
 
 pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
-    let (header, shared_keys) = header::create(route);
-    let payload = payload::create(message, shared_keys);
+    let (header, payload_keys) = header::create(route);
+    let payload = payload::create(message, payload_keys);
     SphinxPacket { header, payload }
 }
 
@@ -27,7 +29,13 @@ pub struct Hop {
 pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
     (
         SphinxPacket {
-            header: header::SphinxHeader {},
+            header: header::SphinxHeader {
+                shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
+                routing_info: header::header::RoutingInfo {
+                    enc_header: vec![],
+                    header_integrity_hmac: [0u8; INTEGRITY_MAC_SIZE],
+                },
+            },
             payload: vec![],
         },
         Hop {

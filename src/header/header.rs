@@ -3,7 +3,7 @@ use speculate::speculate;
 
 use crate::constants::{
     AVERAGE_DELAY, DESTINATION_LENGTH, HKDF_INPUT_SEED, IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE,
-    INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
+    INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
     STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::keys;
@@ -49,6 +49,7 @@ pub struct MixNode {
 pub struct RoutingKeys {
     pub stream_cipher_key: [u8; STREAM_CIPHER_KEY_SIZE],
     pub header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE],
+    pub payload_key: [u8; PAYLOAD_KEY_SIZE],
 }
 
 pub struct RoutingInfo {
