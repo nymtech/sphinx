@@ -42,7 +42,7 @@ pub fn generate_pseudorandom_bytes(
     data
 }
 
-pub fn compute_keyed_hmac(key: Vec<u8>, data: Vec<u8>) -> Vec<u8> {
+pub fn compute_keyed_hmac(key: Vec<u8>, data: &Vec<u8>) -> Vec<u8> {
     let mut mac = HmacSha256::new_varkey(&key).expect("HMAC can take key of any size");
     mac.input(&data);
     mac.result().code().to_vec()

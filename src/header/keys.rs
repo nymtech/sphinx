@@ -47,7 +47,7 @@ fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> 
     let shared_secret = CURVE_GENERATOR * exponent;
     let hmac_full = compute_keyed_hmac(
         shared_secret.to_bytes().to_vec(),
-        shared_key.to_bytes().to_vec(),
+        &shared_key.to_bytes().to_vec(),
     );
     let mut hmac = [0u8; 32];
     hmac.copy_from_slice(&hmac_full[..32]);

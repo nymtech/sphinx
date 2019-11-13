@@ -1,11 +1,10 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
-
 #[cfg(test)]
 use speculate::speculate;
 
 use crate::constants::{
     AVERAGE_DELAY, DESTINATION_LENGTH, HKDF_INPUT_SEED, IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE,
-    MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
+    STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::keys;
 use crate::utils;
@@ -52,12 +51,17 @@ pub struct RoutingKeys {
     pub header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE],
 }
 
+pub struct RoutingInfo {
+    pub enc_header: Vec<u8>,
+    pub header_integrity_hmac: Vec<u8>,
+}
+
 pub(crate) fn generate_all_routing_info(
     route: &[RouteElement],
     routing_keys: &Vec<RoutingKeys>,
     filler_string: Vec<u8>,
-) {
-    let final_key = routing_keys
+) -> RoutingInfo {
+    let final_keys = routing_keys
         .last()
         .cloned()
         .expect("The keys should be already initialized");
@@ -72,17 +76,54 @@ pub(crate) fn generate_all_routing_info(
 
     // TODO: does this IV correspond to STREAM_CIPHER_INIT_VECTOR?
     // (used in generate_pseudorandom_filler_bytes)
-    let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0u8; 16];
     let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-        &final_key.stream_cipher_key,
-        &iv,
+        &final_keys.stream_cipher_key,
+        &STREAM_CIPHER_INIT_VECTOR,
         STREAM_CIPHER_OUTPUT_LENGTH,
     );
     let final_routing_info =
         generate_final_routing_info(filler_string, route.len(), &final_hop, pseudorandom_bytes);
 
-    //let final_routing_info_mac =
     // loop for other hops
+    let mut routing_info = final_routing_info;
+    for i in (0..route.len() - 1).rev() {
+        let mut routing_info_mac = crypto::compute_keyed_hmac(
+            routing_keys[i + 1].header_integrity_hmac_key.to_vec(),
+            &routing_info,
+        );
+        routing_info_mac.truncate(INTEGRITY_MAC_SIZE);
+
+        let next_node_hop_address = match &route[i] {
+            RouteElement::ForwardHop(mixnode) => mixnode.address,
+            _ => panic!("The next route element must be a mix node"),
+        };
+        let routing_info_components = [
+            next_node_hop_address.to_vec(),
+            routing_info_mac.to_vec(),
+            routing_info,
+        ]
+        .concat()
+        .to_vec();
+
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &routing_keys[i].stream_cipher_key,
+            &STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
+        routing_info = utils::bytes::xor(
+            &routing_info_components,
+            &pseudorandom_bytes[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER],
+        );
+    }
+    let mut routing_info_mac: Vec<u8> = crypto::compute_keyed_hmac(
+        routing_keys[0].header_integrity_hmac_key.to_vec(),
+        &routing_info,
+    );
+    routing_info_mac.truncate(INTEGRITY_MAC_SIZE);
+    RoutingInfo {
+        enc_header: routing_info,
+        header_integrity_hmac: routing_info_mac,
+    }
 }
 
 fn generate_final_routing_info(
@@ -178,6 +219,10 @@ speculate! {
             let filler_len = filler.len();
             let destination_address = &destination.address;
             let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+        }
+    }
+    describe "encapsulation of the all the routing information and integrity macs"{
+        context "foomp"{
         }
     }
 }
