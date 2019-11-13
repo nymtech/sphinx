@@ -3,13 +3,11 @@ use crate::header::header::{
     address_fixture, surbidentifier_fixture, Destination, MixNode, RouteElement, RoutingKeys,
 };
 use crate::utils::crypto;
+use crate::utils::crypto::compute_keyed_hmac;
 use crate::utils::crypto::CURVE_GENERATOR;
 use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
-use hmac::{Hmac, Mac};
 use sha2::Sha256;
-
-type HmacSha256 = Hmac<Sha256>;
 
 pub struct KeyMaterial {
     initial_shared_secret: crypto::SharedSecret,
@@ -47,7 +45,13 @@ pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
 
 fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
     let shared_secret = CURVE_GENERATOR * exponent;
-    compute_keyed_hmac(shared_secret.to_bytes(), shared_key.to_bytes())
+    let hmac_full = compute_keyed_hmac(
+        shared_secret.to_bytes().to_vec(),
+        shared_key.to_bytes().to_vec(),
+    );
+    let mut hmac = [0u8; 32];
+    hmac.copy_from_slice(&hmac_full[..32]);
+    Scalar::from_bytes_mod_order(hmac)
 }
 
 // Given that everything here except RoutingKeys lives in the `crypto` module, I think
@@ -66,14 +70,6 @@ pub(crate) fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingK
 
 fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
     node_pub_key * exponent
-}
-
-fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
-    let mut mac = HmacSha256::new_varkey(&alpha).expect("HMAC can take key of any size");
-    mac.input(&data);
-    let mut output = [0u8; 32];
-    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
-    Scalar::from_bytes_mod_order(output)
 }
 
 #[cfg(test)]

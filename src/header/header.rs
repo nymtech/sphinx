@@ -80,6 +80,7 @@ pub(crate) fn generate_all_routing_info(
     let final_routing_info =
         generate_final_routing_info(filler_string, route.len(), &final_hop, pseudorandom_bytes);
 
+    //let final_routing_info_mac =
     // loop for other hops
 }
 

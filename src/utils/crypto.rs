@@ -3,7 +3,11 @@ use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes128Ctr;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
+use hmac::{Hmac, Mac};
 use rand_os;
+use sha2::Sha256;
+
+type HmacSha256 = Hmac<Sha256>;
 
 pub const CURVE_GENERATOR: MontgomeryPoint = curve25519_dalek::constants::X25519_BASEPOINT;
 pub const PUBLIC_KEY_LENGTH: usize = 32;
@@ -36,6 +40,12 @@ pub fn generate_pseudorandom_bytes(
     let mut data = vec![0u8; length];
     cipher.apply_keystream(&mut data);
     data
+}
+
+pub fn compute_keyed_hmac(key: Vec<u8>, data: Vec<u8>) -> Vec<u8> {
+    let mut mac = HmacSha256::new_varkey(&key).expect("HMAC can take key of any size");
+    mac.input(&data);
+    mac.result().code().to_vec()
 }
 
 #[cfg(test)]
