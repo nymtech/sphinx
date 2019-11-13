@@ -26,9 +26,11 @@ impl RouteElement {
     }
 }
 
+pub type AddressBytes = [u8; 32];
+
 #[derive(Clone)]
 pub struct Destination {
-    pub address: SocketAddr,
+    pub address: AddressBytes,
     pub pub_key: crypto::PublicKey,
 }
 
@@ -80,7 +82,7 @@ impl Destination {
 
 #[derive(Clone)]
 pub struct MixNode {
-    pub address: SocketAddr,
+    pub address: AddressBytes,
     pub pub_key: crypto::PublicKey,
 }
 
