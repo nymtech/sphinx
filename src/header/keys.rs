@@ -117,12 +117,12 @@ speculate! {
     describe "deriving key material" {
         fn new_route_forward_hop(pub_key: crypto::PublicKey) -> RouteElement {
             RouteElement::ForwardHop(MixNode {
-                address: ipv4_host_fixture(),
+                address: address_fixture(),
                 pub_key,
             })
         }
 
-        fn new_route_final_hop(pub_key: crypto::PublicKey, address: SocketAddr) -> RouteElement {
+        fn new_route_final_hop(pub_key: crypto::PublicKey, address: crate::header::header::AddressBytes) -> RouteElement {
             RouteElement::FinalHop(Destination {
                 pub_key,address
             })
