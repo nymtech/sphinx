@@ -2,6 +2,7 @@ use crate::header::header::RouteElement;
 use crate::utils::crypto;
 
 pub mod delays;
+pub mod filler;
 pub mod header;
 pub mod keys;
 
@@ -13,7 +14,7 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<crypto::SharedKey>) 
     let initial_secret = crypto::generate_secret();
     let key_material = keys::derive(route, initial_secret);
     let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
-    let filler_string = header::generate_pseudorandom_filler_bytes(&key_material.routing_keys);
+    let filler_string = filler::generate_pseudorandom_filler(&key_material.routing_keys);
     let routing_info =
         header::generate_all_routing_info(route, &key_material.routing_keys, filler_string);
     // encapsulate routing information, compute MACs
