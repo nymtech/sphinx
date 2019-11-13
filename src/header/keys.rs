@@ -149,7 +149,7 @@ speculate! {
         context "with a route with no forward hops and a destination" {
             before {
                 let route: Vec<RouteElement> = vec![
-                    new_route_final_hop(crypto::generate_random_curve_point(), ipv4_host_fixture())
+                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture())
                 ];
                 let initial_secret = crypto::generate_secret();
                 let key_material = derive(&route, initial_secret);
@@ -191,7 +191,7 @@ speculate! {
             before {
                 let route: Vec<RouteElement> = vec![
                     new_route_forward_hop(crypto::generate_random_curve_point()),
-                    new_route_final_hop(crypto::generate_random_curve_point(), ipv4_host_fixture())
+                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture())
                 ];
                 let initial_secret = crypto::generate_secret();
                 let key_material = derive(&route, initial_secret);
@@ -229,7 +229,7 @@ speculate! {
                     new_route_forward_hop(crypto::generate_random_curve_point()),
                     new_route_forward_hop(crypto::generate_random_curve_point()),
                     new_route_forward_hop(crypto::generate_random_curve_point()),
-                    new_route_final_hop(crypto::generate_random_curve_point(), ipv4_host_fixture())
+                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture())
                 ];
                 let initial_secret = crypto::generate_secret();
                 let key_material = derive(&route, initial_secret);

@@ -124,7 +124,7 @@ fn generate_final_routing_info(
     destination: Destination,
     pseudorandom_bytes: Vec<u8>,
 ) -> Vec<u8> {
-    let final_destination_bytes = destination.encode(); // we will convert our address to bytes here
+    let final_destination_bytes = address_fixture();
 
     assert!(
         final_destination_bytes.len()
@@ -272,7 +272,7 @@ speculate! {
                 let filler = vec![0u8; 25];
                 let destination = Destination {
                     pub_key: crypto::generate_random_curve_point(),
-                    address: ipv4_host_fixture(),
+                    address: address_fixture(),
                 };
 //                generate_final_routing_info(filler, route_len, destination, pseudorandom_bytes);
                 assert_eq!(true, true);
@@ -287,6 +287,6 @@ speculate! {
     }
 }
 
-pub fn ipv4_host_fixture() -> SocketAddr {
-    SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 8080)
+pub fn address_fixture() -> AddressBytes {
+    [0u8; 32]
 }
