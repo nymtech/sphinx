@@ -1,7 +1,9 @@
-use crate::constants;
 use rand_distr::{Distribution, Exp};
+
 #[cfg(test)]
 use speculate::speculate;
+
+use crate::constants;
 
 pub(crate) fn generate(number: usize) -> Vec<f64> {
     let exp = Exp::new(1.0 / constants::AVERAGE_DELAY).unwrap();
