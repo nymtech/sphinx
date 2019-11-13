@@ -1,4 +1,4 @@
-use crate::constants::{HKDF_INPUT_SEED, ROUTING_KEYS_LENGTH};
+use crate::constants::{HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, ROUTING_KEYS_LENGTH};
 use crate::header::header::{
     address_fixture, surbidentifier_fixture, Destination, MixNode, RouteElement, RoutingKeys,
 };
@@ -65,7 +65,16 @@ pub(crate) fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingK
     let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
     stream_cipher_key.copy_from_slice(&output[..crypto::STREAM_CIPHER_KEY_SIZE]);
 
-    RoutingKeys { stream_cipher_key }
+    let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
+    header_integrity_hmac_key.copy_from_slice(
+        &output[crypto::STREAM_CIPHER_KEY_SIZE
+            ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
+    );
+
+    RoutingKeys {
+        stream_cipher_key,
+        header_integrity_hmac_key,
+    }
 }
 
 fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
@@ -302,6 +311,7 @@ speculate! {
             let shared_key = crypto::generate_random_curve_point();
             let routing_keys = key_derivation_function(shared_key);
             assert_eq!(crypto::STREAM_CIPHER_KEY_SIZE, routing_keys.stream_cipher_key.len());
+            assert_eq!(INTEGRITY_MAC_KEY_SIZE, routing_keys.header_integrity_hmac_key.len());
         }
         it "returns the same output for two equal inputs" {
             let shared_key = crypto::generate_random_curve_point();

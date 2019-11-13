@@ -4,8 +4,8 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
 use speculate::speculate;
 
 use crate::constants::{
-    AVERAGE_DELAY, DESTINATION_LENGTH, HKDF_INPUT_SEED, IDENTIFIER_LENGTH, MAX_PATH_LENGTH,
-    ROUTING_KEYS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    AVERAGE_DELAY, DESTINATION_LENGTH, HKDF_INPUT_SEED, IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE,
+    MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::keys;
 use crate::utils;
@@ -49,6 +49,7 @@ pub struct MixNode {
 #[derive(Debug, PartialEq, Clone)]
 pub struct RoutingKeys {
     pub stream_cipher_key: [u8; STREAM_CIPHER_KEY_SIZE],
+    pub header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE],
 }
 
 pub(crate) fn generate_all_routing_info(
