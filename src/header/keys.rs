@@ -1,5 +1,5 @@
 use crate::constants::{HKDF_INPUT_SEED, ROUTING_KEYS_LENGTH};
-use crate::header::header::{ipv4_host_fixture, Destination, MixNode, RouteElement, RoutingKeys};
+use crate::header::header::{address_fixture, Destination, MixNode, RouteElement, RoutingKeys};
 use crate::utils::crypto;
 use crate::utils::crypto::CURVE_GENERATOR;
 use curve25519_dalek::scalar::Scalar;
