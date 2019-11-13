@@ -6,7 +6,7 @@ use crate::header::keys;
 use crate::utils::crypto;
 use crate::{constants, utils};
 
-pub(crate) fn generate_pseudorandom_filler(routing_keys: &Vec<RoutingKeys>) -> Vec<u8> {
+pub fn generate_pseudorandom_filler(routing_keys: &Vec<RoutingKeys>) -> Vec<u8> {
     routing_keys
         .iter()
         .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
