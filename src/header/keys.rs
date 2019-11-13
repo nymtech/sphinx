@@ -6,7 +6,6 @@ use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
 use hmac::{Hmac, Mac};
 use sha2::Sha256;
-use std::net::SocketAddr;
 
 type HmacSha256 = Hmac<Sha256>;
 
