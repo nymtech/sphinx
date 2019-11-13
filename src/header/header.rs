@@ -84,7 +84,16 @@ pub(crate) fn generate_all_routing_info(
     let final_routing_info =
         generate_final_routing_info(filler_string, route.len(), &final_hop, pseudorandom_bytes);
 
-    // loop for other hops
+    let all_routing_info =
+        encapsulate_routing_info_and_integrity_macs(final_routing_info, route, routing_keys);
+    all_routing_info
+}
+
+fn encapsulate_routing_info_and_integrity_macs(
+    final_routing_info: Vec<u8>,
+    route: &[RouteElement],
+    routing_keys: &Vec<RoutingKeys>,
+) -> RoutingInfo {
     let mut routing_info = final_routing_info;
     for i in (0..route.len() - 1).rev() {
         let mut routing_info_mac = crypto::compute_keyed_hmac(
@@ -104,16 +113,8 @@ pub(crate) fn generate_all_routing_info(
         ]
         .concat()
         .to_vec();
-
-        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-            &routing_keys[i].stream_cipher_key,
-            &STREAM_CIPHER_INIT_VECTOR,
-            STREAM_CIPHER_OUTPUT_LENGTH,
-        );
-        routing_info = utils::bytes::xor(
-            &routing_info_components,
-            &pseudorandom_bytes[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER],
-        );
+        routing_info =
+            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
     }
     let mut routing_info_mac: Vec<u8> = crypto::compute_keyed_hmac(
         routing_keys[0].header_integrity_hmac_key.to_vec(),
@@ -124,6 +125,21 @@ pub(crate) fn generate_all_routing_info(
         enc_header: routing_info,
         header_integrity_hmac: routing_info_mac,
     }
+}
+
+fn encrypt_routing_info(
+    key: [u8; STREAM_CIPHER_KEY_SIZE],
+    routing_info_components: &Vec<u8>,
+) -> Vec<u8> {
+    let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+        &key,
+        &STREAM_CIPHER_INIT_VECTOR,
+        STREAM_CIPHER_OUTPUT_LENGTH,
+    );
+    utils::bytes::xor(
+        &routing_info_components,
+        &pseudorandom_bytes[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER],
+    )
 }
 
 fn generate_final_routing_info(
@@ -221,8 +237,18 @@ speculate! {
             let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
         }
     }
-    describe "encapsulation of the all the routing information and integrity macs"{
-        context "foomp"{
+    describe "encrypt routing info"{
+        it "check whether we can decrypt the result" {
+            let key = [2u8; STREAM_CIPHER_KEY_SIZE];
+            let data = vec![3u8; (2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER];
+            let encrypted_data = encrypt_routing_info(key, &data);
+            let decryption_key_source = crypto::generate_pseudorandom_bytes(
+                &key,
+                &STREAM_CIPHER_INIT_VECTOR,
+                STREAM_CIPHER_OUTPUT_LENGTH);
+            let decryption_key = &decryption_key_source[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER];
+            let decrypted_data = utils::bytes::xor(&encrypted_data, decryption_key);
+            assert_eq!(data, decrypted_data);
         }
     }
 }
