@@ -33,7 +33,7 @@ impl RouteElement {
 }
 
 pub type AddressBytes = [u8; DESTINATION_LENGTH];
-pub type SURBIdentifier = [u8; SECURITY_PARAMETER];
+pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
 #[derive(Clone)]
 pub struct Destination {
