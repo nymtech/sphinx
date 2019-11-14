@@ -145,7 +145,11 @@ mod deriving_key_material {
         pub_key: crypto::PublicKey,
         address: crate::header::header::AddressBytes,
     ) -> RouteElement {
-        RouteElement::FinalHop(Destination { pub_key, address })
+        RouteElement::FinalHop(Destination {
+            pub_key,
+            address,
+            identifier: surb_identifier_fixture(),
+        })
     }
 
     #[cfg(test)]

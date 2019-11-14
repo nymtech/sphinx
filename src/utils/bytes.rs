@@ -28,7 +28,7 @@ pub fn random(number: usize) -> Vec<u8> {
 mod test_random {
     use super::*;
 
-    fn test_generating_specified_number_of_bytes {
+    fn test_generating_specified_number_of_bytes() {
         let random_bytes = random(10);
         assert_eq!(10, random_bytes.len());
     }
