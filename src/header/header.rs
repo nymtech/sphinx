@@ -6,14 +6,14 @@ use crate::constants::{
     INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH, SECURITY_PARAMETER,
     STREAM_CIPHER_OUTPUT_LENGTH,
 };
-use crate::header::keys;
+use crate::header::keys::routing_keys_fixture;
 use crate::utils;
 use crate::utils::bytes;
 use crate::utils::crypto;
 use crate::utils::crypto::{CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
-use itertools::Itertools;
 
-pub const ROUTING_INFO_SIZE: usize = (2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER;
+pub const TRUNCATED_ROUTING_INFO_SIZE: usize = (2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER;
+pub const ROUTING_INFO_SIZE: usize = (2 * MAX_PATH_LENGTH + 1) * SECURITY_PARAMETER;
 
 #[derive(Clone)]
 pub enum RouteElement {
@@ -347,45 +347,34 @@ speculate! {
     describe "encrypt routing info"{
         it "check whether we can decrypt the result" {
             let key = [2u8; STREAM_CIPHER_KEY_SIZE];
-            let data = vec![3u8; (2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER];
+            let data = vec![3u8; ROUTING_INFO_SIZE];
             let encrypted_data = encrypt_routing_info(key, &data);
             let decryption_key_source = crypto::generate_pseudorandom_bytes(
                 &key,
                 &STREAM_CIPHER_INIT_VECTOR,
                 STREAM_CIPHER_OUTPUT_LENGTH);
-            let decryption_key = &decryption_key_source[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER];
+            let decryption_key = &decryption_key_source[..ROUTING_INFO_SIZE];
             let decrypted_data = utils::bytes::xor(&encrypted_data, decryption_key);
             assert_eq!(data, decrypted_data);
-        }
-    }
-
-    describe "truncating full routing information" {
-        it "preserves head of original content" {
-            let dummy_routing_info = bytes::random(200);
-            let dummy_routing_info_copy = dummy_routing_info.to_vec();
-            let truncated_routing_info = truncate_routing_info_vec(dummy_routing_info);
-            for i in (0..truncated_routing_info.len()) {
-                assert_eq!(truncated_routing_info[i], dummy_routing_info_copy[i])
-            }
         }
     }
 
     describe "compute integrity mac"{
         it "check whether the integrity mac is correct"{
             let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-            let data = vec![3u8; 25];
-            let integrity_mac = generate_routing_info_integrity_mac(key, &data);
+            let data = [3u8; ROUTING_INFO_SIZE];
+            let integrity_mac = generate_routing_info_integrity_mac(key, data);
 
-            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data);
+            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
             computed_mac.truncate(INTEGRITY_MAC_SIZE);
             assert_eq!(computed_mac, integrity_mac);
         }
         it "detects flipped bit in the data"{
             let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-            let mut data = vec![3u8; 25];
-            let integrity_mac = generate_routing_info_integrity_mac(key, &data);
+            let mut data = [3u8; ROUTING_INFO_SIZE];
+            let integrity_mac = generate_routing_info_integrity_mac(key, data);
             data[10] = !data[10];
-            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data);
+            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
             computed_mac.truncate(INTEGRITY_MAC_SIZE);
             assert_ne!(computed_mac, integrity_mac);
         }
@@ -396,10 +385,17 @@ pub fn address_fixture() -> AddressBytes {
     [0u8; 32]
 }
 
-pub fn surbidentifier_fixture() -> SURBIdentifier {
+pub fn surb_identifier_fixture() -> SURBIdentifier {
     [0u8; SECURITY_PARAMETER]
 }
 
 fn filler_fixture(i: usize) -> Vec<u8> {
     vec![0u8; 2 * SECURITY_PARAMETER * i]
+}
+
+fn header_layer_components_fixture() -> HeaderLayerComponents {
+    HeaderLayerComponents {
+        enc_header: [5u8; ROUTING_INFO_SIZE],
+        header_integrity_hmac: [6u8; INTEGRITY_MAC_SIZE],
+    }
 }
