@@ -211,23 +211,30 @@ fn prepare_header_layer(
 fn encrypt_routing_info(
     key: [u8; STREAM_CIPHER_KEY_SIZE],
     routing_info_components: &Vec<u8>,
-) -> Vec<u8> {
+) -> RoutingInformation {
+    assert_eq!(ROUTING_INFO_SIZE, routing_info_components.len());
+
     let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
         &key,
         &STREAM_CIPHER_INIT_VECTOR,
         STREAM_CIPHER_OUTPUT_LENGTH,
     );
-    utils::bytes::xor(
+
+    let encrypted_routing_info_vec = utils::bytes::xor(
         &routing_info_components,
-        &pseudorandom_bytes[..(2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER],
-    )
+        &pseudorandom_bytes[..ROUTING_INFO_SIZE],
+    );
+
+    let mut encrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
+    encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
+    encrypted_routing_info
 }
 
 fn generate_routing_info_integrity_mac(
     key: [u8; INTEGRITY_MAC_KEY_SIZE],
-    data: &Vec<u8>,
-) -> [u8; INTEGRITY_MAC_SIZE] {
-    let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), data);
+    data: RoutingInformation,
+) -> HeaderIntegrityMac {
+    let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
     let mut integrity_mac = [0u8; INTEGRITY_MAC_SIZE];
     integrity_mac.copy_from_slice(&routing_info_mac[..INTEGRITY_MAC_SIZE]);
     integrity_mac
@@ -238,7 +245,7 @@ fn generate_final_routing_info(
     route_len: usize,
     destination: &Destination,
     pseudorandom_bytes: Vec<u8>,
-) -> Vec<u8> {
+) -> RoutingInformation {
     let address_bytes = destination.address;
     let surb_identifier = destination.identifier;
     let final_destination_bytes = [address_bytes.to_vec(), surb_identifier.to_vec()].concat();
@@ -255,7 +262,10 @@ fn generate_final_routing_info(
         &pseudorandom_bytes[..((2 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER)],
     );
 
-    [xored_bytes, filler].concat()
+    let final_routing_info_vec = [xored_bytes, filler].concat();
+    let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
+    final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
+    final_routing_information
 }
 
 fn truncate_routing_info_vec(routing_info_vec: Vec<u8>) -> RoutingInformation {
