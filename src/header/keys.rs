@@ -2,7 +2,7 @@ use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
 use crate::header::header::{
-    address_fixture, surbidentifier_fixture, Destination, MixNode, RouteElement, RoutingKeys,
+    address_fixture, surb_identifier_fixture, Destination, MixNode, RouteElement, RoutingKeys,
 };
 use crate::utils::crypto;
 use crate::utils::crypto::compute_keyed_hmac;
@@ -166,7 +166,7 @@ speculate! {
         context "with a route with no forward hops and a destination" {
             before {
                 let route: Vec<RouteElement> = vec![
-                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture(), surbidentifier_fixture())
+                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture(), surb_identifier_fixture())
                 ];
                 let initial_secret = crypto::generate_secret();
                 let key_material = derive(&route, initial_secret);
@@ -208,7 +208,7 @@ speculate! {
             before {
                 let route: Vec<RouteElement> = vec![
                     new_route_forward_hop(crypto::generate_random_curve_point()),
-                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture(), surbidentifier_fixture())
+                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture(), surb_identifier_fixture())
                 ];
                 let initial_secret = crypto::generate_secret();
                 let key_material = derive(&route, initial_secret);
@@ -246,7 +246,7 @@ speculate! {
                     new_route_forward_hop(crypto::generate_random_curve_point()),
                     new_route_forward_hop(crypto::generate_random_curve_point()),
                     new_route_forward_hop(crypto::generate_random_curve_point()),
-                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture(), surbidentifier_fixture())
+                    new_route_final_hop(crypto::generate_random_curve_point(), address_fixture(), surb_identifier_fixture())
                 ];
                 let initial_secret = crypto::generate_secret();
                 let key_material = derive(&route, initial_secret);
