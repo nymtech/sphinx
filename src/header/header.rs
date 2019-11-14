@@ -72,7 +72,7 @@ struct HeaderLayerComponents {
 
 pub(crate) fn generate_all_routing_info(
     route: &[RouteElement],
-    routing_keys: &Vec<RoutingKeys>,
+    routing_keys: &[RoutingKeys],
     filler_string: Vec<u8>,
 ) -> RoutingInfo {
     let final_keys = routing_keys
@@ -88,54 +88,57 @@ pub(crate) fn generate_all_routing_info(
         _ => panic!("The last route element must be a destination"),
     };
 
-    // TODO: does this IV correspond to STREAM_CIPHER_INIT_VECTOR?
-    // (used in generate_pseudorandom_filler_bytes)
     let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
         &final_keys.stream_cipher_key,
         &STREAM_CIPHER_INIT_VECTOR,
         STREAM_CIPHER_OUTPUT_LENGTH,
     );
+
     let final_routing_info =
         generate_final_routing_info(filler_string, route.len(), &final_hop, pseudorandom_bytes);
 
-    let all_routing_info =
-        encapsulate_routing_info_and_integrity_macs(final_routing_info, route, routing_keys);
-    all_routing_info
+    let final_routing_info_mac = generate_routing_info_integrity_mac(
+        final_keys.header_integrity_hmac_key,
+        final_routing_info,
+    );
+
+    let final_header_layer_components = HeaderLayerComponents {
+        enc_header: final_routing_info,
+        header_integrity_hmac: final_routing_info_mac,
+    };
+
+    encapsulate_routing_info_and_integrity_macs(final_header_layer_components, route, routing_keys)
 }
 
 fn encapsulate_routing_info_and_integrity_macs(
-    final_routing_info: Vec<u8>,
+    final_header_layer_components: HeaderLayerComponents,
     route: &[RouteElement],
-    routing_keys: &Vec<RoutingKeys>,
+    routing_keys: &[RoutingKeys],
 ) -> RoutingInfo {
-
     assert_eq!(route.len(), routing_keys.len());
 
-    let routing_info = route
+    let outer_header_layer_components = route
         .iter()
-        .peekable()
+        .take(route.len() - 1) // we don't want the last element as we already created header for it - the final header
         .map(|route_element| match route_element {
             RouteElement::ForwardHop(mixnode) => mixnode.address,
             _ => panic!("The next route element must be a mix node"),
         }) // we only care about 'address' field from the route
-        .rev() // but we work 'from the inside'
-        .zip( // we need both route (i.e. address field) and corresponding keys
-            routing_keys
-                .iter()
-                .rev() // but we work 'from the inside'
-                .tuple_windows() // however, we need current and NEXT (i.e. previous) key
+        .zip(
+            // we need both route (i.e. address field) and corresponding keys
+            routing_keys.iter().take(routing_keys.len() - 1), // again, we don't want last element
         )
-        .fold(final_routing_info, // we start from the already created final routing info for destination
-            |routing_info_accumulator, (current_node_hop_address, (current_node_routing_keys, previous_node_routing_keys))| {
-                // compute mac with the keys of the NEXT (i.e. previous node)
-                let routing_info_mac = generate_routing_info_integrity_mac(previous_node_routing_keys.header_integrity_hmac_key, &routing_info_accumulator);
-
-                // concatenate address || hmac || previous routing info
-                let routing_info_components = &current_node_hop_address.iter().cloned().chain(routing_info_mac.iter().cloned()).chain(routing_info_accumulator.iter().cloned()).collect();
-
-                // encrypt (by xor'ing with output of aes keyed with our key)
-                encrypt_routing_info(current_node_routing_keys.stream_cipher_key, routing_info_components)
-            });
+        .rev() // we from from the 'inside'
+        .fold(
+            final_header_layer_components, // we start from the already created final routing info and mac for the destination
+            |inner_layer_components, (current_node_hop_address, current_node_routing_keys)| {
+                prepare_header_layer(
+                    current_node_hop_address,
+                    current_node_routing_keys,
+                    inner_layer_components,
+                )
+            },
+        );
 
     // left for reference sake until we have decent tests for this function
 
@@ -162,11 +165,15 @@ fn encapsulate_routing_info_and_integrity_macs(
 //            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
 //    }
 
-    let routing_info_mac = generate_routing_info_integrity_mac(
-        routing_keys[0].header_integrity_hmac_key,
-        &routing_info,
-    );
+    //    let routing_info_mac = generate_routing_info_integrity_mac(
+    //        routing_keys[0].header_integrity_hmac_key,
+    //        &routing_info,
+    //    );
     RoutingInfo {
+        enc_header: outer_header_layer_components.enc_header,
+        header_integrity_hmac: outer_header_layer_components.header_integrity_hmac,
+    }
+}
 
 fn prepare_header_layer(
     hop_address: AddressBytes,
