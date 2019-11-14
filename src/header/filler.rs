@@ -1,9 +1,10 @@
-use crate::header::header::RoutingKeys;
+use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys;
+use crate::header::routing::RoutingKeys;
 use crate::utils::crypto;
 use crate::{constants, utils};
 
-pub fn generate_pseudorandom_filler(routing_keys: &Vec<RoutingKeys>) -> Vec<u8> {
+pub fn generate_pseudorandom_filler(routing_keys: &[RoutingKeys]) -> Vec<u8> {
     routing_keys
         .iter()
         .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
@@ -66,11 +67,11 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_2_times_security_parameter() {
         let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point()];
-        let routing_keys = &shared_keys
+        let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::key_derivation_function(key))
             .collect();
-        let filler_string = generate_pseudorandom_filler(routing_keys);
+        let filler_string = generate_pseudorandom_filler(&routing_keys);
 
         assert_eq!(2 * constants::SECURITY_PARAMETER, filler_string.len());
     }
@@ -82,11 +83,11 @@ mod test_creating_pseudorandom_bytes {
             crypto::generate_random_curve_point(),
             crypto::generate_random_curve_point(),
         ];
-        let routing_keys = &shared_keys
+        let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::key_derivation_function(key))
             .collect();
-        let filler_string = generate_pseudorandom_filler(routing_keys);
+        let filler_string = generate_pseudorandom_filler(&routing_keys);
         assert_eq!(3 * 2 * constants::SECURITY_PARAMETER, filler_string.len());
     }
 
@@ -97,11 +98,11 @@ mod test_creating_pseudorandom_bytes {
             .take(constants::MAX_PATH_LENGTH + 1)
             .map(|_| crypto::generate_random_curve_point())
             .collect();
-        let routing_keys = &shared_keys
+        let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::key_derivation_function(key))
             .collect();
-        generate_pseudorandom_filler(routing_keys);
+        generate_pseudorandom_filler(&routing_keys);
     }
 }
 
@@ -152,4 +153,8 @@ mod test_generating_filler_bytes {
             generate_filler(wrong_accumulator, 1, good_pseudorandom_bytes);
         }
     }
+}
+
+pub fn filler_fixture(i: usize) -> Vec<u8> {
+    vec![0u8; 2 * SECURITY_PARAMETER * i]
 }

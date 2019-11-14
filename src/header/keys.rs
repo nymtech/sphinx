@@ -2,8 +2,9 @@ use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
 use crate::header::header::{
-    address_fixture, surb_identifier_fixture, Destination, MixNode, RouteElement, RoutingKeys,
+    address_fixture, surb_identifier_fixture, Destination, MixNode, RouteElement,
 };
+use crate::header::routing::RoutingKeys;
 use crate::utils::crypto;
 use crate::utils::crypto::compute_keyed_hmac;
 use crate::utils::crypto::CURVE_GENERATOR;
@@ -394,13 +395,5 @@ mod key_derivation_function {
         let routing_keys1 = key_derivation_function(shared_key);
         let routing_keys2 = key_derivation_function(shared_key);
         assert_eq!(routing_keys1, routing_keys2);
-    }
-}
-
-pub fn routing_keys_fixture() -> RoutingKeys {
-    RoutingKeys {
-        stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
-        header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
-        payload_key: [3u8; PAYLOAD_KEY_SIZE],
     }
 }

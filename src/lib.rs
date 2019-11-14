@@ -1,4 +1,5 @@
-use crate::header::header::{MixNode, RouteElement, ROUTING_INFO_SIZE};
+use crate::header::header::{MixNode, RouteElement};
+use crate::header::routing::ROUTING_INFO_SIZE;
 
 use constants::INTEGRITY_MAC_SIZE;
 
@@ -31,7 +32,7 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
         SphinxPacket {
             header: header::SphinxHeader {
                 shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-                routing_info: header::header::RoutingInfo {
+                routing_info: header::routing::RoutingInfo {
                     enc_header: [0u8; ROUTING_INFO_SIZE],
                     header_integrity_hmac: [0u8; INTEGRITY_MAC_SIZE],
                 },
