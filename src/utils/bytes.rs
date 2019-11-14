@@ -16,13 +16,19 @@ pub fn xor_with(a: &mut [u8], b: &[u8]) {
 }
 
 #[cfg(test)]
-use speculate::speculate;
+mod test_xor_with {
+    use super::*;
 
-#[cfg(test)]
-speculate! {
-    describe "xor_with" {
-        context "for empty inputs" {
-            it "does not change initial value" {
+    #[cfg(test)]
+    mod for_valid_inputs {
+        use super::*;
+
+        #[cfg(test)]
+        mod for_empty_inputs {
+            use super::*;
+
+            #[test]
+            fn does_not_change_intitial_value() {
                 let mut a: Vec<u8> = vec![];
                 let b: Vec<u8> = vec![];
                 xor_with(&mut a, &b);
@@ -30,57 +36,74 @@ speculate! {
             }
         }
 
-        context "for non-zero inputs of same length" {
-            it "returns the expected xor of the vectors" {
+        #[cfg(test)]
+        mod for_non_zero_inputs_of_same_length {
+            use super::*;
+
+            #[test]
+            fn it_returns_the_expected_xor_of_vectors() {
                 let mut a: Vec<u8> = vec![1, 2, 3];
                 let b: Vec<u8> = vec![4, 5, 6];
                 xor_with(&mut a, &b);
-                assert_eq!(1^4, a[0]);
-                assert_eq!(2^5, a[1]);
-                assert_eq!(3^6, a[2]);
-
-            }
-        }
-
-        context "for inputs of different lengths" {
-            #[should_panic]
-            it "panics" {
-                let mut a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5];
-                xor_with(&mut a, &b);
+                assert_eq!(1 ^ 4, a[0]);
+                assert_eq!(2 ^ 5, a[1]);
+                assert_eq!(3 ^ 6, a[2]);
             }
         }
     }
 
-    describe "xor" {
-        context "for empty inputs" {
-            it "returns an empty vector" {
-                let a: Vec<u8> = vec![];
-                let b: Vec<u8> = vec![];
-                let c = xor(&a, &b);
-                assert_eq!(0, c.len());
-            }
+    #[cfg(test)]
+    mod for_invalid_inputs {
+        use super::*;
+
+        #[test]
+        #[should_panic]
+        fn panics_for_inputs_of_different_lengths() {
+            let mut a: Vec<u8> = vec![1, 2, 3];
+            let b: Vec<u8> = vec![4, 5];
+            xor_with(&mut a, &b);
+        }
+    }
+}
+
+#[cfg(test)]
+mod test_xor {
+    use super::*;
+
+    #[cfg(test)]
+    mod for_valid_inputs {
+        use super::*;
+
+        #[test]
+        fn for_empty_inputs_it_returns_empty_vector() {
+            let a: Vec<u8> = vec![];
+            let b: Vec<u8> = vec![];
+            let c = xor(&a, &b);
+            assert_eq!(0, c.len());
         }
 
-        context "for non-zero inputs of same length" {
-            it "returns the expected xor of the vectors" {
-                let a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5, 6];
-                let c = xor(&a, &b);
-                assert_eq!(a.len(), c.len());
-                for i in 0..c.len() {
-                    assert_eq!(c[i], a[i] ^ b[i])
-                }
+        #[test]
+        fn for_non_zero_inputs_of_same_length_it_returns_expected_xor() {
+            let a: Vec<u8> = vec![1, 2, 3];
+            let b: Vec<u8> = vec![4, 5, 6];
+            let c = xor(&a, &b);
+            assert_eq!(a.len(), c.len());
+            for i in 0..c.len() {
+                assert_eq!(c[i], a[i] ^ b[i])
             }
         }
+    }
 
-        context "for inputs of different lengths" {
-            #[should_panic]
-            it "panics" {
-                let a: Vec<u8> = vec![1, 2, 3];
-                let b: Vec<u8> = vec![4, 5];
-                let c = xor(&a, &b);
-            }
+    #[cfg(test)]
+    mod for_invalid_inputs {
+        use super::*;
+
+        #[test]
+        #[should_panic]
+        fn panics_for_inputs_of_different_lengths() {
+            let a: Vec<u8> = vec![1, 2, 3];
+            let b: Vec<u8> = vec![4, 5];
+            let c = xor(&a, &b);
         }
     }
 }

@@ -1,6 +1,3 @@
-#[cfg(test)]
-use speculate::speculate;
-
 use crate::header::header::RoutingKeys;
 use crate::header::keys;
 use crate::utils::crypto;
@@ -55,89 +52,104 @@ fn generate_filler(
 }
 
 #[cfg(test)]
-speculate! {
-    describe "creating pseudorandom bytes" {
-        context "for no keys" {
-            it "generates empty filler string" {
-                let routing_keys: Vec<RoutingKeys> = vec![];
-                let filler_string = generate_pseudorandom_filler(&routing_keys);
+mod test_creating_pseudorandom_bytes {
+    use super::*;
 
-                assert_eq!(0, filler_string.len());
+    #[test]
+    fn with_no_keys_it_generates_empty_filler_string() {
+        let routing_keys: Vec<RoutingKeys> = vec![];
+        let filler_string = generate_pseudorandom_filler(&routing_keys);
+
+        assert_eq!(0, filler_string.len());
+    }
+
+    #[test]
+    fn with_1_key_it_generates_filler_of_length_1_times_2_times_security_parameter() {
+        let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point()];
+        let routing_keys = &shared_keys
+            .iter()
+            .map(|&key| keys::key_derivation_function(key))
+            .collect();
+        let filler_string = generate_pseudorandom_filler(routing_keys);
+
+        assert_eq!(2 * constants::SECURITY_PARAMETER, filler_string.len());
+    }
+
+    #[test]
+    fn with_3_key_it_generates_filler_of_length_3_times_2_times_security_parameter() {
+        let shared_keys: Vec<crypto::SharedKey> = vec![
+            crypto::generate_random_curve_point(),
+            crypto::generate_random_curve_point(),
+            crypto::generate_random_curve_point(),
+        ];
+        let routing_keys = &shared_keys
+            .iter()
+            .map(|&key| keys::key_derivation_function(key))
+            .collect();
+        let filler_string = generate_pseudorandom_filler(routing_keys);
+        assert_eq!(3 * 2 * constants::SECURITY_PARAMETER, filler_string.len());
+    }
+
+    #[test]
+    #[should_panic]
+    fn panics_with_more_keys_than_the_maximum_path_length() {
+        let shared_keys: Vec<crypto::SharedKey> = std::iter::repeat(())
+            .take(constants::MAX_PATH_LENGTH + 1)
+            .map(|_| crypto::generate_random_curve_point())
+            .collect();
+        let routing_keys = &shared_keys
+            .iter()
+            .map(|&key| keys::key_derivation_function(key))
+            .collect();
+        generate_pseudorandom_filler(routing_keys);
+    }
+}
+
+#[cfg(test)]
+mod test_generating_filler_bytes {
+    use super::*;
+
+    mod for_valid_inputs {
+        use super::*;
+
+        #[test]
+        fn it_returns_the_xored_byte_vector_of_a_correct_length() {
+            let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
+            let filler_string_accumulator = vec![0; 32];
+            let filler_string = generate_filler(filler_string_accumulator, 1, pseudorandom_bytes);
+            assert_eq!(64, filler_string.len());
+            for x in filler_string {
+                assert_eq!(0, x); // XOR of 0 + 0 == 0
             }
         }
 
-        context "for one key" {
-            it "generates filler string of length 1 * 2 * SECURITY_PARAMETER" {
-                let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point()];
-                let routing_keys = &shared_keys.iter().map(|&key| keys::key_derivation_function(key)).collect();
-                let filler_string = generate_pseudorandom_filler(routing_keys);
+        mod for_an_empty_filler_string_accumulator {
+            use super::*;
 
-                assert_eq!(2 * constants::SECURITY_PARAMETER, filler_string.len());
+            #[test]
+            fn it_returns_a_byte_vector_of_length_2_times_security_parameter() {
+                let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
+                generate_filler(vec![], 0, pseudorandom_bytes);
             }
         }
+    }
 
-        context "for three keys" {
-            before {
-                let shared_keys: Vec<crypto::SharedKey> = vec![
-                crypto::generate_random_curve_point(),
-                crypto::generate_random_curve_point(),
-                crypto::generate_random_curve_point()
-                ];
-                let routing_keys = &shared_keys.iter().map(|&key| keys::key_derivation_function(key)).collect();
-                let filler_string = generate_pseudorandom_filler(routing_keys);
-            }
-            it "generates filler string of length 3 * 2 * SECURITY_PARAMETER" {
-                assert_eq!(3 * 2 * constants::SECURITY_PARAMETER, filler_string.len());
-            }
+    mod for_invalid_inputs {
+        use super::*;
+
+        #[test]
+        #[should_panic]
+        fn panics_for_incorrectly_sized_pseudorandom_bytes_vector_and_accumulator_vector() {
+            let pseudorandom_bytes = vec![0; 1];
+            generate_filler(vec![], 0, pseudorandom_bytes);
         }
 
-        context "more keys than the maximum path length" {
-            #[should_panic]
-            it "panics" {
-                let shared_keys: Vec<crypto::SharedKey> = std::iter::repeat(())
-                .take(constants::MAX_PATH_LENGTH + 1)
-                .map(|_| crypto::generate_random_curve_point())
-                .collect();
-                let routing_keys = &shared_keys.iter().map(|&key| keys::key_derivation_function(key)).collect();
-                generate_pseudorandom_filler(routing_keys);
-            }
-        }
-
-        describe "generating filler bytes" {
-            context "for incorrectly sized pseudorandom bytes vector and accumulator vector"{
-                #[should_panic]
-                it "panics" {
-                    let pseudorandom_bytes = vec![0; 1];
-                    generate_filler(vec![], 0, pseudorandom_bytes);
-                }
-                context "when the filler accumulator is not the correct length" {
-                    #[should_panic]
-                    it "panics" {
-                        let good_pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
-                        let wrong_accumulator = vec![0; 25];
-                        generate_filler(wrong_accumulator, 1, good_pseudorandom_bytes);
-                    }
-
-                }
-            }
-            context "for an empty filler string accumulator"{
-                it "returns a byte vector of length 2 * SECURITY_PARAMETER" {
-                    let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
-                    generate_filler(vec![], 0, pseudorandom_bytes);
-                }
-            }
-
-            context "for valid inputs"{
-                it "returns the xored byte vector of a correct length"{
-                    let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
-                    let filler_string_accumulator = vec![0; 32];
-                    let filler_string = generate_filler(filler_string_accumulator, 1, pseudorandom_bytes);
-                    assert_eq!(64, filler_string.len());
-                    for x in filler_string {
-                    assert_eq!(0, x); // XOR of 0 + 0 == 0
-                }
-            }
-        }
+        #[test]
+        #[should_panic]
+        fn panics_with_incorrect_length_filler_accumulator() {
+            let good_pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
+            let wrong_accumulator = vec![0; 25];
+            generate_filler(wrong_accumulator, 1, good_pseudorandom_bytes);
         }
     }
 }

@@ -1,8 +1,5 @@
 use rand_distr::{Distribution, Exp};
 
-#[cfg(test)]
-use speculate::speculate;
-
 use crate::constants;
 
 pub(crate) fn generate(number: usize) -> Vec<f64> {
@@ -15,27 +12,24 @@ pub(crate) fn generate(number: usize) -> Vec<f64> {
 }
 
 #[cfg(test)]
-speculate! {
-    describe "generating delays" {
-        context "for 0 delays" {
-            it "returns an empty delays vector" {
-                let delays = generate(0);
-                assert_eq!(0, delays.len());
-            }
-        }
+mod test_delay_generation {
+    use super::*;
 
-        context "for 1 delay" {
-            it "returns 1 delay" {
-                let delays = generate(1);
-                assert_eq!(1, delays.len());
-            }
-        }
+    #[test]
+    fn with_0_delays_returns_an_empty_vector() {
+        let delays = generate(0);
+        assert_eq!(0, delays.len());
+    }
 
-        context "for 3 delays" {
-            it "returns 3 delays" {
-                let delays = generate(3);
-                assert_eq!(3, delays.len());
-            }
-        }
+    #[test]
+    fn with_1_delay_it_returns_1_delay() {
+        let delays = generate(1);
+        assert_eq!(1, delays.len());
+    }
+
+    #[test]
+    fn with_3_delays_it_returns_3_delays() {
+        let delays = generate(3);
+        assert_eq!(3, delays.len());
     }
 }
