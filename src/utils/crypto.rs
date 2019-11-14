@@ -49,31 +49,39 @@ pub fn compute_keyed_hmac(key: Vec<u8>, data: &Vec<u8>) -> Vec<u8> {
 }
 
 #[cfg(test)]
-use speculate::speculate;
+mod generating_pseudorandom_bytes {
+    use super::*;
+
+    // TODO: 10,000 is the wrong number, @aniap what is correct here?
+    #[test]
+    fn it_generates_output_of_size_10000() {
+        let key: [u8; STREAM_CIPHER_KEY_SIZE] =
+            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+        let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+
+        let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
+        assert_eq!(10000, rand_bytes.len());
+    }
+}
 
 #[cfg(test)]
-speculate! {
-    describe "generating pseudorandom bytes" {
-        it "generates outputs of expected length" {
-            let key: [u8; STREAM_CIPHER_KEY_SIZE] = [1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16];
-            let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0];
+mod secret_generation {
+    use super::*;
 
-            let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
-            assert_eq!(10000, rand_bytes.len());
-        }
+    #[test]
+    fn it_returns_a_32_byte_scalar() {
+        let secret = generate_secret();
+        assert_eq!(32, secret.to_bytes().len());
     }
+}
 
-    describe "secret generation" {
-        it "returns a 32 byte scalar" {
-            let secret = generate_secret();
-            assert_eq!(32, secret.to_bytes().len());
-        }
-    }
+#[cfg(test)]
+mod generating_a_random_curve_point {
+    use super::*;
 
-    describe "generating a random curve point" {
-        it "returns a 32 byte Montgomery point" {
-            let secret = generate_random_curve_point();
-            assert_eq!(32, secret.to_bytes().len())
-        }
+    #[test]
+    fn it_returns_a_32_byte_montgomery_point() {
+        let secret = generate_random_curve_point();
+        assert_eq!(32, secret.to_bytes().len())
     }
 }

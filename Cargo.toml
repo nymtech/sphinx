@@ -17,4 +17,5 @@ aes-ctr = "0.3.0"
 hkdf = "0.8.0"
 
 [dev-dependencies]
+mockall = "0.5.2"
 speculate = "0.1.2"

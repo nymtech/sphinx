@@ -2,8 +2,10 @@ use crate::utils::crypto;
 
 // AVERAGE_DELAY SHOULD NEVER BE ZERO!!
 pub const AVERAGE_DELAY: f64 = 10.0;
-pub const SECURITY_PARAMETER: usize = 16; // in bytes; 128 bits
-pub const MAX_PATH_LENGTH: usize = 5; // what we refer in the Sphinx paper as r
+// k in the Sphinx paper. Measured in bytes; 128 bits.
+pub const SECURITY_PARAMETER: usize = 16;
+// r in the Sphinx paper
+pub const MAX_PATH_LENGTH: usize = 5;
 pub const ROUTING_KEYS_LENGTH: usize =
     crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE;
 pub const HKDF_INPUT_SEED: &[u8; 97] = b"Dwste mou enan moxlo arketa makru kai ena upomoxlio gia na ton topothetisw kai tha kinisw thn gh.";
