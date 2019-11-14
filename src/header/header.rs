@@ -56,8 +56,18 @@ pub struct RoutingKeys {
 }
 
 pub struct RoutingInfo {
-    pub enc_header: Vec<u8>,
-    pub header_integrity_hmac: [u8; INTEGRITY_MAC_SIZE],
+    pub enc_header: RoutingInformation,
+    pub header_integrity_hmac: HeaderIntegrityMac,
+}
+
+type RoutingInformation = [u8; ROUTING_INFO_SIZE];
+type HeaderIntegrityMac = [u8; INTEGRITY_MAC_SIZE];
+
+struct HeaderLayerComponents {
+    // in paper beta
+    pub enc_header: RoutingInformation,
+    // in paper beta
+    pub header_integrity_hmac: HeaderIntegrityMac,
 }
 
 pub(crate) fn generate_all_routing_info(
@@ -157,8 +167,37 @@ fn encapsulate_routing_info_and_integrity_macs(
         &routing_info,
     );
     RoutingInfo {
+
+fn prepare_header_layer(
+    hop_address: AddressBytes,
+    routing_keys: &RoutingKeys,
+    inner_layer_components: HeaderLayerComponents,
+) -> HeaderLayerComponents {
+    // concatenate address || previous hmac || previous routing info
+    let routing_info_components = &hop_address
+        .iter()
+        .cloned()
+        .chain(inner_layer_components.header_integrity_hmac.iter().cloned())
+        .chain(
+            inner_layer_components
+                .enc_header
+                .iter()
+                .cloned()
+                .take(TRUNCATED_ROUTING_INFO_SIZE),
+        ) // truncate (beta) to the desired length
+        .collect();
+
+    // encrypt (by xor'ing with output of aes keyed with our key)
+    let routing_info =
+        encrypt_routing_info(routing_keys.stream_cipher_key, routing_info_components);
+
+    // compute hmac for that 'layer'
+    let routing_info_integrity_mac =
+        generate_routing_info_integrity_mac(routing_keys.header_integrity_hmac_key, routing_info);
+
+    HeaderLayerComponents {
         enc_header: routing_info,
-        header_integrity_hmac: routing_info_mac,
+        header_integrity_hmac: routing_info_integrity_mac,
     }
 }
 
