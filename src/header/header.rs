@@ -72,15 +72,12 @@ pub(crate) fn generate_all_routing_info(
     routing_keys: &[RoutingKeys],
     filler_string: Vec<u8>,
 ) -> RoutingInfo {
+    assert_eq!(route.len(), routing_keys.len());
+
     let final_keys = routing_keys
         .last()
-        .cloned()
         .expect("The keys should be already initialized");
-    let final_route_element = route
-        .last()
-        .cloned()
-        .expect("The route should not be empty");
-    let final_hop = match final_route_element {
+    let final_hop = match route.last().expect("The route should not be empty") {
         RouteElement::FinalHop(destination) => destination,
         _ => panic!("The last route element must be a destination"),
     };
@@ -112,8 +109,6 @@ fn encapsulate_routing_info_and_integrity_macs(
     route: &[RouteElement],
     routing_keys: &[RoutingKeys],
 ) -> RoutingInfo {
-    assert_eq!(route.len(), routing_keys.len());
-
     let outer_header_layer_components = route
         .iter()
         .take(route.len() - 1) // we don't want the last element as we already created header for it - the final header
