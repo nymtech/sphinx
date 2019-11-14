@@ -142,28 +142,28 @@ fn encapsulate_routing_info_and_integrity_macs(
 
     // left for reference sake until we have decent tests for this function
 
-//    let mut routing_info = final_routing_info;
-//
-//    for i in (0..route.len() - 1).rev() {
-//        let routing_info_mac = generate_routing_info_integrity_mac(
-//            routing_keys[i + 1].header_integrity_hmac_key,
-//            &routing_info,
-//        );
-//
-//        let next_node_hop_address = match &route[i] {
-//            RouteElement::ForwardHop(mixnode) => mixnode.address,
-//            _ => panic!("The next route element must be a mix node"),
-//        };
-//        let routing_info_components = [
-//            next_node_hop_address.to_vec(),
-//            routing_info_mac.to_vec(),
-//            routing_info,
-//        ]
-//        .concat()
-//        .to_vec();
-//        routing_info =
-//            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
-//    }
+    //    let mut routing_info = final_routing_info;
+    //
+    //    for i in (0..route.len() - 1).rev() {
+    //        let routing_info_mac = generate_routing_info_integrity_mac(
+    //            routing_keys[i + 1].header_integrity_hmac_key,
+    //            &routing_info,
+    //        );
+    //
+    //        let next_node_hop_address = match &route[i] {
+    //            RouteElement::ForwardHop(mixnode) => mixnode.address,
+    //            _ => panic!("The next route element must be a mix node"),
+    //        };
+    //        let routing_info_components = [
+    //            next_node_hop_address.to_vec(),
+    //            routing_info_mac.to_vec(),
+    //            routing_info,
+    //        ]
+    //        .concat()
+    //        .to_vec();
+    //        routing_info =
+    //            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
+    //    }
 
     //    let routing_info_mac = generate_routing_info_integrity_mac(
     //        routing_keys[0].header_integrity_hmac_key,
@@ -314,109 +314,133 @@ fn generate_final_routing_info(
 //}
 
 #[cfg(test)]
-speculate! {
-    describe "encapsulation of the final routing information" {
-        context "for route of length 5"{
-            it "produces result of length filler plus padded concatenated destination and identifier" {
-                let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
-                let route_len = 5;
-                let filler = filler_fixture(route_len-1);
-                let destination = Destination {
-                    pub_key: crypto::generate_random_curve_point(),
-                    address: address_fixture(),
-                    identifier: surb_identifier_fixture(),
-                };
-                let filler_len = filler.len();
-                let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
-                let expected_padding_len = (2*(MAX_PATH_LENGTH-route_len)+2)*SECURITY_PARAMETER-DESTINATION_LENGTH;
-                let expected_final_header_len = DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
-                assert_eq!(expected_final_header_len, final_header.len());
-            }
-        }
-    }
-    context "for route of length 3"{
-        it "produces result of length filler plus padded concatenated destination and identifier" {
-            let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
-            let route_len = 3;
-            let filler = filler_fixture(route_len-1);
-            let destination = Destination {
-                pub_key: crypto::generate_random_curve_point(),
-                address: address_fixture(),
-                identifier: surb_identifier_fixture(),
-            };
-            let filler_len = filler.len();
-            let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
-            let expected_padding_len = (2*(MAX_PATH_LENGTH-route_len)+2)*SECURITY_PARAMETER-DESTINATION_LENGTH;
-            let expected_final_header_len = DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
-            assert_eq!(expected_final_header_len, final_header.len());
-        }
-    }
-    context "for route of length 1"{
-        it "produces result of length filler plus padded concatenated destination and identifier" {
-            let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
-            let route_len = 1;
-            let filler = filler_fixture(route_len-1);
-            let destination = Destination {
-                pub_key: crypto::generate_random_curve_point(),
-                address: address_fixture(),
-                identifier: surb_identifier_fixture(),
-            };
-            let filler_len = filler.len();
-            let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
-            let expected_padding_len = (2*(MAX_PATH_LENGTH-route_len)+2)*SECURITY_PARAMETER-DESTINATION_LENGTH;
-            let expected_final_header_len = DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
-            assert_eq!(expected_final_header_len, final_header.len());
-        }
-    }
-    context "for route of length 0"{
-        #[should_panic]
-        it "panics" {
-            let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
-            let route_len = 0;
-            let filler = filler_fixture(route_len-1);
-            let destination = Destination {
-                pub_key: crypto::generate_random_curve_point(),
-                address: address_fixture(),
-                identifier: surb_identifier_fixture(),
-            };
-            let filler_len = filler.len();
-            let final_header = generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
-        }
-    }
-    describe "encrypt routing info"{
-        it "check whether we can decrypt the result" {
-            let key = [2u8; STREAM_CIPHER_KEY_SIZE];
-            let data = vec![3u8; ROUTING_INFO_SIZE];
-            let encrypted_data = encrypt_routing_info(key, &data);
-            let decryption_key_source = crypto::generate_pseudorandom_bytes(
-                &key,
-                &STREAM_CIPHER_INIT_VECTOR,
-                STREAM_CIPHER_OUTPUT_LENGTH);
-            let decryption_key = &decryption_key_source[..ROUTING_INFO_SIZE];
-            let decrypted_data = utils::bytes::xor(&encrypted_data, decryption_key);
-            assert_eq!(data, decrypted_data);
-        }
+mod test_encapsulating_final_routing_information {
+    use super::*;
+
+    #[test]
+    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
+    ) {
+        let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+        let route_len = 5;
+        let filler = filler_fixture(route_len - 1);
+        let destination = Destination {
+            pub_key: crypto::generate_random_curve_point(),
+            address: address_fixture(),
+            identifier: surb_identifier_fixture(),
+        };
+        let filler_len = filler.len();
+        let final_header =
+            generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+        let expected_padding_len =
+            (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - DESTINATION_LENGTH;
+        let expected_final_header_len =
+            DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
+        assert_eq!(expected_final_header_len, final_header.len());
     }
 
-    describe "compute integrity mac"{
-        it "check whether the integrity mac is correct"{
-            let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-            let data = [3u8; ROUTING_INFO_SIZE];
-            let integrity_mac = generate_routing_info_integrity_mac(key, data);
+    #[test]
+    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_3(
+    ) {
+        let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+        let route_len = 3;
+        let filler = filler_fixture(route_len - 1);
+        let destination = Destination {
+            pub_key: crypto::generate_random_curve_point(),
+            address: address_fixture(),
+            identifier: surb_identifier_fixture(),
+        };
+        let filler_len = filler.len();
+        let final_header =
+            generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+        let expected_padding_len =
+            (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - DESTINATION_LENGTH;
+        let expected_final_header_len =
+            DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
+        assert_eq!(expected_final_header_len, final_header.len());
+    }
 
-            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-            computed_mac.truncate(INTEGRITY_MAC_SIZE);
-            assert_eq!(computed_mac, integrity_mac);
-        }
-        it "detects flipped bit in the data"{
-            let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-            let mut data = [3u8; ROUTING_INFO_SIZE];
-            let integrity_mac = generate_routing_info_integrity_mac(key, data);
-            data[10] = !data[10];
-            let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-            computed_mac.truncate(INTEGRITY_MAC_SIZE);
-            assert_ne!(computed_mac, integrity_mac);
-        }
+    #[test]
+    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_1(
+    ) {
+        let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+        let route_len = 1;
+        let filler = filler_fixture(route_len - 1);
+        let destination = Destination {
+            pub_key: crypto::generate_random_curve_point(),
+            address: address_fixture(),
+            identifier: surb_identifier_fixture(),
+        };
+        let filler_len = filler.len();
+        let final_header =
+            generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+        let expected_padding_len =
+            (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - DESTINATION_LENGTH;
+        let expected_final_header_len =
+            DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
+        assert_eq!(expected_final_header_len, final_header.len());
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_panics_route_of_length_0() {
+        let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
+        let route_len = 0;
+        let filler = filler_fixture(route_len - 1);
+        let destination = Destination {
+            pub_key: crypto::generate_random_curve_point(),
+            address: address_fixture(),
+            identifier: surb_identifier_fixture(),
+        };
+        let filler_len = filler.len();
+        let final_header =
+            generate_final_routing_info(filler, route_len, &destination, pseudorandom_bytes);
+    }
+}
+
+#[cfg(test)]
+mod encrypting_routing_information {
+    use super::*;
+
+    #[test]
+    fn it_is_possible_to_decrypt_it_to_recover_original_data() {
+        let key = [2u8; STREAM_CIPHER_KEY_SIZE];
+        let data = vec![3u8; ROUTING_INFO_SIZE];
+        let encrypted_data = encrypt_routing_info(key, &data);
+        let decryption_key_source = crypto::generate_pseudorandom_bytes(
+            &key,
+            &STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
+        let decryption_key = &decryption_key_source[..ROUTING_INFO_SIZE];
+        let decrypted_data = utils::bytes::xor(&encrypted_data, decryption_key);
+        assert_eq!(data, decrypted_data);
+    }
+}
+
+#[cfg(test)]
+mod computing_integrity_mac {
+    use super::*;
+
+    #[test]
+    fn it_is_possible_to_verify_correct_mac() {
+        let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
+        let data = [3u8; ROUTING_INFO_SIZE];
+        let integrity_mac = generate_routing_info_integrity_mac(key, data);
+
+        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
+        computed_mac.truncate(INTEGRITY_MAC_SIZE);
+        assert_eq!(computed_mac, integrity_mac);
+    }
+
+    #[test]
+    fn it_lets_detecting_flipped_data_bits() {
+        let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
+        let mut data = [3u8; ROUTING_INFO_SIZE];
+        let integrity_mac = generate_routing_info_integrity_mac(key, data);
+        data[10] = !data[10];
+        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
+        computed_mac.truncate(INTEGRITY_MAC_SIZE);
+        assert_ne!(computed_mac, integrity_mac);
     }
 }
 
