@@ -173,7 +173,7 @@ fn prepare_header_layer(
     inner_layer_components: HeaderLayerComponents,
 ) -> HeaderLayerComponents {
     // concatenate address || previous hmac || previous routing info
-    let routing_info_components = &hop_address
+    let routing_info_components: Vec<_> = hop_address
         .iter()
         .cloned()
         .chain(inner_layer_components.header_integrity_hmac.iter().cloned())
@@ -188,7 +188,7 @@ fn prepare_header_layer(
 
     // encrypt (by xor'ing with output of aes keyed with our key)
     let routing_info =
-        encrypt_routing_info(routing_keys.stream_cipher_key, routing_info_components);
+        encrypt_routing_info(routing_keys.stream_cipher_key, &routing_info_components);
 
     // compute hmac for that 'layer'
     let routing_info_integrity_mac =
@@ -202,7 +202,7 @@ fn prepare_header_layer(
 
 fn encrypt_routing_info(
     key: [u8; STREAM_CIPHER_KEY_SIZE],
-    routing_info_components: &Vec<u8>,
+    routing_info_components: &[u8],
 ) -> RoutingInformation {
     assert_eq!(ROUTING_INFO_SIZE, routing_info_components.len());
 
