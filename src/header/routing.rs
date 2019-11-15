@@ -237,11 +237,11 @@ fn generate_final_routing_info(
     let surb_identifier = destination.identifier;
     let final_destination_bytes = [address_bytes.to_vec(), surb_identifier.to_vec()].concat();
 
-    assert!(address_bytes.len() <= (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER);
-    assert!(filler.len() == 3 * SECURITY_PARAMETER * (route_len - 1));
-    let padding = utils::bytes::random(
-        (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - address_bytes.len(),
-    );
+    let max_destination_length = (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER;
+    assert!(address_bytes.len() <= max_destination_length);
+    assert_eq!(filler.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
+
+    let padding = utils::bytes::random(max_destination_length - address_bytes.len());
     let padded_final_destination = [final_destination_bytes.to_vec(), padding].concat();
     let encrypted_final_destination = encrypt_padded_final_destination(
         final_keys.stream_cipher_key,
