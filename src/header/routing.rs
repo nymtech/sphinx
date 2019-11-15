@@ -44,27 +44,8 @@ pub fn generate_all_routing_info(
 ) -> RoutingInfo {
     assert_eq!(route.len(), routing_keys.len());
 
-    let final_keys = routing_keys
-        .last()
-        .expect("The keys should be already initialized");
-    let final_hop = match route.last().expect("The route should not be empty") {
-        RouteElement::FinalHop(destination) => destination,
-        _ => panic!("The last route element must be a destination"),
-    };
-
-    let final_routing_info =
-        generate_final_routing_info(filler_string, route.len(), &final_hop, final_keys);
-
-    let final_routing_info_mac = generate_routing_info_integrity_mac(
-        final_keys.header_integrity_hmac_key,
-        final_routing_info,
-    );
-
-    let final_header_layer_components = HeaderLayerComponents {
-        enc_header: final_routing_info,
-        header_integrity_hmac: final_routing_info_mac,
-    };
-
+    let final_header_layer_components =
+        encapsulate_final_routing_info_and_integrity_mac(route, routing_keys, filler_string);
     encapsulate_routing_info_and_integrity_macs(final_header_layer_components, route, routing_keys)
 }
 
@@ -217,6 +198,33 @@ fn encrypt_padded_final_destination(
         padded_final_destination,
         &pseudorandom_bytes[..((3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER)],
     )
+}
+
+fn encapsulate_final_routing_info_and_integrity_mac(
+    route: &[RouteElement],
+    routing_keys: &[RoutingKeys],
+    filler_string: Vec<u8>,
+) -> HeaderLayerComponents {
+    let final_keys = routing_keys
+        .last()
+        .expect("The keys should be already initialized");
+    let final_hop = match route.last().expect("The route should not be empty") {
+        RouteElement::FinalHop(destination) => destination,
+        _ => panic!("The last route element must be a destination"),
+    };
+
+    let final_routing_info =
+        generate_final_routing_info(filler_string, route.len(), &final_hop, final_keys);
+
+    let final_routing_info_mac = generate_routing_info_integrity_mac(
+        final_keys.header_integrity_hmac_key,
+        final_routing_info,
+    );
+
+    HeaderLayerComponents {
+        enc_header: final_routing_info,
+        header_integrity_hmac: final_routing_info_mac,
+    }
 }
 
 fn generate_final_routing_info(
