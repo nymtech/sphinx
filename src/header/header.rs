@@ -1,4 +1,4 @@
-use crate::constants::{DESTINATION_LENGTH, IDENTIFIER_LENGTH};
+use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
 use crate::utils::crypto;
 
 // I think everything from below here should be moved to main sphinx file or perhaps to something for route
@@ -20,24 +20,29 @@ impl RouteElement {
     }
 }
 
-pub type AddressBytes = [u8; DESTINATION_LENGTH];
+pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
+pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH];
 pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
 #[derive(Clone)]
 pub struct Destination {
-    pub address: AddressBytes,
+    pub address: DestinationAddressBytes,
     pub identifier: SURBIdentifier,
     pub pub_key: crypto::PublicKey,
 }
 
 #[derive(Clone)]
 pub struct MixNode {
-    pub address: AddressBytes,
+    pub address: NodeAddressBytes,
     pub pub_key: crypto::PublicKey,
 }
 
-pub fn address_fixture() -> AddressBytes {
-    [0u8; DESTINATION_LENGTH]
+pub fn destination_address_fixture() -> DestinationAddressBytes {
+    [0u8; DESTINATION_ADDRESS_LENGTH]
+}
+
+pub fn node_address_fixture() -> NodeAddressBytes {
+    [0u8; NODE_ADDRESS_LENGTH]
 }
 
 pub fn surb_identifier_fixture() -> SURBIdentifier {
@@ -46,14 +51,14 @@ pub fn surb_identifier_fixture() -> SURBIdentifier {
 
 pub fn random_forward_hop() -> RouteElement {
     RouteElement::ForwardHop(MixNode {
-        address: [2u8; DESTINATION_LENGTH],
+        address: [2u8; NODE_ADDRESS_LENGTH],
         pub_key: crypto::generate_random_curve_point(),
     })
 }
 
 pub fn random_final_hop() -> RouteElement {
     RouteElement::FinalHop(Destination {
-        address: [3u8; DESTINATION_LENGTH],
+        address: [3u8; DESTINATION_ADDRESS_LENGTH],
         identifier: [4u8; IDENTIFIER_LENGTH],
         pub_key: crypto::generate_random_curve_point(),
     })

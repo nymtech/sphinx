@@ -1,14 +1,15 @@
 use crate::constants::{
-    INTEGRITY_MAC_KEY_SIZE, INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE,
-    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, INTEGRITY_MAC_SIZE,
+    MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
-use crate::header::header::{AddressBytes, Destination, RouteElement};
+use crate::header::header::{Destination, NodeAddressBytes, RouteElement};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::{STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
 
-pub const TRUNCATED_ROUTING_INFO_SIZE: usize = (2 * MAX_PATH_LENGTH - 1) * SECURITY_PARAMETER;
-pub const ROUTING_INFO_SIZE: usize = (2 * MAX_PATH_LENGTH + 1) * SECURITY_PARAMETER;
+pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
+    ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
+pub const ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -132,7 +133,7 @@ fn encapsulate_routing_info_and_integrity_macs(
 }
 
 fn prepare_header_layer(
-    hop_address: AddressBytes,
+    hop_address: NodeAddressBytes,
     routing_keys: &RoutingKeys,
     inner_layer_components: HeaderLayerComponents,
 ) -> HeaderLayerComponents {
@@ -202,7 +203,7 @@ fn encrypt_padded_final_destination(
     route_len: usize,
 ) -> Vec<u8> {
     assert_eq!(
-        ((2 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER),
+        ((3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER),
         padded_final_destination.len()
     );
 
@@ -214,7 +215,7 @@ fn encrypt_padded_final_destination(
 
     utils::bytes::xor(
         padded_final_destination,
-        &pseudorandom_bytes[..((2 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER)],
+        &pseudorandom_bytes[..((3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER)],
     )
 }
 
@@ -228,10 +229,10 @@ fn generate_final_routing_info(
     let surb_identifier = destination.identifier;
     let final_destination_bytes = [address_bytes.to_vec(), surb_identifier.to_vec()].concat();
 
-    assert!(address_bytes.len() <= (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER);
-
+    assert!(address_bytes.len() <= (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER);
+    assert!(filler.len() == 3 * SECURITY_PARAMETER * (route_len - 1));
     let padding = utils::bytes::random(
-        (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - address_bytes.len(),
+        (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - address_bytes.len(),
     );
     let padded_final_destination = [final_destination_bytes.to_vec(), padding].concat();
     let encrypted_final_destination = encrypt_padded_final_destination(
@@ -241,6 +242,7 @@ fn generate_final_routing_info(
     );
 
     let final_routing_info_vec = [encrypted_final_destination, filler].concat();
+    assert_eq!(final_routing_info_vec.len(), ROUTING_INFO_SIZE);
     let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
     final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
     final_routing_information
@@ -248,56 +250,56 @@ fn generate_final_routing_info(
 
 // UNCOMMENT ONCE WE FIX OUR LENGTH ISSUE
 //
-//#[cfg(test)]
-//mod preparing_header_layer {
-//    use super::*;
-//    use crate::header::header::address_fixture;
-//
-//    #[test]
-//    fn returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
-//        let address = address_fixture();
-//        let routing_keys = routing_keys_fixture();
-//        let inner_layer_components = header_layer_components_fixture();
-//
-//        let concatenated_materials: Vec<u8> = [
-//            address.to_vec(),
-//            inner_layer_components.header_integrity_hmac.to_vec(),
-//            inner_layer_components
-//                .enc_header
-//                .to_vec()
-//                .iter()
-//                .cloned()
-//                .take(TRUNCATED_ROUTING_INFO_SIZE)
-//                .collect(),
-//        ]
-//        .concat();
-//
-//        let next_layer_components =
-//            prepare_header_layer(address, &routing_keys, inner_layer_components);
-//        let expected_routing_info =
-//            encrypt_routing_info(routing_keys.stream_cipher_key, &concatenated_materials);
-//        let expected_integrity_mac = generate_routing_info_integrity_mac(
-//            routing_keys.header_integrity_hmac_key,
-//            expected_routing_info,
-//        );
-//
-//        assert_eq!(
-//            expected_routing_info.to_vec(),
-//            next_layer_components.enc_header.to_vec()
-//        );
-//        assert_eq!(
-//            expected_integrity_mac.to_vec(),
-//            next_layer_components.header_integrity_hmac.to_vec()
-//        );
-//    }
-//}
+#[cfg(test)]
+mod preparing_header_layer {
+    use super::*;
+    use crate::header::header::node_address_fixture;
+
+    #[test]
+    fn returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
+        let address = node_address_fixture();
+        let routing_keys = routing_keys_fixture();
+        let inner_layer_components = header_layer_components_fixture();
+
+        let concatenated_materials: Vec<u8> = [
+            address.to_vec(),
+            inner_layer_components.header_integrity_hmac.to_vec(),
+            inner_layer_components
+                .enc_header
+                .to_vec()
+                .iter()
+                .cloned()
+                .take(TRUNCATED_ROUTING_INFO_SIZE)
+                .collect(),
+        ]
+        .concat();
+
+        let next_layer_components =
+            prepare_header_layer(address, &routing_keys, inner_layer_components);
+        let expected_routing_info =
+            encrypt_routing_info(routing_keys.stream_cipher_key, &concatenated_materials);
+        let expected_integrity_mac = generate_routing_info_integrity_mac(
+            routing_keys.header_integrity_hmac_key,
+            expected_routing_info,
+        );
+
+        assert_eq!(
+            expected_routing_info.to_vec(),
+            next_layer_components.enc_header.to_vec()
+        );
+        assert_eq!(
+            expected_integrity_mac.to_vec(),
+            next_layer_components.header_integrity_hmac.to_vec()
+        );
+    }
+}
 
 #[cfg(test)]
 mod test_encapsulating_final_routing_information {
     use super::*;
-    use crate::constants::{DESTINATION_LENGTH, IDENTIFIER_LENGTH};
+    use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH};
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{address_fixture, surb_identifier_fixture};
+    use crate::header::header::{destination_address_fixture, surb_identifier_fixture};
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
@@ -307,16 +309,15 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len - 1);
         let destination = Destination {
             pub_key: crypto::generate_random_curve_point(),
-            address: address_fixture(),
+            address: destination_address_fixture(),
             identifier: surb_identifier_fixture(),
         };
         let filler_len = filler.len();
         let final_header =
             generate_final_routing_info(filler, route_len, &destination, &final_leys);
-        let expected_padding_len =
-            (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - DESTINATION_LENGTH;
-        let expected_final_header_len =
-            DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
+
+        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+
         assert_eq!(expected_final_header_len, final_header.len());
     }
 
@@ -328,16 +329,13 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len - 1);
         let destination = Destination {
             pub_key: crypto::generate_random_curve_point(),
-            address: address_fixture(),
+            address: destination_address_fixture(),
             identifier: surb_identifier_fixture(),
         };
         let filler_len = filler.len();
         let final_header =
             generate_final_routing_info(filler, route_len, &destination, &final_leys);
-        let expected_padding_len =
-            (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - DESTINATION_LENGTH;
-        let expected_final_header_len =
-            DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
+        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
         assert_eq!(expected_final_header_len, final_header.len());
     }
 
@@ -349,16 +347,13 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len - 1);
         let destination = Destination {
             pub_key: crypto::generate_random_curve_point(),
-            address: address_fixture(),
+            address: destination_address_fixture(),
             identifier: surb_identifier_fixture(),
         };
         let filler_len = filler.len();
         let final_header =
             generate_final_routing_info(filler, route_len, &destination, &final_leys);
-        let expected_padding_len =
-            (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER - DESTINATION_LENGTH;
-        let expected_final_header_len =
-            DESTINATION_LENGTH + IDENTIFIER_LENGTH + expected_padding_len + filler_len;
+        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
         assert_eq!(expected_final_header_len, final_header.len());
     }
 
@@ -367,10 +362,10 @@ mod test_encapsulating_final_routing_information {
     fn it_panics_route_of_length_0() {
         let final_leys = routing_keys_fixture();
         let route_len = 0;
-        let filler = filler_fixture(route_len - 1);
+        let filler = filler_fixture(route_len);
         let destination = Destination {
             pub_key: crypto::generate_random_curve_point(),
-            address: address_fixture(),
+            address: destination_address_fixture(),
             identifier: surb_identifier_fixture(),
         };
         let filler_len = filler.len();

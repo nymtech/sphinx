@@ -1,5 +1,5 @@
-#![feature(test)]
-extern crate test;
+// #![feature(test)]
+// extern crate test;
 
 use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 use crate::header::keys;
@@ -45,7 +45,7 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
         },
         Hop {
             host: RouteElement::ForwardHop(MixNode {
-                address: header::header::address_fixture(),
+                address: header::header::node_address_fixture(),
                 pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
             }),
             delay: 0.0,
@@ -53,40 +53,40 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
     )
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use test::Bencher;
-
-    //    #[bench]
-    //    fn bench_create_header(b: &mut Bencher) {
-    //        // 3 mixes and a destination
-    //        let dummy_route = vec![
-    //            random_forward_hop(),
-    //            random_forward_hop(),
-    //            random_forward_hop(),
-    //            random_final_hop(),
-    //        ];
-    //
-    //        b.iter(|| {
-    //            header::create(&dummy_route);
-    //        });
-    //    }
-
-    #[bench]
-    fn bench_generate_shared_secets(b: &mut Bencher) {
-        // 3 mixes and a destination
-        let dummy_route = vec![
-            random_forward_hop(),
-            random_forward_hop(),
-            random_forward_hop(),
-            random_final_hop(),
-        ];
-
-        let initial_secret = utils::crypto::generate_secret();
-
-        b.iter(|| {
-            header::keys::derive(&dummy_route, initial_secret);
-        });
-    }
-}
+// #[cfg(test)]
+// mod tests {
+//     use super::*;
+//     use test::Bencher;
+//
+//     //    #[bench]
+//     //    fn bench_create_header(b: &mut Bencher) {
+//     //        // 3 mixes and a destination
+//     //        let dummy_route = vec![
+//     //            random_forward_hop(),
+//     //            random_forward_hop(),
+//     //            random_forward_hop(),
+//     //            random_final_hop(),
+//     //        ];
+//     //
+//     //        b.iter(|| {
+//     //            header::create(&dummy_route);
+//     //        });
+//     //    }
+//
+//     #[bench]
+//     fn bench_generate_shared_secets(b: &mut Bencher) {
+//         // 3 mixes and a destination
+//         let dummy_route = vec![
+//             random_forward_hop(),
+//             random_forward_hop(),
+//             random_forward_hop(),
+//             random_final_hop(),
+//         ];
+//
+//         let initial_secret = utils::crypto::generate_secret();
+//
+//         b.iter(|| {
+//             header::keys::derive(&dummy_route, initial_secret);
+//         });
+//     }
+// }

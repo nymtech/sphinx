@@ -2,7 +2,8 @@ use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
 use crate::header::header::{
-    address_fixture, surb_identifier_fixture, Destination, MixNode, RouteElement,
+    destination_address_fixture, node_address_fixture, surb_identifier_fixture, Destination,
+    MixNode, RouteElement,
 };
 use crate::header::routing::RoutingKeys;
 use crate::utils::crypto;
@@ -137,14 +138,14 @@ mod deriving_key_material {
 
     fn new_route_forward_hop(pub_key: crypto::PublicKey) -> RouteElement {
         RouteElement::ForwardHop(MixNode {
-            address: address_fixture(),
+            address: node_address_fixture(),
             pub_key,
         })
     }
 
     fn new_route_final_hop(
         pub_key: crypto::PublicKey,
-        address: crate::header::header::AddressBytes,
+        address: crate::header::header::DestinationAddressBytes,
     ) -> RouteElement {
         RouteElement::FinalHop(Destination {
             pub_key,
@@ -177,7 +178,7 @@ mod deriving_key_material {
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![new_route_final_hop(
                 crypto::generate_random_curve_point(),
-                address_fixture(),
+                destination_address_fixture(),
             )];
             let initial_secret = crypto::generate_secret();
             let key_material = derive(&route, initial_secret);
@@ -228,7 +229,10 @@ mod deriving_key_material {
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![
                 new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_final_hop(crypto::generate_random_curve_point(), address_fixture()),
+                new_route_final_hop(
+                    crypto::generate_random_curve_point(),
+                    destination_address_fixture(),
+                ),
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = derive(&route, initial_secret);
@@ -280,7 +284,10 @@ mod deriving_key_material {
                 new_route_forward_hop(crypto::generate_random_curve_point()),
                 new_route_forward_hop(crypto::generate_random_curve_point()),
                 new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_final_hop(crypto::generate_random_curve_point(), address_fixture()),
+                new_route_final_hop(
+                    crypto::generate_random_curve_point(),
+                    destination_address_fixture(),
+                ),
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = derive(&route, initial_secret);

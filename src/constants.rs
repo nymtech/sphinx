@@ -9,9 +9,11 @@ pub const MAX_PATH_LENGTH: usize = 5;
 pub const ROUTING_KEYS_LENGTH: usize =
     crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE;
 pub const HKDF_INPUT_SEED: &[u8; 97] = b"Dwste mou enan moxlo arketa makru kai ena upomoxlio gia na ton topothetisw kai tha kinisw thn gh.";
-pub const STREAM_CIPHER_OUTPUT_LENGTH: usize = (2 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER;
-pub const DESTINATION_LENGTH: usize = 2 * SECURITY_PARAMETER;
+pub const STREAM_CIPHER_OUTPUT_LENGTH: usize = (3 * MAX_PATH_LENGTH + 3) * SECURITY_PARAMETER;
+pub const DESTINATION_ADDRESS_LENGTH: usize = 2 * SECURITY_PARAMETER;
+pub const NODE_ADDRESS_LENGTH: usize = 2 * SECURITY_PARAMETER;
 pub const IDENTIFIER_LENGTH: usize = SECURITY_PARAMETER;
 pub const INTEGRITY_MAC_KEY_SIZE: usize = SECURITY_PARAMETER;
 pub const INTEGRITY_MAC_SIZE: usize = SECURITY_PARAMETER;
 pub const PAYLOAD_KEY_SIZE: usize = SECURITY_PARAMETER;
+pub const INITIAL_FILLER_PADDING: usize = 3 * SECURITY_PARAMETER;
