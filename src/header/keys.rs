@@ -77,7 +77,7 @@ pub(crate) fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingK
             ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
     );
 
-    let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = Default::default();
+    let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
     payload_key.copy_from_slice(
         &output[crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE
             ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],

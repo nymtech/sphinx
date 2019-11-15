@@ -19,7 +19,11 @@ pub struct SphinxPacket {
 
 pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
     let (header, payload_keys) = header::create(route);
-    let payload = payload::create(message, payload_keys);
+    let destination = match route.last().expect("The route should not be empty") {
+        RouteElement::FinalHop(destination) => destination,
+        _ => panic!("The last route element must be a destination"),
+    };
+    let payload = payload::create(message, payload_keys, &destination);
     SphinxPacket { header, payload }
 }
 
