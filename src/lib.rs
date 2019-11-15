@@ -58,20 +58,20 @@ mod tests {
     use super::*;
     use test::Bencher;
 
-    #[bench]
-    fn bench_create_header(b: &mut Bencher) {
-        // 3 mixes and a destination
-        let dummy_route = vec![
-            random_forward_hop(),
-            random_forward_hop(),
-            random_forward_hop(),
-            random_final_hop(),
-        ];
-
-        b.iter(|| {
-            header::create(&dummy_route);
-        });
-    }
+    //    #[bench]
+    //    fn bench_create_header(b: &mut Bencher) {
+    //        // 3 mixes and a destination
+    //        let dummy_route = vec![
+    //            random_forward_hop(),
+    //            random_forward_hop(),
+    //            random_forward_hop(),
+    //            random_final_hop(),
+    //        ];
+    //
+    //        b.iter(|| {
+    //            header::create(&dummy_route);
+    //        });
+    //    }
 
     #[bench]
     fn bench_generate_shared_secets(b: &mut Bencher) {
