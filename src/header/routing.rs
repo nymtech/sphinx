@@ -301,6 +301,65 @@ mod preparing_header_layer {
 }
 
 #[cfg(test)]
+mod test_encapsulating_final_routing_information_and_mac {
+    use super::*;
+    use crate::header::filler::filler_fixture;
+    use crate::header::header::{random_destination, random_final_hop, random_forward_hop};
+
+    #[test]
+    #[should_panic]
+    fn it_panics_if_last_route_element_is_not_a_final_hop() {
+        let route = [
+            random_forward_hop(),
+            random_forward_hop(),
+            random_forward_hop(),
+        ];
+        let routing_keys = [
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+        ];
+        let filler = filler_fixture(route.len() - 1);
+        encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_panics_if_it_doesnt_receive_any_keys() {
+        let route = [random_final_hop()];
+        let routing_keys: Vec<RoutingKeys> = vec![];
+        let filler = filler_fixture(route.len() - 1);
+        encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+    }
+
+    #[test]
+    fn it_returns_mac_on_correct_data() {
+        let route = [
+            random_forward_hop(),
+            random_forward_hop(),
+            random_final_hop(),
+        ];
+        let routing_keys = [
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+        ];
+        let filler = filler_fixture(route.len() - 1);
+        let final_header_layer_components =
+            encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+
+        let expected_mac = generate_routing_info_integrity_mac(
+            routing_keys.last().unwrap().header_integrity_hmac_key,
+            final_header_layer_components.enc_header,
+        );
+        assert_eq!(
+            expected_mac,
+            final_header_layer_components.header_integrity_hmac
+        );
+    }
+}
+
+#[cfg(test)]
 mod test_encapsulating_final_routing_information {
     use super::*;
     use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH};
