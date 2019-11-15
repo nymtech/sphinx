@@ -362,24 +362,18 @@ mod test_encapsulating_final_routing_information_and_mac {
 #[cfg(test)]
 mod test_encapsulating_final_routing_information {
     use super::*;
-    use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH};
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{destination_address_fixture, surb_identifier_fixture};
+    use crate::header::header::random_destination;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
     ) {
-        let final_leys = routing_keys_fixture();
+        let final_keys = routing_keys_fixture();
         let route_len = 5;
         let filler = filler_fixture(route_len - 1);
-        let destination = Destination {
-            pub_key: crypto::generate_random_curve_point(),
-            address: destination_address_fixture(),
-            identifier: surb_identifier_fixture(),
-        };
-        let filler_len = filler.len();
+        let destination = random_destination();
         let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_leys);
+            generate_final_routing_info(filler, route_len, &destination, &final_keys);
 
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
@@ -389,17 +383,12 @@ mod test_encapsulating_final_routing_information {
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_3(
     ) {
-        let final_leys = routing_keys_fixture();
+        let final_keys = routing_keys_fixture();
         let route_len = 3;
         let filler = filler_fixture(route_len - 1);
-        let destination = Destination {
-            pub_key: crypto::generate_random_curve_point(),
-            address: destination_address_fixture(),
-            identifier: surb_identifier_fixture(),
-        };
-        let filler_len = filler.len();
+        let destination = random_destination();
         let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_leys);
+            generate_final_routing_info(filler, route_len, &destination, &final_keys);
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
         assert_eq!(expected_final_header_len, final_header.len());
     }
@@ -407,17 +396,12 @@ mod test_encapsulating_final_routing_information {
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_1(
     ) {
-        let final_leys = routing_keys_fixture();
+        let final_keys = routing_keys_fixture();
         let route_len = 1;
         let filler = filler_fixture(route_len - 1);
-        let destination = Destination {
-            pub_key: crypto::generate_random_curve_point(),
-            address: destination_address_fixture(),
-            identifier: surb_identifier_fixture(),
-        };
-        let filler_len = filler.len();
+        let destination = random_destination();
         let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_leys);
+            generate_final_routing_info(filler, route_len, &destination, &final_keys);
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
         assert_eq!(expected_final_header_len, final_header.len());
     }
@@ -425,17 +409,22 @@ mod test_encapsulating_final_routing_information {
     #[test]
     #[should_panic]
     fn it_panics_route_of_length_0() {
-        let final_leys = routing_keys_fixture();
+        let final_keys = routing_keys_fixture();
         let route_len = 0;
-        let filler = filler_fixture(route_len);
-        let destination = Destination {
-            pub_key: crypto::generate_random_curve_point(),
-            address: destination_address_fixture(),
-            identifier: surb_identifier_fixture(),
-        };
-        let filler_len = filler.len();
+        let filler = filler_fixture(route_len - 1);
+        let destination = random_destination();
         let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_leys);
+            generate_final_routing_info(filler, route_len, &destination, &final_keys);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_panics_if_it_receives_filler_different_than_3i_security_parameter() {
+        let final_keys = routing_keys_fixture();
+        let route_len = 3;
+        let filler = filler_fixture(route_len);
+        let destination = random_destination();
+        generate_final_routing_info(filler, route_len, &destination, &final_keys);
     }
 }
 
