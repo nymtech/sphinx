@@ -26,6 +26,8 @@ pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
 #[derive(Clone)]
 pub struct Destination {
+    // address in theory could be changed to a vec<u8> as it does not need to be strictly DESTINATION_ADDRESS_LENGTH long
+    // but cannot be longer than that (assuming longest possible route)
     pub address: DestinationAddressBytes,
     pub identifier: SURBIdentifier,
     pub pub_key: crypto::PublicKey,
