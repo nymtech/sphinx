@@ -6,6 +6,7 @@ use crate::header::header::{Destination, NodeAddressBytes, RouteElement};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::{STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
+use std::fmt;
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
@@ -15,11 +16,31 @@ pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone)]
 pub struct RoutingKeys {
     pub stream_cipher_key: StreamCipherKey,
     pub header_integrity_hmac_key: HeaderIntegrityMacKey,
     pub payload_key: PayloadKey,
+}
+
+impl fmt::Debug for RoutingKeys {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:?} {:?} {:?}",
+            self.stream_cipher_key,
+            self.header_integrity_hmac_key,
+            self.payload_key.to_vec()
+        )
+    }
+}
+
+impl PartialEq for RoutingKeys {
+    fn eq(&self, other: &RoutingKeys) -> bool {
+        self.stream_cipher_key == other.stream_cipher_key
+            && self.header_integrity_hmac_key == other.header_integrity_hmac_key
+            && self.payload_key.to_vec() == other.payload_key.to_vec()
+    }
 }
 
 type RoutingInformation = [u8; ROUTING_INFO_SIZE];
