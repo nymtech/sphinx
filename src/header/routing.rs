@@ -30,6 +30,7 @@ pub struct RoutingInfo {
     pub header_integrity_hmac: HeaderIntegrityMac,
 }
 
+#[derive(Clone)]
 struct HeaderLayerComponents {
     // in paper beta
     pub enc_header: RoutingInformation,
@@ -350,23 +351,40 @@ mod encapsulating_routing_information {
         let final_header_layer_components =
             encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
 
+        // we need to make an explicit copy of final components because they are consumed (and rightfully so) after encapsulation
+        let final_header_layer_components_copy = final_header_layer_components.clone();
         let routing_info = encapsulate_routing_info_and_integrity_macs(
             final_header_layer_components,
             &route,
             &routing_keys,
         );
 
-        /* we need to do the following:
-        1. truncate final_routing_info
-        2. prepend 2nd from last node's address and final_mac to form: B2 = addr || mac || Bf_trunc
-        3. encrypt the above
-        4. calculate MAC on the encryption
-        5. truncate B2
-        6. prepend first node's address and the calculate mac to form: B1 = addr || mac2 || B2
-        7. encrypt the above
-        8. calculate MAC on encryption
-        9. compare our final encryption and MAC from function output
-        */
+        let layer_2_header = prepare_header_layer(
+            match &route[1] {
+                RouteElement::ForwardHop(mix) => mix.address,
+                _ => panic!(),
+            },
+            &routing_keys[1],
+            final_header_layer_components_copy,
+        );
+
+        let layer_1_header = prepare_header_layer(
+            match &route[0] {
+                RouteElement::ForwardHop(mix) => mix.address,
+                _ => panic!(),
+            },
+            &routing_keys[0],
+            layer_2_header,
+        );
+
+        assert_eq!(
+            routing_info.enc_header.to_vec(),
+            layer_1_header.enc_header.to_vec()
+        );
+        assert_eq!(
+            routing_info.header_integrity_hmac,
+            layer_1_header.header_integrity_hmac
+        );
     }
 
     #[test]
