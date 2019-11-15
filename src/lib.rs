@@ -1,4 +1,8 @@
-use crate::header::header::{MixNode, RouteElement};
+#![feature(test)]
+extern crate test;
+
+use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
+use crate::header::keys;
 use crate::header::routing::ROUTING_INFO_SIZE;
 
 use constants::INTEGRITY_MAC_SIZE;
@@ -47,4 +51,42 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
             delay: 0.0,
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use test::Bencher;
+
+    #[bench]
+    fn bench_create_header(b: &mut Bencher) {
+        // 3 mixes and a destination
+        let dummy_route = vec![
+            random_forward_hop(),
+            random_forward_hop(),
+            random_forward_hop(),
+            random_final_hop(),
+        ];
+
+        b.iter(|| {
+            header::create(&dummy_route);
+        });
+    }
+
+    #[bench]
+    fn bench_generate_shared_secets(b: &mut Bencher) {
+        // 3 mixes and a destination
+        let dummy_route = vec![
+            random_forward_hop(),
+            random_forward_hop(),
+            random_forward_hop(),
+            random_final_hop(),
+        ];
+
+        let initial_secret = utils::crypto::generate_secret();
+
+        b.iter(|| {
+            header::keys::derive(&dummy_route, initial_secret);
+        });
+    }
 }
