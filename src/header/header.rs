@@ -1,6 +1,8 @@
 use crate::constants::{DESTINATION_LENGTH, IDENTIFIER_LENGTH};
 use crate::utils::crypto;
 
+// I think everything from below here should be moved to main sphinx file or perhaps to something for route
+
 #[derive(Clone)]
 pub enum RouteElement {
     FinalHop(Destination),
@@ -35,9 +37,24 @@ pub struct MixNode {
 }
 
 pub fn address_fixture() -> AddressBytes {
-    [0u8; 32]
+    [0u8; DESTINATION_LENGTH]
 }
 
 pub fn surb_identifier_fixture() -> SURBIdentifier {
     [0u8; IDENTIFIER_LENGTH]
+}
+
+pub fn random_forward_hop() -> RouteElement {
+    RouteElement::ForwardHop(MixNode {
+        address: [2u8; DESTINATION_LENGTH],
+        pub_key: crypto::generate_random_curve_point(),
+    })
+}
+
+pub fn random_final_hop() -> RouteElement {
+    RouteElement::FinalHop(Destination {
+        address: [3u8; DESTINATION_LENGTH],
+        identifier: [4u8; IDENTIFIER_LENGTH],
+        pub_key: crypto::generate_random_curve_point(),
+    })
 }
