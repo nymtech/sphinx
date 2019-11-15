@@ -248,8 +248,6 @@ fn generate_final_routing_info(
     final_routing_information
 }
 
-// UNCOMMENT ONCE WE FIX OUR LENGTH ISSUE
-//
 #[cfg(test)]
 mod preparing_header_layer {
     use super::*;
