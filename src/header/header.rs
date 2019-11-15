@@ -57,9 +57,13 @@ pub fn random_forward_hop() -> RouteElement {
 }
 
 pub fn random_final_hop() -> RouteElement {
-    RouteElement::FinalHop(Destination {
+    RouteElement::FinalHop(random_destination())
+}
+
+pub fn random_destination() -> Destination {
+    Destination {
         address: [3u8; DESTINATION_ADDRESS_LENGTH],
         identifier: [4u8; IDENTIFIER_LENGTH],
         pub_key: crypto::generate_random_curve_point(),
-    })
+    }
 }
