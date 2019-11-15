@@ -257,12 +257,146 @@ fn generate_final_routing_info(
 }
 
 #[cfg(test)]
+mod encapsulating_all_routing_information {
+    use super::*;
+    use crate::header::filler::filler_fixture;
+    use crate::header::header::{random_final_hop, random_forward_hop};
+
+    #[test]
+    #[should_panic]
+    fn it_panics_if_route_is_longer_than_keys() {
+        let route = [
+            random_forward_hop(),
+            random_forward_hop(),
+            random_final_hop(),
+        ];
+        let keys = [routing_keys_fixture(), routing_keys_fixture()];
+        let filler = filler_fixture(route.len() - 1);
+
+        generate_all_routing_info(&route, &keys, filler);
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_panics_if_keys_are_longer_than_route() {
+        let route = [random_forward_hop(), random_final_hop()];
+        let keys = [
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+        ];
+        let filler = filler_fixture(route.len() - 1);
+
+        generate_all_routing_info(&route, &keys, filler);
+    }
+}
+
+#[cfg(test)]
+mod encapsulating_routing_information {
+    use super::*;
+    use crate::header::filler::filler_fixture;
+    use crate::header::header::{random_destination, random_final_hop, random_forward_hop};
+
+    #[test]
+    fn it_returns_final_header_components_for_route_of_length_1() {
+        let route_len = 1;
+        let final_keys = routing_keys_fixture();
+        let destination = random_destination();
+        let filler = filler_fixture(route_len - 1);
+
+        let final_routing_info =
+            generate_final_routing_info(filler, route_len, &destination, &final_keys);
+        let final_routing_mac = generate_routing_info_integrity_mac(
+            final_keys.header_integrity_hmac_key,
+            final_routing_info,
+        );
+        let final_header_layer_components = HeaderLayerComponents {
+            enc_header: final_routing_info,
+            header_integrity_hmac: final_routing_mac,
+        };
+
+        let route = vec![RouteElement::FinalHop(destination)];
+        let routing_info = encapsulate_routing_info_and_integrity_macs(
+            final_header_layer_components,
+            &route,
+            &[final_keys],
+        );
+
+        assert_eq!(
+            routing_info.enc_header.to_vec(),
+            final_routing_info.to_vec()
+        );
+        assert_eq!(
+            routing_info.header_integrity_hmac.to_vec(),
+            final_routing_mac.to_vec()
+        );
+    }
+
+    #[test]
+    fn it_correctly_generates_sphinx_routing_information_for_route_of_length_3() {
+        // this is basically loop unwrapping, but considering the complex iterator, it's warranted
+        let route = [
+            random_forward_hop(),
+            random_forward_hop(),
+            random_final_hop(),
+        ];
+        let routing_keys = [
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+        ];
+        let filler = filler_fixture(route.len() - 1);
+
+        let final_header_layer_components =
+            encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+
+        let routing_info = encapsulate_routing_info_and_integrity_macs(
+            final_header_layer_components,
+            &route,
+            &routing_keys,
+        );
+
+        /* we need to do the following:
+        1. truncate final_routing_info
+        2. prepend 2nd from last node's address and final_mac to form: B2 = addr || mac || Bf_trunc
+        3. encrypt the above
+        4. calculate MAC on the encryption
+        5. truncate B2
+        6. prepend first node's address and the calculate mac to form: B1 = addr || mac2 || B2
+        7. encrypt the above
+        8. calculate MAC on encryption
+        9. compare our final encryption and MAC from function output
+        */
+    }
+
+    #[test]
+    fn it_correctly_generates_sphinx_routing_information_for_route_of_max_length() {
+        // this is basically loop unwrapping, but considering the complex iterator, it's warranted
+        assert_eq!(5, MAX_PATH_LENGTH); // make sure we catch it if we decided to change the constant
+
+        /* since we're using max path length we expect literally:
+        n4 || m4 || n3 || m3 || n2 || m2 || n1 || m1 || d || i || p
+        // so literally no filler!
+        where:
+        {n1, n2, ...} are node addresses
+        {m1, m2, ...} are macs on previous layers
+        d is destination address
+        i is destination identifier
+        p is destination padding
+        */
+
+        // TODO: IMPLEMENT SPHINX HEADER LAYER UNWRAPING
+        // HOWEVER! to test it, we need to first wrap function to unwrap header layer because each consequtive (ni, mi) pair is encrypted
+    }
+}
+
+#[cfg(test)]
 mod preparing_header_layer {
     use super::*;
     use crate::header::header::node_address_fixture;
 
     #[test]
-    fn returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
+    fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
         let address = node_address_fixture();
         let routing_keys = routing_keys_fixture();
         let inner_layer_components = header_layer_components_fixture();
