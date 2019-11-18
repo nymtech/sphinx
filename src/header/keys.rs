@@ -70,14 +70,15 @@ impl KeyMaterial {
         let routing_keys = route
             .iter()
             .scan(initial_secret, |accumulator, route_element| {
-                let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
+                let shared_key =
+                    KeyMaterial::compute_shared_key(route_element.get_pub_key(), &accumulator);
 
                 // last element in the route should be the destination and hence don't compute blinding factor
                 // or increment the iterator
                 match route_element {
                     RouteElement::ForwardHop(_) => {
-                        *accumulator =
-                            *accumulator * compute_blinding_factor(shared_key, &accumulator)
+                        *accumulator *=
+                            KeyMaterial::compute_blinding_factor(shared_key, &accumulator)
                     }
                     RouteElement::FinalHop(_) => (),
                 }
@@ -92,50 +93,21 @@ impl KeyMaterial {
             initial_shared_secret,
         }
     }
-}
-//
-//// derive shared keys, group elements, blinding factors
-//pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
-//    let initial_shared_secret = CURVE_GENERATOR * initial_secret;
-//
-//    let routing_keys = route
-//        .iter()
-//        .scan(initial_secret, |accumulator, route_element| {
-//            let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
-//
-//            // last element in the route should be the destination and hence don't compute blinding factor
-//            // or increment the iterator
-//            match route_element {
-//                RouteElement::ForwardHop(_) => {
-//                    *accumulator = *accumulator * compute_blinding_factor(shared_key, &accumulator)
-//                }
-//                RouteElement::FinalHop(_) => (),
-//            }
-//
-//            Some(shared_key)
-//        })
-//        .map(RoutingKeys::derive)
-//        .collect();
-//
-//    KeyMaterial {
-//        routing_keys,
-//        initial_shared_secret,
-//    }
-//}
 
-fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
-    let shared_secret = CURVE_GENERATOR * exponent;
-    let hmac_full = compute_keyed_hmac(
-        shared_secret.to_bytes().to_vec(),
-        &shared_key.to_bytes().to_vec(),
-    );
-    let mut hmac = [0u8; 32];
-    hmac.copy_from_slice(&hmac_full[..32]);
-    Scalar::from_bytes_mod_order(hmac)
-}
+    fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
+        let shared_secret = CURVE_GENERATOR * exponent;
+        let hmac_full = compute_keyed_hmac(
+            shared_secret.to_bytes().to_vec(),
+            &shared_key.to_bytes().to_vec(),
+        );
+        let mut hmac = [0u8; 32];
+        hmac.copy_from_slice(&hmac_full[..32]);
+        Scalar::from_bytes_mod_order(hmac)
+    }
 
-fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
-    node_pub_key * exponent
+    fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
+        node_pub_key * exponent
+    }
 }
 
 #[cfg(test)]
@@ -147,7 +119,7 @@ mod computing_shared_key {
         let g = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
         let x = Scalar::from_bytes_mod_order([42u8; 32]);
 
-        assert_eq!(g * x, compute_shared_key(g, &x));
+        assert_eq!(g * x, KeyMaterial::compute_shared_key(g, &x));
     }
 }
 
@@ -171,7 +143,7 @@ mod computing_blinding_factor {
             178, 37, 181, 248, 165, 180, 75, 103, 133, 191, 146, 10, 8,
         ]);
 
-        let blinding_factor = compute_blinding_factor(y, &x);
+        let blinding_factor = KeyMaterial::compute_blinding_factor(y, &x);
         assert_eq!(expected_blinding_factor, blinding_factor)
     }
 }
@@ -255,9 +227,11 @@ mod deriving_key_material {
             let mut expected_accumulator = initial_secret;
             for i in 0..route.len() {
                 let expected_shared_key =
-                    compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder =
-                    compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                let expected_blinder = KeyMaterial::compute_blinding_factor(
+                    expected_shared_key,
+                    &expected_accumulator,
+                );
                 expected_accumulator = expected_accumulator * expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
 
@@ -309,9 +283,11 @@ mod deriving_key_material {
             let mut expected_accumulator = initial_secret;
             for i in 0..route.len() {
                 let expected_shared_key =
-                    compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder =
-                    compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                let expected_blinder = KeyMaterial::compute_blinding_factor(
+                    expected_shared_key,
+                    &expected_accumulator,
+                );
                 expected_accumulator = expected_accumulator * expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
@@ -364,9 +340,11 @@ mod deriving_key_material {
             let mut expected_accumulator = initial_secret;
             for i in 0..4 {
                 let expected_shared_key =
-                    compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder =
-                    compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                let expected_blinder = KeyMaterial::compute_blinding_factor(
+                    expected_shared_key,
+                    &expected_accumulator,
+                );
                 expected_accumulator = expected_accumulator * expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
@@ -415,9 +393,11 @@ mod deriving_key_material {
             let mut expected_accumulator = initial_secret;
             for i in 0..3 {
                 let expected_shared_key =
-                    compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder =
-                    compute_blinding_factor(expected_shared_key, &expected_accumulator);
+                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                let expected_blinder = KeyMaterial::compute_blinding_factor(
+                    expected_shared_key,
+                    &expected_accumulator,
+                );
                 expected_accumulator = expected_accumulator * expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
