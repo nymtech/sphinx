@@ -3,6 +3,7 @@ use crate::constants::{
     MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::header::{Destination, NodeAddressBytes, RouteElement};
+use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::{STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
@@ -10,17 +11,6 @@ use crate::utils::crypto::{STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
 pub const ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
-
-pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
-pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
-pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
-
-#[derive(Debug, PartialEq, Clone)]
-pub struct RoutingKeys {
-    pub stream_cipher_key: StreamCipherKey,
-    pub header_integrity_hmac_key: HeaderIntegrityMacKey,
-    pub payload_key: PayloadKey,
-}
 
 type RoutingInformation = [u8; ROUTING_INFO_SIZE];
 type HeaderIntegrityMac = [u8; INTEGRITY_MAC_SIZE];

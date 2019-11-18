@@ -5,10 +5,9 @@ use crate::header::header::{
     destination_address_fixture, node_address_fixture, surb_identifier_fixture, Destination,
     MixNode, RouteElement,
 };
-use crate::header::routing::RoutingKeys;
 use crate::utils::crypto;
-use crate::utils::crypto::compute_keyed_hmac;
 use crate::utils::crypto::CURVE_GENERATOR;
+use crate::utils::crypto::{compute_keyed_hmac, STREAM_CIPHER_KEY_SIZE};
 use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -18,7 +17,50 @@ pub struct KeyMaterial {
     pub routing_keys: Vec<RoutingKeys>,
 }
 
+pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
+pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
+
+#[derive(Debug, PartialEq, Clone)]
+pub struct RoutingKeys {
+    pub stream_cipher_key: StreamCipherKey,
+    pub header_integrity_hmac_key: HeaderIntegrityMacKey,
+    pub payload_key: PayloadKey,
+}
+
+#[allow(dead_code)]
+impl RoutingKeys {
+    // or should this be renamed to 'new'?
+    // Given that everything here except RoutingKeys lives in the `crypto` module, I think
+    // that this one could potentially move most of its functionality there quite profitably.
+    pub fn derive(shared_key: crypto::SharedKey) -> Self {
+        let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
+
+        let mut output = [0u8; ROUTING_KEYS_LENGTH];
+        hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
+
+        let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
+        stream_cipher_key.copy_from_slice(&output[..crypto::STREAM_CIPHER_KEY_SIZE]);
+
+        let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
+        header_integrity_hmac_key.copy_from_slice(
+            &output[crypto::STREAM_CIPHER_KEY_SIZE
+                ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
+        );
+
+        let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
+        payload_key.copy_from_slice(
+            &output[crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE
+                ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],
+        );
+
+        RoutingKeys {
+            stream_cipher_key,
+            header_integrity_hmac_key,
+            payload_key,
+        }
+    }
+}
 
 // derive shared keys, group elements, blinding factors
 pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
@@ -40,7 +82,7 @@ pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
 
             Some(shared_key)
         })
-        .map(key_derivation_function)
+        .map(RoutingKeys::derive)
         .collect();
 
     KeyMaterial {
@@ -58,36 +100,6 @@ fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> 
     let mut hmac = [0u8; 32];
     hmac.copy_from_slice(&hmac_full[..32]);
     Scalar::from_bytes_mod_order(hmac)
-}
-
-// Given that everything here except RoutingKeys lives in the `crypto` module, I think
-// that this one could potentially move most of its functionality there quite profitably.
-pub(crate) fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingKeys {
-    let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
-
-    let mut output = [0u8; ROUTING_KEYS_LENGTH];
-    hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
-
-    let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
-    stream_cipher_key.copy_from_slice(&output[..crypto::STREAM_CIPHER_KEY_SIZE]);
-
-    let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
-    header_integrity_hmac_key.copy_from_slice(
-        &output[crypto::STREAM_CIPHER_KEY_SIZE
-            ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
-    );
-
-    let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
-    payload_key.copy_from_slice(
-        &output[crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE
-            ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],
-    );
-
-    RoutingKeys {
-        stream_cipher_key,
-        header_integrity_hmac_key,
-        payload_key,
-    }
 }
 
 fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
@@ -215,7 +227,7 @@ mod deriving_key_material {
                 let expected_blinder =
                     compute_blinding_factor(expected_shared_key, &expected_accumulator);
                 expected_accumulator = expected_accumulator * expected_blinder;
-                let expected_routing_keys = key_derivation_function(expected_shared_key);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
 
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
@@ -269,7 +281,7 @@ mod deriving_key_material {
                 let expected_blinder =
                     compute_blinding_factor(expected_shared_key, &expected_accumulator);
                 expected_accumulator = expected_accumulator * expected_blinder;
-                let expected_routing_keys = key_derivation_function(expected_shared_key);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
         }
@@ -324,7 +336,7 @@ mod deriving_key_material {
                 let expected_blinder =
                     compute_blinding_factor(expected_shared_key, &expected_accumulator);
                 expected_accumulator = expected_accumulator * expected_blinder;
-                let expected_routing_keys = key_derivation_function(expected_shared_key);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
         }
@@ -375,7 +387,7 @@ mod deriving_key_material {
                 let expected_blinder =
                     compute_blinding_factor(expected_shared_key, &expected_accumulator);
                 expected_accumulator = expected_accumulator * expected_blinder;
-                let expected_routing_keys = key_derivation_function(expected_shared_key);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
         }
@@ -389,7 +401,7 @@ mod key_derivation_function {
     #[test]
     fn it_expands_the_seed_key_to_expected_length() {
         let shared_key = crypto::generate_random_curve_point();
-        let routing_keys = key_derivation_function(shared_key);
+        let routing_keys = RoutingKeys::derive(shared_key);
         assert_eq!(
             crypto::STREAM_CIPHER_KEY_SIZE,
             routing_keys.stream_cipher_key.len()
@@ -399,8 +411,8 @@ mod key_derivation_function {
     #[test]
     fn it_returns_the_same_output_for_two_equal_inputs() {
         let shared_key = crypto::generate_random_curve_point();
-        let routing_keys1 = key_derivation_function(shared_key);
-        let routing_keys2 = key_derivation_function(shared_key);
+        let routing_keys1 = RoutingKeys::derive(shared_key);
+        let routing_keys2 = RoutingKeys::derive(shared_key);
         assert_eq!(routing_keys1, routing_keys2);
     }
 }

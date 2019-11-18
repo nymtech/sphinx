@@ -1,6 +1,6 @@
 use crate::constants::{INITIAL_FILLER_PADDING, MAX_PATH_LENGTH, SECURITY_PARAMETER};
 use crate::header::keys;
-use crate::header::routing::RoutingKeys;
+use crate::header::keys::RoutingKeys;
 use crate::utils::crypto;
 use crate::{constants, utils};
 
@@ -69,7 +69,7 @@ mod test_creating_pseudorandom_bytes {
         let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point()];
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::key_derivation_function(key))
+            .map(|&key| keys::RoutingKeys::derive(key))
             .collect();
         let filler_string = generate_pseudorandom_filler(&routing_keys);
 
@@ -85,7 +85,7 @@ mod test_creating_pseudorandom_bytes {
         ];
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::key_derivation_function(key))
+            .map(|&key| keys::RoutingKeys::derive(key))
             .collect();
         let filler_string = generate_pseudorandom_filler(&routing_keys);
         assert_eq!(3 * 3 * constants::SECURITY_PARAMETER, filler_string.len());
@@ -100,7 +100,7 @@ mod test_creating_pseudorandom_bytes {
             .collect();
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::key_derivation_function(key))
+            .map(|&key| keys::RoutingKeys::derive(key))
             .collect();
         generate_pseudorandom_filler(&routing_keys);
     }
