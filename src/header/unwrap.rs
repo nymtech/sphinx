@@ -2,7 +2,9 @@ use crate::constants::{INTEGRITY_MAC_SIZE, SECURITY_PARAMETER, STREAM_CIPHER_OUT
 use crate::header::header;
 use crate::header::header::MixNode;
 use crate::header::routing;
-use crate::header::routing::{RoutingInformation, RoutingKeys, StreamCipherKey, ROUTING_INFO_SIZE};
+use crate::header::routing::{
+    PaddedRoutingInformation, RoutingInformation, RoutingKeys, StreamCipherKey, ROUTING_INFO_SIZE,
+};
 use crate::header::SphinxHeader;
 use crate::utils;
 use crate::utils::crypto;
@@ -38,9 +40,9 @@ pub fn unwrap_routing_information(
     )
 }
 
-fn add_zero_padding_to_encrypted_routing_information(enc_header: &[u8]) -> Vec<u8> {
-    let zero_bytes = vec![0u8; 2 * SECURITY_PARAMETER];
-    [enc_header.to_vec(), zero_bytes.to_vec()].concat()
+fn add_zero_padding_to_encrypted_routing_information(enc_routing_info: &[u8]) -> Vec<u8> {
+    let zero_bytes = vec![0u8; 3 * SECURITY_PARAMETER];
+    [enc_routing_info.to_vec(), zero_bytes.to_vec()].concat()
 }
 
 pub fn check_integrity_mac(
@@ -58,18 +60,18 @@ pub fn check_integrity_mac(
 
 pub fn decrypt_padded_routing_info(
     key: &StreamCipherKey,
-    routing_info: &[u8],
-) -> RoutingInformation {
+    padded_routing_info: &[u8],
+) -> PaddedRoutingInformation {
     let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
         &key,
         &crypto::STREAM_CIPHER_INIT_VECTOR,
         STREAM_CIPHER_OUTPUT_LENGTH,
     );
 
-    let decrypted_routing_info_vec =
-        utils::bytes::xor(&routing_info, &pseudorandom_bytes[..ROUTING_INFO_SIZE]);
+    let lenx = padded_routing_info.len();
+    let decrypted_routing_info_vec = utils::bytes::xor(&padded_routing_info, &pseudorandom_bytes);
 
-    let mut decrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
+    let mut decrypted_routing_info = [0u8; ROUTING_INFO_SIZE + 3 * SECURITY_PARAMETER];
     decrypted_routing_info.copy_from_slice(&decrypted_routing_info_vec);
     decrypted_routing_info
 }
@@ -107,8 +109,33 @@ mod check_zero_padding {
         let enc_header = [6u8; ROUTING_INFO_SIZE];
         let paddede_enc_header = add_zero_padding_to_encrypted_routing_information(&enc_header);
         assert_eq!(
-            ROUTING_INFO_SIZE + 2 * SECURITY_PARAMETER,
+            ROUTING_INFO_SIZE + 3 * SECURITY_PARAMETER,
             paddede_enc_header.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod check_decryption {
+    use super::*;
+    use crate::header::crypto::STREAM_CIPHER_KEY_SIZE;
+    use crate::header::routing::encrypt_routing_info;
+
+    #[test]
+    fn it_returns_output_equal_to_input_plaintext() {
+        let routing_info = [9u8; ROUTING_INFO_SIZE];
+        let key = [1u8; STREAM_CIPHER_KEY_SIZE];
+
+        let enc_routing_info = encrypt_routing_info(key, &routing_info);
+        let padded_enc_routing_info = [
+            enc_routing_info.to_vec(),
+            [0u8; 3 * SECURITY_PARAMETER].to_vec(),
+        ]
+        .concat();
+        let decrypted_routing_info = decrypt_padded_routing_info(&key, &padded_enc_routing_info);
+        assert_eq!(padded_enc_routing_info.len(), decrypted_routing_info.len());
+        assert!(decrypted_routing_info[..routing_info.len()]
+            .iter()
+            .eq(routing_info.iter()));
     }
 }

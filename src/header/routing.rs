@@ -44,6 +44,7 @@ impl PartialEq for RoutingKeys {
 }
 
 pub type RoutingInformation = [u8; ROUTING_INFO_SIZE];
+pub type PaddedRoutingInformation = [u8; ROUTING_INFO_SIZE + 3 * SECURITY_PARAMETER];
 pub type HeaderIntegrityMac = [u8; INTEGRITY_MAC_SIZE];
 
 pub struct RoutingInfo {
@@ -139,7 +140,7 @@ fn prepare_header_layer(
     }
 }
 
-fn encrypt_routing_info(
+pub fn encrypt_routing_info(
     key: StreamCipherKey,
     routing_info_components: &[u8],
 ) -> RoutingInformation {
