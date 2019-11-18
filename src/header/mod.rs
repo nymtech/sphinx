@@ -1,3 +1,4 @@
+use crate::header::filler::Filler;
 use crate::header::header::RouteElement;
 use crate::header::keys::PayloadKey;
 use crate::header::routing::RoutingInfo;
@@ -20,7 +21,7 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     let initial_secret = crypto::generate_secret();
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
     let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
-    let filler_string = filler::generate_pseudorandom_filler(&key_material.routing_keys);
+    let filler_string = Filler::new(&key_material.routing_keys);
     let routing_info =
         routing::generate_all_routing_info(route, &key_material.routing_keys, filler_string);
 

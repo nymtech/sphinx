@@ -89,14 +89,13 @@ impl KeyMaterial {
             .iter()
             .scan(initial_secret, |accumulator, route_element| {
                 let shared_key =
-                    KeyMaterial::compute_shared_key(route_element.get_pub_key(), &accumulator);
+                    Self::compute_shared_key(route_element.get_pub_key(), &accumulator);
 
                 // last element in the route should be the destination and hence don't compute blinding factor
                 // or increment the iterator
                 match route_element {
                     RouteElement::ForwardHop(_) => {
-                        *accumulator *=
-                            KeyMaterial::compute_blinding_factor(shared_key, &accumulator)
+                        *accumulator *= Self::compute_blinding_factor(shared_key, &accumulator)
                     }
                     RouteElement::FinalHop(_) => (),
                 }

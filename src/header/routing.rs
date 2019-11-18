@@ -2,6 +2,7 @@ use crate::constants::{
     DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, INTEGRITY_MAC_SIZE,
     MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
+use crate::header::filler::Filler;
 use crate::header::header::{Destination, NodeAddressBytes, RouteElement};
 use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::utils;
@@ -31,7 +32,7 @@ struct HeaderLayerComponents {
 pub fn generate_all_routing_info(
     route: &[RouteElement],
     routing_keys: &[RoutingKeys],
-    filler_string: Vec<u8>,
+    filler_string: Filler,
 ) -> RoutingInfo {
     assert_eq!(route.len(), routing_keys.len());
 
@@ -165,7 +166,7 @@ fn encrypt_padded_final_destination(
 fn encapsulate_final_routing_info_and_integrity_mac(
     route: &[RouteElement],
     routing_keys: &[RoutingKeys],
-    filler_string: Vec<u8>,
+    filler_string: Filler,
 ) -> HeaderLayerComponents {
     let final_keys = routing_keys
         .last()
@@ -190,7 +191,7 @@ fn encapsulate_final_routing_info_and_integrity_mac(
 }
 
 fn generate_final_routing_info(
-    filler: Vec<u8>,
+    filler: Filler,
     route_len: usize,
     destination: &Destination,
     final_keys: &RoutingKeys,
@@ -198,10 +199,11 @@ fn generate_final_routing_info(
     let address_bytes = destination.address;
     let surb_identifier = destination.identifier;
     let final_destination_bytes = [address_bytes.to_vec(), surb_identifier.to_vec()].concat();
+    let filler_value = filler.get_value();
 
     let max_destination_length = (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER;
     assert!(address_bytes.len() <= max_destination_length);
-    assert_eq!(filler.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
+    assert_eq!(filler_value.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
 
     let padding = utils::bytes::random(max_destination_length - address_bytes.len());
     let padded_final_destination = [final_destination_bytes.to_vec(), padding].concat();
@@ -211,7 +213,7 @@ fn generate_final_routing_info(
         route_len,
     );
 
-    let final_routing_info_vec = [encrypted_final_destination, filler].concat();
+    let final_routing_info_vec = [encrypted_final_destination, filler_value].concat();
     assert_eq!(final_routing_info_vec.len(), ROUTING_INFO_SIZE);
     let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
     final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
