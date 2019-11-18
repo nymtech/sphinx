@@ -1,6 +1,6 @@
+use crate::constants::INTEGRITY_MAC_SIZE;
 use crate::header::header::RouteElement;
 use crate::header::keys::PayloadKey;
-use crate::header::routing::RoutingInfo;
 use crate::utils::crypto;
 use crate::Hop;
 
@@ -13,7 +13,12 @@ pub mod unwrap;
 
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
-    pub routing_info: RoutingInfo,
+    pub routing_info: routing::RoutingInfo,
+}
+
+#[derive(Debug)]
+pub enum SphinxUnwrapError {
+    IntegrityMacError,
 }
 
 // needs client's secret key, how should we inject this?
@@ -40,7 +45,33 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     )
 }
 
-// pub fn process_header(
-//     header: SphinxHeader,
-//     routing_keys: RoutingKeys,
-// ) -> Result<(SphinxHeader, Hop), SphinxUnwrapError> {
+pub fn process_header(
+    header: SphinxHeader,
+    routing_keys: &routing::RoutingKeys,
+) -> Result<(SphinxHeader, Hop), SphinxUnwrapError> {
+    if !unwrap::check_integrity_mac(
+        header.routing_info.header_integrity_hmac,
+        routing_keys.header_integrity_hmac_key,
+        header.routing_info.enc_header,
+    ) {
+        return Err(SphinxUnwrapError::IntegrityMacError);
+    };
+
+    let tmp = unwrap::unwrap_routing_information(header, &routing_keys.stream_cipher_key);
+    Ok((
+        SphinxHeader {
+            shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
+            routing_info: routing::RoutingInfo {
+                enc_header: [0u8; routing::ROUTING_INFO_SIZE],
+                header_integrity_hmac: [0u8; INTEGRITY_MAC_SIZE],
+            },
+        },
+        Hop {
+            host: header::RouteElement::ForwardHop(header::MixNode {
+                address: header::node_address_fixture(),
+                pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
+            }),
+            delay: 0.0,
+        },
+    ))
+}

@@ -39,7 +39,7 @@ pub fn process_packet(packet: SphinxPacket, node_secret_key: Scalar) {
     // TODO: we should have some list of 'seens shared_keys' for replay detection
     let routing_keys = &keys::key_derivation_function(shared_key);
 
-    let tmp = header::unwrap::process_header(packet.header, &routing_keys);
+    let tmp = header::process_header(packet.header, routing_keys);
     // process the payload
     let unwrapped_payload =
         unwrap_payload::unwrap_payload(packet.payload, &routing_keys.payload_key);

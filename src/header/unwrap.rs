@@ -1,4 +1,4 @@
-use crate::constants::{INTEGRITY_MAC_SIZE, STREAM_CIPHER_OUTPUT_LENGTH};
+use crate::constants::{INTEGRITY_MAC_SIZE, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH};
 use crate::header::header;
 use crate::header::header::MixNode;
 use crate::header::routing;
@@ -8,29 +8,19 @@ use crate::utils;
 use crate::utils::crypto;
 use crate::Hop;
 
-#[derive(Debug)]
-pub enum SphinxUnwrapError {
-    IntegrityMacError,
-}
-
-pub fn process_header(
+pub fn unwrap_routing_information(
     header: SphinxHeader,
-    routing_keys: &RoutingKeys,
-) -> Result<(SphinxHeader, Hop), SphinxUnwrapError> {
-    if !check_integrity_mac(
-        header.routing_info.header_integrity_hmac,
-        routing_keys.header_integrity_hmac_key,
-        header.routing_info.enc_header,
-    ) {
-        return Err(SphinxUnwrapError::IntegrityMacError);
-    }
+    stream_cipher_key: &StreamCipherKey,
+) -> (SphinxHeader, Hop) {
+    // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose informatio
+    let padded_routing_information =
+        add_zero_padding_to_encrypted_routing_information(&header.routing_info.enc_header);
+    let unwrapped_routing_info =
+        decrypt_padded_routing_info(stream_cipher_key, &padded_routing_information);
 
-    let unwrapped_routing_info = decrypt_routing_info(
-        routing_keys.stream_cipher_key,
-        &header.routing_info.enc_header,
-    );
+    // TODO: parse the decrypted result to get next_hop, delay, next_routing_info etc.
 
-    Ok((
+    (
         SphinxHeader {
             shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
             routing_info: routing::RoutingInfo {
@@ -45,10 +35,15 @@ pub fn process_header(
             }),
             delay: 0.0,
         },
-    ))
+    )
 }
 
-fn check_integrity_mac(
+fn add_zero_padding_to_encrypted_routing_information(enc_header: &[u8]) -> Vec<u8> {
+    let zero_bytes = vec![0u8; 2 * SECURITY_PARAMETER];
+    [enc_header.to_vec(), zero_bytes.to_vec()].concat()
+}
+
+pub fn check_integrity_mac(
     integrity_mac: routing::HeaderIntegrityMac,
     integrity_mac_key: routing::HeaderIntegrityMacKey,
     enc_routing_info: RoutingInformation,
@@ -61,22 +56,18 @@ fn check_integrity_mac(
     return true;
 }
 
-pub fn decrypt_routing_info(
-    key: StreamCipherKey,
-    routing_info_components: &[u8],
+pub fn decrypt_padded_routing_info(
+    key: &StreamCipherKey,
+    routing_info: &[u8],
 ) -> RoutingInformation {
-    assert_eq!(ROUTING_INFO_SIZE, routing_info_components.len());
-
     let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
         &key,
         &crypto::STREAM_CIPHER_INIT_VECTOR,
         STREAM_CIPHER_OUTPUT_LENGTH,
     );
 
-    let decrypted_routing_info_vec = utils::bytes::xor(
-        &routing_info_components,
-        &pseudorandom_bytes[..ROUTING_INFO_SIZE],
-    );
+    let decrypted_routing_info_vec =
+        utils::bytes::xor(&routing_info, &pseudorandom_bytes[..ROUTING_INFO_SIZE]);
 
     let mut decrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
     decrypted_routing_info.copy_from_slice(&decrypted_routing_info_vec);
@@ -104,5 +95,20 @@ mod checking_integrity_mac {
         let hmac = [0u8; INTEGRITY_MAC_SIZE];
 
         assert_eq!(false, check_integrity_mac(hmac, mac_key, data));
+    }
+}
+
+#[cfg(test)]
+mod check_zero_padding {
+    use super::*;
+
+    #[test]
+    fn it_returns_a_correctly_padded_bytes() {
+        let enc_header = [6u8; ROUTING_INFO_SIZE];
+        let paddede_enc_header = add_zero_padding_to_encrypted_routing_information(&enc_header);
+        assert_eq!(
+            ROUTING_INFO_SIZE + 2 * SECURITY_PARAMETER,
+            paddede_enc_header.len()
+        );
     }
 }
