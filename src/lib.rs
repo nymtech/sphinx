@@ -10,6 +10,7 @@ use constants::INTEGRITY_MAC_SIZE;
 mod constants;
 mod header;
 mod payload;
+mod unwrap_payload;
 mod utils;
 
 pub struct SphinxPacket {
@@ -23,7 +24,7 @@ pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
         RouteElement::FinalHop(destination) => destination,
         _ => panic!("The last route element must be a destination"),
     };
-    let payload = payload::create(message, payload_keys, &destination);
+    let payload = payload::create(&message, payload_keys, destination.address);
     SphinxPacket { header, payload }
 }
 

@@ -1,5 +1,5 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, SECURITY_PARAMETER};
-use crate::header::header::Destination;
+use crate::header::header::DestinationAddressBytes;
 use crate::header::keys::PayloadKey;
 use arrayref::array_ref;
 use blake2::VarBlake2b; // we might want to swap this one with a different implementation
@@ -10,16 +10,19 @@ use lioness::{Lioness, RAW_KEY_SIZE}; // we might want to swap this one with a d
 // as in theory everything will have a constant size which we already know.
 // For now we'll stick with Vecs.
 pub fn create(
-    payload: Vec<u8>,
+    plaintext_payload: &[u8], //Vec<u8>,
     payload_keys: Vec<PayloadKey>,
-    destination: &Destination,
+    destination_addr: DestinationAddressBytes,
 ) -> Vec<u8> {
     let final_payload_key = payload_keys
         .last()
         .expect("The keys should be already initialized");
     // encapsulate_most_inner_payload
-    let encrypted_final_payload =
-        create_final_encrypted_payload(payload, destination.address, final_payload_key);
+    let encrypted_final_payload = create_final_encrypted_payload(
+        plaintext_payload.to_vec(),
+        destination_addr,
+        final_payload_key,
+    );
     // encapsulate the rest
     encapsulate_payload(encrypted_final_payload, &payload_keys)
 }
@@ -83,7 +86,7 @@ mod test_encrypting_final_payload {
 #[cfg(test)]
 mod test_encapsulating_payload {
     use super::*;
-    use crate::constants::{INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE};
+    use crate::constants::PAYLOAD_KEY_SIZE;
     use crate::header::header::destination_address_fixture;
     use crate::header::routing::routing_keys_fixture;
     use crate::header::routing::RoutingKeys;
