@@ -21,7 +21,7 @@ pub fn create(
     let encrypted_final_payload =
         create_final_encrypted_payload(payload, destination.address, final_payload_key);
     // encapsulate the rest
-    vec![]
+    encapsulate_payload(encrypted_final_payload, &payload_keys)
 }
 
 // final means most inner
@@ -43,6 +43,22 @@ fn create_final_encrypted_payload(
     final_payload
 }
 
+fn encapsulate_payload(
+    final_layer_payload_component: Vec<u8>,
+    route_payload_keys: &[PayloadKey],
+) -> Vec<u8> {
+    let mut prev_payload_layer = final_layer_payload_component;
+    for i in (0..route_payload_keys.len() - 1).rev() {
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
+            route_payload_keys[i],
+            0,
+            RAW_KEY_SIZE
+        ));
+        lioness_cipher.encrypt(&mut prev_payload_layer).unwrap();
+    }
+    prev_payload_layer
+}
+
 #[cfg(test)]
 mod test_encrypting_final_payload {
     use super::*;
@@ -60,6 +76,35 @@ mod test_encrypting_final_payload {
         assert_eq!(
             SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + message_len,
             final_enc_payload.len()
+        );
+    }
+}
+
+#[cfg(test)]
+mod test_encapsulating_payload {
+    use super::*;
+    use crate::constants::{INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE};
+    use crate::header::header::destination_address_fixture;
+    use crate::header::routing::routing_keys_fixture;
+    use crate::header::routing::RoutingKeys;
+    use crate::utils::crypto;
+    #[test]
+    fn always_both_input_and_output_are_the_same_length() {
+        let message = vec![1u8, 16];
+        let message_len = message.len();
+        let destination = destination_address_fixture();
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+        let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
+        let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
+        let payload_keys = vec![payload_key_1, payload_key_2, payload_key_3];
+
+        let final_enc_payload =
+            create_final_encrypted_payload(message, destination, &payload_key_1);
+
+        let payload_encapsulation = encapsulate_payload(final_enc_payload, &payload_keys);
+        assert_eq!(
+            SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + message_len,
+            payload_encapsulation.len()
         );
     }
 }
