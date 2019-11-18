@@ -1,18 +1,18 @@
-use curve25519_dalek::scalar::Scalar;
-use hkdf::Hkdf;
-use sha2::Sha256;
-
 use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
-
 use crate::header::header::RouteElement;
 use crate::utils::crypto;
 use crate::utils::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
+use curve25519_dalek::scalar::Scalar;
+use hkdf::Hkdf;
+use sha2::Sha256;
 use std::fmt;
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
+// TODO: perhaps change PayloadKey to a Vec considering it's almost 200 bytes long?
+// we will lose length assertions but won't need to copy all that data every single function call
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 
 #[derive(Clone)]
