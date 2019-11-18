@@ -223,6 +223,7 @@ mod encapsulating_all_routing_information {
     use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::header::{random_final_hop, random_forward_hop};
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     #[should_panic]
@@ -258,6 +259,7 @@ mod encapsulating_routing_information {
     use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::header::{random_destination, random_final_hop, random_forward_hop};
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     fn it_returns_final_header_components_for_route_of_length_1() {
@@ -373,6 +375,7 @@ mod encapsulating_routing_information {
 mod preparing_header_layer {
     use super::*;
     use crate::header::header::node_address_fixture;
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
@@ -418,6 +421,7 @@ mod test_encapsulating_final_routing_information_and_mac {
     use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::header::{random_destination, random_final_hop, random_forward_hop};
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     #[should_panic]
@@ -477,6 +481,7 @@ mod test_encapsulating_final_routing_information {
     use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::header::random_destination;
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
@@ -585,14 +590,6 @@ mod computing_integrity_mac {
         let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
         computed_mac.truncate(INTEGRITY_MAC_SIZE);
         assert_ne!(computed_mac, integrity_mac);
-    }
-}
-
-pub fn routing_keys_fixture() -> RoutingKeys {
-    RoutingKeys {
-        stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
-        header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
-        payload_key: [3u8; PAYLOAD_KEY_SIZE],
     }
 }
 
