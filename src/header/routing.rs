@@ -79,35 +79,6 @@ fn encapsulate_routing_info_and_integrity_macs(
             },
         );
 
-    // left for reference sake until we have decent tests for this function
-
-    //    let mut routing_info = final_routing_info;
-    //
-    //    for i in (0..route.len() - 1).rev() {
-    //        let routing_info_mac = generate_routing_info_integrity_mac(
-    //            routing_keys[i + 1].header_integrity_hmac_key,
-    //            &routing_info,
-    //        );
-    //
-    //        let next_node_hop_address = match &route[i] {
-    //            RouteElement::ForwardHop(mixnode) => mixnode.address,
-    //            _ => panic!("The next route element must be a mix node"),
-    //        };
-    //        let routing_info_components = [
-    //            next_node_hop_address.to_vec(),
-    //            routing_info_mac.to_vec(),
-    //            routing_info,
-    //        ]
-    //        .concat()
-    //        .to_vec();
-    //        routing_info =
-    //            encrypt_routing_info(routing_keys[i].stream_cipher_key, &routing_info_components);
-    //    }
-
-    //    let routing_info_mac = generate_routing_info_integrity_mac(
-    //        routing_keys[0].header_integrity_hmac_key,
-    //        &routing_info,
-    //    );
     RoutingInfo {
         enc_header: outer_header_layer_components.enc_header,
         header_integrity_hmac: outer_header_layer_components.header_integrity_hmac,
