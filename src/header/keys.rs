@@ -1,3 +1,7 @@
+use curve25519_dalek::scalar::Scalar;
+use hkdf::Hkdf;
+use sha2::Sha256;
+
 use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
@@ -8,14 +12,6 @@ use crate::header::header::{
 use crate::utils::crypto;
 use crate::utils::crypto::CURVE_GENERATOR;
 use crate::utils::crypto::{compute_keyed_hmac, STREAM_CIPHER_KEY_SIZE};
-use curve25519_dalek::scalar::Scalar;
-use hkdf::Hkdf;
-use sha2::Sha256;
-
-pub struct KeyMaterial {
-    pub initial_shared_secret: crypto::SharedSecret,
-    pub routing_keys: Vec<RoutingKeys>,
-}
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -28,7 +24,6 @@ pub struct RoutingKeys {
     pub payload_key: PayloadKey,
 }
 
-#[allow(dead_code)]
 impl RoutingKeys {
     // or should this be renamed to 'new'?
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
@@ -62,34 +57,71 @@ impl RoutingKeys {
     }
 }
 
-// derive shared keys, group elements, blinding factors
-pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
-    let initial_shared_secret = CURVE_GENERATOR * initial_secret;
+pub struct KeyMaterial {
+    pub initial_shared_secret: crypto::SharedSecret,
+    pub routing_keys: Vec<RoutingKeys>,
+}
 
-    let routing_keys = route
-        .iter()
-        .scan(initial_secret, |accumulator, route_element| {
-            let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
+impl KeyMaterial {
+    // derive shared keys, group elements, blinding factors
+    pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> Self {
+        let initial_shared_secret = CURVE_GENERATOR * initial_secret;
 
-            // last element in the route should be the destination and hence don't compute blinding factor
-            // or increment the iterator
-            match route_element {
-                RouteElement::ForwardHop(_) => {
-                    *accumulator = *accumulator * compute_blinding_factor(shared_key, &accumulator)
+        let routing_keys = route
+            .iter()
+            .scan(initial_secret, |accumulator, route_element| {
+                let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
+
+                // last element in the route should be the destination and hence don't compute blinding factor
+                // or increment the iterator
+                match route_element {
+                    RouteElement::ForwardHop(_) => {
+                        *accumulator =
+                            *accumulator * compute_blinding_factor(shared_key, &accumulator)
+                    }
+                    RouteElement::FinalHop(_) => (),
                 }
-                RouteElement::FinalHop(_) => (),
-            }
 
-            Some(shared_key)
-        })
-        .map(RoutingKeys::derive)
-        .collect();
+                Some(shared_key)
+            })
+            .map(RoutingKeys::derive)
+            .collect();
 
-    KeyMaterial {
-        routing_keys,
-        initial_shared_secret,
+        KeyMaterial {
+            routing_keys,
+            initial_shared_secret,
+        }
     }
 }
+//
+//// derive shared keys, group elements, blinding factors
+//pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
+//    let initial_shared_secret = CURVE_GENERATOR * initial_secret;
+//
+//    let routing_keys = route
+//        .iter()
+//        .scan(initial_secret, |accumulator, route_element| {
+//            let shared_key = compute_shared_key(route_element.get_pub_key(), &accumulator);
+//
+//            // last element in the route should be the destination and hence don't compute blinding factor
+//            // or increment the iterator
+//            match route_element {
+//                RouteElement::ForwardHop(_) => {
+//                    *accumulator = *accumulator * compute_blinding_factor(shared_key, &accumulator)
+//                }
+//                RouteElement::FinalHop(_) => (),
+//            }
+//
+//            Some(shared_key)
+//        })
+//        .map(RoutingKeys::derive)
+//        .collect();
+//
+//    KeyMaterial {
+//        routing_keys,
+//        initial_shared_secret,
+//    }
+//}
 
 fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
     let shared_secret = CURVE_GENERATOR * exponent;
@@ -174,7 +206,7 @@ mod deriving_key_material {
         fn it_returns_no_routing_keys() {
             let empty_route: Vec<RouteElement> = vec![];
             let initial_secret = crypto::generate_secret();
-            let key_material = derive(&empty_route, initial_secret);
+            let key_material = KeyMaterial::derive(&empty_route, initial_secret);
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
                 CURVE_GENERATOR * initial_secret,
@@ -193,7 +225,7 @@ mod deriving_key_material {
                 destination_address_fixture(),
             )];
             let initial_secret = crypto::generate_secret();
-            let key_material = derive(&route, initial_secret);
+            let key_material = KeyMaterial::derive(&route, initial_secret);
             return (route, initial_secret, key_material);
         }
 
@@ -247,7 +279,7 @@ mod deriving_key_material {
                 ),
             ];
             let initial_secret = crypto::generate_secret();
-            let key_material = derive(&route, initial_secret);
+            let key_material = KeyMaterial::derive(&route, initial_secret);
             return (route, initial_secret, key_material);
         }
 
@@ -302,7 +334,7 @@ mod deriving_key_material {
                 ),
             ];
             let initial_secret = crypto::generate_secret();
-            let key_material = derive(&route, initial_secret);
+            let key_material = KeyMaterial::derive(&route, initial_secret);
             return (route, initial_secret, key_material);
         }
 
@@ -353,7 +385,7 @@ mod deriving_key_material {
                 new_route_forward_hop(crypto::generate_random_curve_point()),
             ];
             let initial_secret = crypto::generate_secret();
-            let key_material = derive(&route, initial_secret);
+            let key_material = KeyMaterial::derive(&route, initial_secret);
             return (route, initial_secret, key_material);
         }
 

@@ -18,7 +18,7 @@ pub struct SphinxHeader {
 // needs to deal with SURBs too at some point
 pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     let initial_secret = crypto::generate_secret();
-    let key_material = keys::derive(route, initial_secret);
+    let key_material = keys::KeyMaterial::derive(route, initial_secret);
     let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
     let filler_string = filler::generate_pseudorandom_filler(&key_material.routing_keys);
     let routing_info =
