@@ -1,16 +1,7 @@
-use std::net::{IpAddr, Ipv4Addr, Ipv6Addr, SocketAddr, ToSocketAddrs};
-
-#[cfg(test)]
-use speculate::speculate;
-
-use crate::constants::{
-    AVERAGE_DELAY, HKDF_INPUT_SEED, MAX_DESTINATION_LENGTH, MAX_PATH_LENGTH, ROUTING_KEYS_LENGTH,
-    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
-};
-use crate::header::keys;
-use crate::utils;
+use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
 use crate::utils::crypto;
-use crate::utils::crypto::{CURVE_GENERATOR, STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
+
+// I think everything from below here should be moved to main sphinx file or perhaps to something for route
 
 #[derive(Clone)]
 pub enum RouteElement {
@@ -29,100 +20,52 @@ impl RouteElement {
     }
 }
 
-pub type AddressBytes = [u8; 32];
+pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
+pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH];
+pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
 #[derive(Clone)]
 pub struct Destination {
-    pub address: AddressBytes,
+    // address in theory could be changed to a vec<u8> as it does not need to be strictly DESTINATION_ADDRESS_LENGTH long
+    // but cannot be longer than that (assuming longest possible route)
+    pub address: DestinationAddressBytes,
+    pub identifier: SURBIdentifier,
     pub pub_key: crypto::PublicKey,
 }
 
 #[derive(Clone)]
 pub struct MixNode {
-    pub address: AddressBytes,
+    pub address: NodeAddressBytes,
     pub pub_key: crypto::PublicKey,
 }
 
-#[derive(Debug, PartialEq, Clone)]
-pub struct RoutingKeys {
-    pub stream_cipher_key: [u8; STREAM_CIPHER_KEY_SIZE],
+pub fn destination_address_fixture() -> DestinationAddressBytes {
+    [0u8; DESTINATION_ADDRESS_LENGTH]
 }
 
-pub(crate) fn generate_all_routing_info(
-    route: &[RouteElement],
-    routing_keys: &Vec<RoutingKeys>,
-    filler_string: Vec<u8>,
-) {
-    let final_key = routing_keys
-        .last()
-        .cloned()
-        .expect("The keys should be already initialized");
-    let final_route_element = route
-        .last()
-        .cloned()
-        .expect("The route should not be empty");
-    let final_hop = match final_route_element {
-        RouteElement::FinalHop(destination) => destination,
-        _ => panic!("The last route element must be a destination"),
-    };
-
-    // TODO: does this IV correspond to STREAM_CIPHER_INIT_VECTOR?
-    // (used in generate_pseudorandom_filler_bytes)
-    let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0u8; 16];
-    let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-        &final_key.stream_cipher_key,
-        &iv,
-        STREAM_CIPHER_OUTPUT_LENGTH,
-    );
-    let final_routing_info =
-        generate_final_routing_info(filler_string, route.len(), final_hop, pseudorandom_bytes);
-
-    // loop for other hops
+pub fn node_address_fixture() -> NodeAddressBytes {
+    [0u8; NODE_ADDRESS_LENGTH]
 }
 
-fn generate_final_routing_info(
-    filler: Vec<u8>,
-    route_len: usize,
-    destination: Destination,
-    pseudorandom_bytes: Vec<u8>,
-) -> Vec<u8> {
-    let final_destination_bytes = address_fixture();
-
-    assert!(
-        final_destination_bytes.len()
-            <= (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
-    );
-
-    let zero_padding = vec![
-        0u8;
-        (2 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
-            - final_destination_bytes.len()
-    ];
-
-    let padded_final_destination = [final_destination_bytes.to_vec(), zero_padding].concat();
-    let xored_bytes = utils::bytes::xor(&padded_final_destination, &pseudorandom_bytes);
-    [xored_bytes, filler].concat()
+pub fn surb_identifier_fixture() -> SURBIdentifier {
+    [0u8; IDENTIFIER_LENGTH]
 }
 
-#[cfg(test)]
-speculate! {
-    describe "encapsulation of the final routing information" {
-        context "for IPV4" {
-            it "produces result of length filler plus pseudorandom bytes lengths" {
-                let pseudorandom_bytes = vec![0; STREAM_CIPHER_OUTPUT_LENGTH];
-                let route_len = 4;
-                let filler = vec![0u8; 25];
-                let destination = Destination {
-                    pub_key: crypto::generate_random_curve_point(),
-                    address: address_fixture(),
-                };
-    //                generate_final_routing_info(filler, route_len, destination, pseudorandom_bytes);
-                assert_eq!(true, true);
-            }
-        }
+pub fn random_forward_hop() -> RouteElement {
+    RouteElement::ForwardHop(MixNode {
+        address: [2u8; NODE_ADDRESS_LENGTH],
+        pub_key: crypto::generate_random_curve_point(),
+    })
+}
+
+pub fn random_final_hop() -> RouteElement {
+    RouteElement::FinalHop(random_destination())
+}
+
+pub fn random_destination() -> Destination {
+    Destination {
+        address: [3u8; DESTINATION_ADDRESS_LENGTH],
+        identifier: [4u8; IDENTIFIER_LENGTH],
+        pub_key: crypto::generate_random_curve_point(),
     }
-}
-
-pub fn address_fixture() -> AddressBytes {
-    [0u8; 32]
 }

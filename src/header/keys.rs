@@ -1,19 +1,24 @@
+use crate::constants::{
+    HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
+};
+use crate::header::header::{
+    destination_address_fixture, node_address_fixture, surb_identifier_fixture, Destination,
+    MixNode, RouteElement,
+};
+use crate::header::routing::RoutingKeys;
+use crate::utils::crypto;
+use crate::utils::crypto::compute_keyed_hmac;
+use crate::utils::crypto::CURVE_GENERATOR;
 use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
-use hmac::{Hmac, Mac};
 use sha2::Sha256;
 
-use crate::constants::{HKDF_INPUT_SEED, ROUTING_KEYS_LENGTH};
-use crate::header::header::{address_fixture, Destination, MixNode, RouteElement, RoutingKeys};
-use crate::utils::crypto;
-use crate::utils::crypto::CURVE_GENERATOR;
-
-type HmacSha256 = Hmac<Sha256>;
-
 pub struct KeyMaterial {
-    initial_shared_secret: crypto::SharedSecret,
+    pub initial_shared_secret: crypto::SharedSecret,
     pub routing_keys: Vec<RoutingKeys>,
 }
+
+pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 
 // derive shared keys, group elements, blinding factors
 pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
@@ -46,7 +51,13 @@ pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> KeyMaterial {
 
 fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
     let shared_secret = CURVE_GENERATOR * exponent;
-    compute_keyed_hmac(shared_secret.to_bytes(), shared_key.to_bytes())
+    let hmac_full = compute_keyed_hmac(
+        shared_secret.to_bytes().to_vec(),
+        &shared_key.to_bytes().to_vec(),
+    );
+    let mut hmac = [0u8; 32];
+    hmac.copy_from_slice(&hmac_full[..32]);
+    Scalar::from_bytes_mod_order(hmac)
 }
 
 // Given that everything here except RoutingKeys lives in the `crypto` module, I think
@@ -60,19 +71,27 @@ pub(crate) fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingK
     let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
     stream_cipher_key.copy_from_slice(&output[..crypto::STREAM_CIPHER_KEY_SIZE]);
 
-    RoutingKeys { stream_cipher_key }
+    let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
+    header_integrity_hmac_key.copy_from_slice(
+        &output[crypto::STREAM_CIPHER_KEY_SIZE
+            ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
+    );
+
+    let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
+    payload_key.copy_from_slice(
+        &output[crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE
+            ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],
+    );
+
+    RoutingKeys {
+        stream_cipher_key,
+        header_integrity_hmac_key,
+        payload_key,
+    }
 }
 
 fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
     node_pub_key * exponent
-}
-
-fn compute_keyed_hmac(alpha: [u8; 32], data: [u8; 32]) -> Scalar {
-    let mut mac = HmacSha256::new_varkey(&alpha).expect("HMAC can take key of any size");
-    mac.input(&data);
-    let mut output = [0u8; 32];
-    output.copy_from_slice(&mac.result().code().to_vec()[..32]);
-    Scalar::from_bytes_mod_order(output)
 }
 
 #[cfg(test)]
@@ -119,16 +138,20 @@ mod deriving_key_material {
 
     fn new_route_forward_hop(pub_key: crypto::PublicKey) -> RouteElement {
         RouteElement::ForwardHop(MixNode {
-            address: address_fixture(),
+            address: node_address_fixture(),
             pub_key,
         })
     }
 
     fn new_route_final_hop(
         pub_key: crypto::PublicKey,
-        address: crate::header::header::AddressBytes,
+        address: crate::header::header::DestinationAddressBytes,
     ) -> RouteElement {
-        RouteElement::FinalHop(Destination { pub_key, address })
+        RouteElement::FinalHop(Destination {
+            pub_key,
+            address,
+            identifier: surb_identifier_fixture(),
+        })
     }
 
     #[cfg(test)]
@@ -155,7 +178,7 @@ mod deriving_key_material {
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![new_route_final_hop(
                 crypto::generate_random_curve_point(),
-                address_fixture(),
+                destination_address_fixture(),
             )];
             let initial_secret = crypto::generate_secret();
             let key_material = derive(&route, initial_secret);
@@ -206,7 +229,10 @@ mod deriving_key_material {
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![
                 new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_final_hop(crypto::generate_random_curve_point(), address_fixture()),
+                new_route_final_hop(
+                    crypto::generate_random_curve_point(),
+                    destination_address_fixture(),
+                ),
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = derive(&route, initial_secret);
@@ -258,7 +284,10 @@ mod deriving_key_material {
                 new_route_forward_hop(crypto::generate_random_curve_point()),
                 new_route_forward_hop(crypto::generate_random_curve_point()),
                 new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_final_hop(crypto::generate_random_curve_point(), address_fixture()),
+                new_route_final_hop(
+                    crypto::generate_random_curve_point(),
+                    destination_address_fixture(),
+                ),
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = derive(&route, initial_secret);
