@@ -9,12 +9,13 @@ use crate::constants::{
 use crate::header::header::RouteElement;
 use crate::utils::crypto;
 use crate::utils::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
+use std::fmt;
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Clone)]
 pub struct RoutingKeys {
     pub stream_cipher_key: StreamCipherKey,
     pub header_integrity_hmac_key: HeaderIntegrityMacKey,
@@ -51,6 +52,26 @@ impl RoutingKeys {
             header_integrity_hmac_key,
             payload_key,
         }
+    }
+}
+
+impl fmt::Debug for RoutingKeys {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(
+            f,
+            "{:?} {:?} {:?}",
+            self.stream_cipher_key,
+            self.header_integrity_hmac_key,
+            self.payload_key.to_vec()
+        )
+    }
+}
+
+impl PartialEq for RoutingKeys {
+    fn eq(&self, other: &RoutingKeys) -> bool {
+        self.stream_cipher_key == other.stream_cipher_key
+            && self.header_integrity_hmac_key == other.header_integrity_hmac_key
+            && self.payload_key.to_vec() == other.payload_key.to_vec()
     }
 }
 
