@@ -198,7 +198,7 @@ mod deriving_key_material {
             )];
             let initial_secret = crypto::generate_secret();
             let key_material = KeyMaterial::derive(&route, initial_secret);
-            return (route, initial_secret, key_material);
+            (route, initial_secret, key_material)
         }
 
         #[test]
@@ -232,7 +232,7 @@ mod deriving_key_material {
                     expected_shared_key,
                     &expected_accumulator,
                 );
-                expected_accumulator = expected_accumulator * expected_blinder;
+                expected_accumulator *= &expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
 
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
@@ -254,12 +254,12 @@ mod deriving_key_material {
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = KeyMaterial::derive(&route, initial_secret);
-            return (route, initial_secret, key_material);
+            (route, initial_secret, key_material)
         }
 
         #[test]
         fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
-            let (route, _, key_material) = setup();
+            let (_, _, key_material) = setup();
             assert_eq!(2, key_material.routing_keys.len());
         }
 
@@ -288,7 +288,7 @@ mod deriving_key_material {
                     expected_shared_key,
                     &expected_accumulator,
                 );
-                expected_accumulator = expected_accumulator * expected_blinder;
+                expected_accumulator *= &expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
@@ -311,12 +311,12 @@ mod deriving_key_material {
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = KeyMaterial::derive(&route, initial_secret);
-            return (route, initial_secret, key_material);
+            (route, initial_secret, key_material)
         }
 
         #[test]
         fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
-            let (route, _, key_material) = setup();
+            let (_, _, key_material) = setup();
             assert_eq!(4, key_material.routing_keys.len());
         }
 
@@ -345,7 +345,7 @@ mod deriving_key_material {
                     expected_shared_key,
                     &expected_accumulator,
                 );
-                expected_accumulator = expected_accumulator * expected_blinder;
+                expected_accumulator *= &expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
@@ -364,12 +364,12 @@ mod deriving_key_material {
             ];
             let initial_secret = crypto::generate_secret();
             let key_material = KeyMaterial::derive(&route, initial_secret);
-            return (route, initial_secret, key_material);
+            (route, initial_secret, key_material)
         }
 
         #[test]
         fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
-            let (route, _, key_material) = setup();
+            let (_, _, key_material) = setup();
             assert_eq!(3, key_material.routing_keys.len());
         }
 
@@ -398,7 +398,7 @@ mod deriving_key_material {
                     expected_shared_key,
                     &expected_accumulator,
                 );
-                expected_accumulator = expected_accumulator * expected_blinder;
+                expected_accumulator *= &expected_blinder;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
