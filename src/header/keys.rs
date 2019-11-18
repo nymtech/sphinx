@@ -5,13 +5,10 @@ use sha2::Sha256;
 use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
-use crate::header::header::{
-    destination_address_fixture, node_address_fixture, surb_identifier_fixture, Destination,
-    MixNode, RouteElement,
-};
+
+use crate::header::header::RouteElement;
 use crate::utils::crypto;
-use crate::utils::crypto::CURVE_GENERATOR;
-use crate::utils::crypto::{compute_keyed_hmac, STREAM_CIPHER_KEY_SIZE};
+use crate::utils::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -151,6 +148,9 @@ mod computing_blinding_factor {
 #[cfg(test)]
 mod deriving_key_material {
     use super::*;
+    use crate::header::header::{
+        node_address_fixture, surb_identifier_fixture, Destination, MixNode,
+    };
 
     fn new_route_forward_hop(pub_key: crypto::PublicKey) -> RouteElement {
         RouteElement::ForwardHop(MixNode {
@@ -190,6 +190,7 @@ mod deriving_key_material {
     #[cfg(test)]
     mod for_a_route_with_no_forward_hops_and_a_destination {
         use super::*;
+        use crate::header::header::destination_address_fixture;
 
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![new_route_final_hop(
@@ -243,6 +244,7 @@ mod deriving_key_material {
     #[cfg(test)]
     mod for_a_route_with_1_forward_hops_and_a_destination {
         use super::*;
+        use crate::header::header::destination_address_fixture;
 
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![
@@ -298,6 +300,7 @@ mod deriving_key_material {
     #[cfg(test)]
     mod for_a_route_with_3_forward_hops_and_a_destination {
         use super::*;
+        use crate::header::header::destination_address_fixture;
 
         fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
             let route: Vec<RouteElement> = vec![
