@@ -43,8 +43,8 @@ impl PartialEq for RoutingKeys {
     }
 }
 
-type RoutingInformation = [u8; ROUTING_INFO_SIZE];
-type HeaderIntegrityMac = [u8; INTEGRITY_MAC_SIZE];
+pub type RoutingInformation = [u8; ROUTING_INFO_SIZE];
+pub type HeaderIntegrityMac = [u8; INTEGRITY_MAC_SIZE];
 
 pub struct RoutingInfo {
     pub enc_header: RoutingInformation,
@@ -161,7 +161,7 @@ fn encrypt_routing_info(
     encrypted_routing_info
 }
 
-fn generate_routing_info_integrity_mac(
+pub fn generate_routing_info_integrity_mac(
     key: HeaderIntegrityMacKey,
     data: RoutingInformation,
 ) -> HeaderIntegrityMac {

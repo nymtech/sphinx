@@ -3,10 +3,7 @@
 
 use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 use crate::header::keys;
-use crate::header::routing::ROUTING_INFO_SIZE;
-
-use constants::INTEGRITY_MAC_SIZE;
-
+use curve25519_dalek::scalar::Scalar;
 mod constants;
 mod header;
 mod payload;
@@ -34,28 +31,19 @@ pub struct Hop {
     pub delay: f64,
 }
 
-// needs the processor's secret key somehow, figure out where this will come from
+// needs the processor's secret key somehow, so far I'm just passing it
 // the return value could also be a message, handle this
-pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
-    (
-        SphinxPacket {
-            header: header::SphinxHeader {
-                shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-                routing_info: header::routing::RoutingInfo {
-                    enc_header: [0u8; ROUTING_INFO_SIZE],
-                    header_integrity_hmac: [0u8; INTEGRITY_MAC_SIZE],
-                },
-            },
-            payload: vec![],
-        },
-        Hop {
-            host: RouteElement::ForwardHop(MixNode {
-                address: header::header::node_address_fixture(),
-                pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-            }),
-            delay: 0.0,
-        },
-    )
+pub fn process_packet(packet: SphinxPacket, node_secret_key: Scalar) {
+    //-> Result<(SphinxPacket, Hop), SphinxUnwrapError> {
+    let shared_key = keys::compute_shared_key(packet.header.shared_secret, &node_secret_key);
+    // TODO: we should have some list of 'seens shared_keys' for replay detection
+    let routing_keys = &keys::key_derivation_function(shared_key);
+
+    let tmp = header::unwrap::process_header(packet.header, &routing_keys);
+    // process the payload
+    let unwrapped_payload =
+        unwrap_payload::unwrap_payload(packet.payload, &routing_keys.payload_key);
+    //Ok(())
 }
 
 // #[cfg(test)]

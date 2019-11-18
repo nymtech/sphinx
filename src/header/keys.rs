@@ -90,7 +90,7 @@ pub(crate) fn key_derivation_function(shared_key: crypto::SharedKey) -> RoutingK
     }
 }
 
-fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
+pub fn compute_shared_key(node_pub_key: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
     node_pub_key * exponent
 }
 

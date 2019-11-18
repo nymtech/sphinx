@@ -2,12 +2,14 @@ use crate::header::header::RouteElement;
 use crate::header::keys::PayloadKey;
 use crate::header::routing::RoutingInfo;
 use crate::utils::crypto;
+use crate::Hop;
 
 pub mod delays;
 pub mod filler;
 pub mod header;
 pub mod keys;
 pub mod routing;
+pub mod unwrap;
 
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
@@ -37,3 +39,8 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
             .collect(),
     )
 }
+
+// pub fn process_header(
+//     header: SphinxHeader,
+//     routing_keys: RoutingKeys,
+// ) -> Result<(SphinxHeader, Hop), SphinxUnwrapError> {
