@@ -1,8 +1,9 @@
-use crate::constants::{INITIAL_FILLER_PADDING, MAX_PATH_LENGTH, SECURITY_PARAMETER};
-use crate::header::keys;
+use crate::constants::{MAX_PATH_LENGTH, SECURITY_PARAMETER};
 use crate::header::keys::RoutingKeys;
 use crate::utils::crypto;
 use crate::{constants, utils};
+
+const FILLER_STEP_SIZE_INCREASE: usize = 3 * SECURITY_PARAMETER;
 
 // can't have impl blocks for type aliases
 pub struct Filler {
@@ -23,7 +24,7 @@ impl Filler {
                 )
             }) // the actual cipher key is only used to generate the pseudorandom bytes
             .enumerate() // we need to know index of each element to take correct slice of the PRNG output
-            .map(|(i, pseudorandom_bytes)| (i + 1, pseudorandom_bytes))
+            .map(|(i, pseudorandom_bytes)| (i + 1, pseudorandom_bytes)) // the zeroth step is the empty filler and we add on top of it
             .fold(
                 Vec::new(),
                 |filler_string_accumulator, (i, pseudorandom_bytes)| {
@@ -46,16 +47,16 @@ impl Filler {
         );
         assert_eq!(
             filler_string_accumulator.len(),
-            INITIAL_FILLER_PADDING * (i - 1)
+            FILLER_STEP_SIZE_INCREASE * (i - 1) // make sure it has length of the previous step
         );
-        let zero_bytes = vec![0u8; INITIAL_FILLER_PADDING];
+        let zero_bytes = vec![0u8; FILLER_STEP_SIZE_INCREASE];
         filler_string_accumulator.extend(&zero_bytes);
 
-        // after computing the output vector of AES_CTR we take the last 2*k*i elements of the returned vector
+        // after computing the output vector of AES_CTR we take the last 3*k*i elements of the returned vector
         // and xor it with the current filler string
         utils::bytes::xor_with(
             &mut filler_string_accumulator,
-            &pseudorandom_bytes[pseudorandom_bytes.len() - 3 * i * SECURITY_PARAMETER..],
+            &pseudorandom_bytes[pseudorandom_bytes.len() - i * FILLER_STEP_SIZE_INCREASE..],
         );
 
         filler_string_accumulator
@@ -69,6 +70,7 @@ impl Filler {
 #[cfg(test)]
 mod test_creating_pseudorandom_bytes {
     use super::*;
+    use crate::header::keys;
 
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
