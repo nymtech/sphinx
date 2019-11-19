@@ -1,7 +1,7 @@
 use crate::header::filler::Filler;
 use crate::header::header::RouteElement;
 use crate::header::keys::PayloadKey;
-use crate::header::routing::RoutingInfo;
+use crate::header::routing::EncapsulatedRoutingInformation;
 use crate::utils::crypto;
 
 pub mod delays;
@@ -12,7 +12,7 @@ pub mod routing;
 
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
-    pub routing_info: RoutingInfo,
+    pub routing_info: EncapsulatedRoutingInformation,
 }
 
 // needs client's secret key, how should we inject this?
@@ -22,8 +22,12 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
     let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
     let filler_string = Filler::new(&key_material.routing_keys);
-    let routing_info =
-        routing::generate_all_routing_info(route, &key_material.routing_keys, filler_string);
+    let routing_info = routing::EncapsulatedRoutingInformation::new(
+        route,
+        &key_material.routing_keys,
+        filler_string,
+    )
+    .unwrap();
 
     // encapsulate routing information, compute MACs
     (

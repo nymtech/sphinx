@@ -5,7 +5,7 @@ use crate::{constants, utils};
 
 const FILLER_STEP_SIZE_INCREASE: usize = 3 * SECURITY_PARAMETER;
 
-// can't have impl blocks for type aliases
+#[derive(Debug, PartialEq)]
 pub struct Filler {
     value: Vec<u8>,
 }
@@ -31,7 +31,7 @@ impl Filler {
                     Self::filler_step(filler_string_accumulator, i, pseudorandom_bytes)
                 },
             );
-        Filler {
+        Self {
             value: filler_value,
         }
     }

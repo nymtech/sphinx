@@ -47,7 +47,7 @@ impl RoutingKeys {
                 ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],
         );
 
-        RoutingKeys {
+        Self {
             stream_cipher_key,
             header_integrity_hmac_key,
             payload_key,
@@ -105,7 +105,7 @@ impl KeyMaterial {
             .map(RoutingKeys::derive)
             .collect();
 
-        KeyMaterial {
+        Self {
             routing_keys,
             initial_shared_secret,
         }
