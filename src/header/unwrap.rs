@@ -17,7 +17,7 @@ pub fn unwrap_routing_information(
     // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose informatio
     let padded_routing_information =
         add_zero_padding_to_encrypted_routing_information(&header.routing_info.enc_header);
-    let unwrapped_routing_info =
+    let unwrapped_padded_routing_info =
         decrypt_padded_routing_info(stream_cipher_key, &padded_routing_information);
 
     // TODO: parse the decrypted result to get next_hop, delay, next_routing_info etc.
@@ -58,7 +58,7 @@ pub fn check_integrity_mac(
     return true;
 }
 
-pub fn decrypt_padded_routing_info(
+fn decrypt_padded_routing_info(
     key: &StreamCipherKey,
     padded_routing_info: &[u8],
 ) -> PaddedRoutingInformation {
@@ -107,10 +107,10 @@ mod check_zero_padding {
     #[test]
     fn it_returns_a_correctly_padded_bytes() {
         let enc_header = [6u8; ROUTING_INFO_SIZE];
-        let paddede_enc_header = add_zero_padding_to_encrypted_routing_information(&enc_header);
+        let padded_enc_header = add_zero_padding_to_encrypted_routing_information(&enc_header);
         assert_eq!(
             ROUTING_INFO_SIZE + 3 * SECURITY_PARAMETER,
-            paddede_enc_header.len()
+            padded_enc_header.len()
         );
     }
 }
