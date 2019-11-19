@@ -1,11 +1,11 @@
-// #![feature(test)]
-// extern crate test;
+//#![feature(test)]
+//extern crate test;
 
 use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 use crate::header::keys;
 use crate::header::routing::ROUTING_INFO_SIZE;
 
-use constants::INTEGRITY_MAC_SIZE;
+use constants::HEADER_INTEGRITY_MAC_SIZE;
 
 mod constants;
 mod header;
@@ -40,10 +40,7 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
         SphinxPacket {
             header: header::SphinxHeader {
                 shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-                routing_info: header::routing::RoutingInfo {
-                    enc_header: [0u8; ROUTING_INFO_SIZE],
-                    header_integrity_hmac: [0u8; INTEGRITY_MAC_SIZE],
-                },
+                routing_info: header::routing::encapsulated_routing_information_fixture(),
             },
             payload: vec![],
         },
@@ -94,3 +91,46 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
 //         });
 //     }
 // }
+
+// test conclusion: chain is more than twice as fast as concat
+//
+//#[cfg(test)]
+//mod tests {
+//    use super::*;
+//    use test::Bencher;
+//
+//    #[bench]
+//    fn bench_concat(b: &mut test::Bencher) {
+//        let foo: [u8; 32] = [
+//            1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+//            0, 1, 2,
+//        ];
+//        let bar: [u8; 16] = [0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9, 8, 7, 6, 5];
+//        let baz: [u8; 48] = [
+//            1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+//            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+//        ];
+//        b.iter(|| [foo.to_vec(), bar.to_vec(), baz.to_vec()].concat());
+//    }
+//
+//    #[bench]
+//    fn bench_chain(b: &mut test::Bencher) {
+//        let foo: [u8; 32] = [
+//            1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+//            0, 1, 2,
+//        ];
+//        let bar: [u8; 16] = [0, 9, 8, 7, 6, 5, 4, 3, 2, 1, 0, 9, 8, 7, 6, 5];
+//        let baz: [u8; 48] = [
+//            1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9,
+//            0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 0, 1, 2, 3, 4, 5, 6, 7, 8,
+//        ];
+//        b.iter(|| {
+//            let a: Vec<_> = foo
+//                .iter()
+//                .cloned()
+//                .chain(bar.iter().cloned())
+//                .chain(baz.iter().cloned())
+//                .collect();
+//        });
+//    }
+//}

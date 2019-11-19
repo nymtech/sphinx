@@ -20,9 +20,9 @@ impl RouteElement {
     }
 }
 
-pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
-pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH];
-pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
+pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH]; // in paper delta
+pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH]; // in paper nu
+pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH]; // in paper I
 
 #[derive(Clone)]
 pub struct Destination {
