@@ -56,12 +56,12 @@ pub fn process_header(
 ) -> Result<(SphinxHeader, Hop), SphinxUnwrapError> {
     if !header.routing_info.integrity_mac.verify(
         routing_keys.header_integrity_hmac_key,
-        &header.routing_info.enc_routing_information.get_value(),
+        header.routing_info.enc_routing_information.get_value_ref(),
     ) {
         return Err(SphinxUnwrapError::IntegrityMacError);
     }
 
-    //let tmp = unwrap::unwrap_routing_information(header, routing_keys.stream_cipher_key);
+    let tmp = unwrap::unwrap_routing_information(header, routing_keys.stream_cipher_key);
     Ok((
         SphinxHeader {
             shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),

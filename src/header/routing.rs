@@ -10,6 +10,7 @@ use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
+use std::borrow::Borrow;
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
@@ -128,9 +129,13 @@ impl HeaderIntegrityMac {
         self.value
     }
 
-    pub fn verify(self, integrity_mac_key: HeaderIntegrityMacKey, enc_routing_info: &[u8]) -> bool {
+    pub fn verify(
+        &self,
+        integrity_mac_key: HeaderIntegrityMacKey,
+        enc_routing_info: &[u8],
+    ) -> bool {
         let recomputed_integrity_mac = Self::compute(integrity_mac_key, enc_routing_info);
-        self.get_value() == recomputed_integrity_mac.get_value()
+        self.value == recomputed_integrity_mac.get_value()
     }
 }
 
@@ -208,6 +213,10 @@ impl EncryptedRoutingInformation {
 
     pub fn get_value(self) -> [u8; ROUTING_INFO_SIZE] {
         self.value
+    }
+
+    pub fn get_value_ref(&self) -> &[u8] {
+        self.value.as_ref()
     }
 
     fn encapsulate_with_mac(self, key: HeaderIntegrityMacKey) -> EncapsulatedRoutingInformation {
@@ -829,6 +838,7 @@ mod decrypting_padded_encrypted_routing_info {
     use super::*;
     use crate::header::crypto::STREAM_CIPHER_KEY_SIZE;
     use crate::header::header::node_address_fixture;
+
     #[test]
     fn returns_original_routing_info() {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
