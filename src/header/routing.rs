@@ -1,260 +1,377 @@
 use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, INTEGRITY_MAC_SIZE,
-    MAX_PATH_LENGTH, PAYLOAD_KEY_SIZE, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH, MAX_PATH_LENGTH,
+    NODE_ADDRESS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
-use crate::header::header::{Destination, NodeAddressBytes, RouteElement};
+use crate::header::filler::Filler;
+use crate::header::header::{
+    Destination, DestinationAddressBytes, NodeAddressBytes, RouteElement, SURBIdentifier,
+};
+use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::utils;
 use crate::utils::crypto;
-use crate::utils::crypto::{STREAM_CIPHER_INIT_VECTOR, STREAM_CIPHER_KEY_SIZE};
-use std::fmt;
+use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
 pub const ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
+    ROUTING_INFO_SIZE + NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
 
-pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
-pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
-pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
-
-#[derive(Clone)]
-pub struct RoutingKeys {
-    pub stream_cipher_key: StreamCipherKey,
-    pub header_integrity_hmac_key: HeaderIntegrityMacKey,
-    pub payload_key: PayloadKey,
+#[derive(Debug)]
+pub enum RoutingEncapsulationError {
+    IsNotForwardHopError,
+    IsNotFinalHopError,
+    EmptyRouteError,
+    EmptyKeysError,
+    UnequalRouteAndKeysError,
 }
 
-impl fmt::Debug for RoutingKeys {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:?} {:?} {:?}",
-            self.stream_cipher_key,
-            self.header_integrity_hmac_key,
-            self.payload_key.to_vec()
-        )
+pub struct EncapsulatedRoutingInformation {
+    pub enc_routing_information: EncryptedRoutingInformation,
+    pub integrity_mac: HeaderIntegrityMac,
+}
+
+impl EncapsulatedRoutingInformation {
+    pub fn new(
+        route: &[RouteElement],
+        routing_keys: &[RoutingKeys],
+        filler: Filler,
+    ) -> Result<Self, RoutingEncapsulationError> {
+        if route.len() != routing_keys.len() {
+            return Err(RoutingEncapsulationError::UnequalRouteAndKeysError);
+        }
+        let final_keys = match routing_keys.last() {
+            Some(k) => k,
+            None => return Err(RoutingEncapsulationError::EmptyKeysError),
+        };
+        let final_hop = match route.last() {
+            Some(k) => k,
+            None => return Err(RoutingEncapsulationError::EmptyRouteError),
+        };
+
+        // TODO: proper error wrapping for below
+        let final_encapsulated_routing_info =
+            Self::for_final_hop(final_hop, final_keys, filler, route.len()).unwrap();
+
+        Ok(Self::for_forward_hops(
+            final_encapsulated_routing_info,
+            route,
+            routing_keys,
+        ))
+    }
+
+    fn for_final_hop(
+        destination_hop: &RouteElement,
+        routing_keys: &RoutingKeys,
+        filler: Filler,
+        route_len: usize,
+    ) -> Result<Self, RoutingEncapsulationError> {
+        let destination = match destination_hop {
+            RouteElement::FinalHop(dest) => dest,
+            _ => return Err(RoutingEncapsulationError::IsNotFinalHopError),
+        };
+
+        // personal note: I like how this looks so much.
+        Ok(FinalRoutingInformation::new(destination, route_len)
+            .add_padding(route_len)
+            .encrypt(routing_keys.stream_cipher_key, route_len)
+            .combine_with_filler(filler, route_len)
+            .encapsulate_with_mac(routing_keys.header_integrity_hmac_key))
+    }
+
+    fn for_forward_hops(
+        final_encapsulated_routing_info: Self,
+        route: &[RouteElement],
+        routing_keys: &[RoutingKeys],
+    ) -> Self {
+        route
+            .iter()
+            .take(route.len() - 1) // we don't want the last element as we already created routing information for it
+            .zip(
+                // we need both route (i.e. address field) and corresponding keys
+                routing_keys.iter().take(routing_keys.len() - 1), // again, we don't want last element
+            )
+            .rev() // we from from the 'inside'
+            .fold(
+                final_encapsulated_routing_info, // we start from the already created encrypted final routing info and mac for the destination
+                |next_encapsulated_routing_information,
+                 (current_node_route_element, current_node_routing_keys)| {
+                    RoutingInformation::new(
+                        current_node_route_element,
+                        next_encapsulated_routing_information,
+                    )
+                    .unwrap()
+                    .encrypt(current_node_routing_keys.stream_cipher_key)
+                    .encapsulate_with_mac(current_node_routing_keys.header_integrity_hmac_key)
+                },
+            )
     }
 }
 
-impl PartialEq for RoutingKeys {
-    fn eq(&self, other: &RoutingKeys) -> bool {
-        self.stream_cipher_key == other.stream_cipher_key
-            && self.header_integrity_hmac_key == other.header_integrity_hmac_key
-            && self.payload_key.to_vec() == other.payload_key.to_vec()
+// In paper gamma
+pub struct HeaderIntegrityMac {
+    value: [u8; HEADER_INTEGRITY_MAC_SIZE],
+}
+
+impl HeaderIntegrityMac {
+    // TODO: perhaps change header_data to concrete type? (but then we have issue with ownership)
+    pub fn compute(key: HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
+        let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), &header_data);
+        let mut integrity_mac = [0u8; HEADER_INTEGRITY_MAC_SIZE];
+        integrity_mac.copy_from_slice(&routing_info_mac[..HEADER_INTEGRITY_MAC_SIZE]);
+        Self {
+            value: integrity_mac,
+        }
+    }
+
+    pub fn get_value(self) -> [u8; HEADER_INTEGRITY_MAC_SIZE] {
+        self.value
+    }
+
+    pub fn verify(self, integrity_mac_key: HeaderIntegrityMacKey, enc_routing_info: &[u8]) -> bool {
+        let recomputed_integrity_mac = Self::compute(integrity_mac_key, enc_routing_info);
+        self.get_value() == recomputed_integrity_mac.get_value()
     }
 }
 
-pub type RoutingInformation = [u8; ROUTING_INFO_SIZE];
-pub type PaddedRoutingInformation = [u8; ROUTING_INFO_SIZE + 3 * SECURITY_PARAMETER];
-pub type HeaderIntegrityMac = [u8; INTEGRITY_MAC_SIZE];
-
-pub struct RoutingInfo {
-    pub enc_header: RoutingInformation,
-    pub header_integrity_hmac: HeaderIntegrityMac,
+// In paper beta
+struct RoutingInformation {
+    node_address: NodeAddressBytes,
+    // in paper nu
+    header_integrity_mac: HeaderIntegrityMac,
+    // in paper gamma
+    next_routing_information: TruncatedRoutingInformation, // in paper also beta
 }
 
-#[derive(Clone)]
-struct HeaderLayerComponents {
-    // in paper beta
-    pub enc_header: RoutingInformation,
-    // in paper beta
-    pub header_integrity_hmac: HeaderIntegrityMac,
-}
-
-pub fn generate_all_routing_info(
-    route: &[RouteElement],
-    routing_keys: &[RoutingKeys],
-    filler_string: Vec<u8>,
-) -> RoutingInfo {
-    assert_eq!(route.len(), routing_keys.len());
-
-    let final_header_layer_components =
-        encapsulate_final_routing_info_and_integrity_mac(route, routing_keys, filler_string);
-    encapsulate_routing_info_and_integrity_macs(final_header_layer_components, route, routing_keys)
-}
-
-fn encapsulate_routing_info_and_integrity_macs(
-    final_header_layer_components: HeaderLayerComponents,
-    route: &[RouteElement],
-    routing_keys: &[RoutingKeys],
-) -> RoutingInfo {
-    let outer_header_layer_components = route
-        .iter()
-        .take(route.len() - 1) // we don't want the last element as we already created header for it - the final header
-        .map(|route_element| match route_element {
+impl RoutingInformation {
+    fn new(
+        route_element: &RouteElement,
+        next_encapsulated_routing_information: EncapsulatedRoutingInformation,
+    ) -> Result<Self, RoutingEncapsulationError> {
+        let node_address = match route_element {
             RouteElement::ForwardHop(mixnode) => mixnode.address,
-            _ => panic!("The next route element must be a mix node"),
-        }) // we only care about 'address' field from the route + we implicitly check if the route has only forward hops
-        .zip(
-            // we need both route (i.e. address field) and corresponding keys
-            routing_keys.iter().take(routing_keys.len() - 1), // again, we don't want last element
-        )
-        .rev() // we from from the 'inside'
-        .fold(
-            final_header_layer_components, // we start from the already created final routing info and mac for the destination
-            |inner_layer_components, (current_node_hop_address, current_node_routing_keys)| {
-                // we return routing_info and mac of this layer
-                prepare_header_layer(
-                    current_node_hop_address,
-                    current_node_routing_keys,
-                    inner_layer_components,
-                )
-            },
+            _ => return Err(RoutingEncapsulationError::IsNotForwardHopError),
+        };
+
+        Ok(RoutingInformation {
+            node_address,
+            header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
+            next_routing_information: next_encapsulated_routing_information
+                .enc_routing_information
+                .truncate(),
+        })
+    }
+
+    fn concatenate_components(self) -> Vec<u8> {
+        self.node_address
+            .iter()
+            .cloned()
+            .chain(self.header_integrity_mac.get_value().iter().cloned())
+            .chain(self.next_routing_information.iter().cloned())
+            .collect()
+    }
+
+    fn encrypt(self, key: StreamCipherKey) -> EncryptedRoutingInformation {
+        let routing_info_components = self.concatenate_components();
+        assert_eq!(ROUTING_INFO_SIZE, routing_info_components.len());
+
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &key,
+            &STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
         );
 
-    RoutingInfo {
-        enc_header: outer_header_layer_components.enc_header,
-        header_integrity_hmac: outer_header_layer_components.header_integrity_hmac,
+        let encrypted_routing_info_vec = utils::bytes::xor(
+            &routing_info_components,
+            &pseudorandom_bytes[..ROUTING_INFO_SIZE],
+        );
+
+        let mut encrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
+        encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
+        EncryptedRoutingInformation {
+            value: encrypted_routing_info,
+        }
     }
 }
 
-fn prepare_header_layer(
-    hop_address: NodeAddressBytes,
-    routing_keys: &RoutingKeys,
-    inner_layer_components: HeaderLayerComponents,
-) -> HeaderLayerComponents {
-    // concatenate address || previous hmac || previous routing info
-    let routing_info_components: Vec<_> = hop_address
-        .iter()
-        .cloned()
-        .chain(inner_layer_components.header_integrity_hmac.iter().cloned())
-        .chain(
-            inner_layer_components
-                .enc_header
+// result of xoring beta with rho (output of PRNG)
+pub struct EncryptedRoutingInformation {
+    value: [u8; ROUTING_INFO_SIZE],
+}
+
+impl EncryptedRoutingInformation {
+    fn truncate(self) -> TruncatedRoutingInformation {
+        let mut truncated_routing_info = [0u8; TRUNCATED_ROUTING_INFO_SIZE];
+        truncated_routing_info.copy_from_slice(&self.value[..TRUNCATED_ROUTING_INFO_SIZE]);
+        truncated_routing_info
+    }
+
+    pub fn get_value(self) -> [u8; ROUTING_INFO_SIZE] {
+        self.value
+    }
+
+    fn encapsulate_with_mac(self, key: HeaderIntegrityMacKey) -> EncapsulatedRoutingInformation {
+        let integrity_mac = HeaderIntegrityMac::compute(key, &self.value);
+        EncapsulatedRoutingInformation {
+            enc_routing_information: self,
+            integrity_mac,
+        }
+    }
+
+    pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
+        let zero_bytes = vec![0u8; 3 * SECURITY_PARAMETER];
+        let padded_enc_routing_info: Vec<u8> =
+            self.value.iter().cloned().chain(zero_bytes).collect();
+
+        assert_eq!(
+            PADDED_ENCRYPTED_ROUTING_INFO_SIZE,
+            padded_enc_routing_info.len()
+        );
+        PaddedEncryptedRoutingInformation {
+            value: padded_enc_routing_info,
+        }
+    }
+}
+
+pub struct PaddedEncryptedRoutingInformation {
+    value: Vec<u8>, //[u8; PADDED_ENCRYPTED_ROUTING_INFO_SIZE],
+}
+
+impl PaddedEncryptedRoutingInformation {
+    pub fn decrypt(self, key: StreamCipherKey) -> Vec<u8> {
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &key,
+            &crypto::STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
+
+        utils::bytes::xor(&self.value, &pseudorandom_bytes)
+    }
+}
+
+// result of truncating encrypted beta before passing it to next 'layer'
+type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
+
+// this is going through the following transformations:
+/*
+    FinalRoutingInformation -> PaddedFinalRoutingInformation -> EncryptedPaddedFinalRoutingInformation ->
+    Encrypted Padded Destination with Filler - this can be treated as EncryptedRoutingInformation
+*/
+
+// TODO: perhaps add route_len to all final_routing_info related structs to simplify everything?
+// because it seems weird that say 'encrypt' requires route_len argument
+struct FinalRoutingInformation {
+    destination: DestinationAddressBytes,
+    // in paper delta
+    identifier: SURBIdentifier, // in paper I
+}
+
+impl FinalRoutingInformation {
+    // TODO: this should really return a Result in case the assertion failed
+    fn new(dest: &Destination, route_len: usize) -> Self {
+        assert!(dest.address.len() <= Self::max_destination_length(route_len));
+
+        Self {
+            destination: dest.address,
+            identifier: dest.identifier,
+        }
+    }
+
+    fn max_destination_length(route_len: usize) -> usize {
+        (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
+    }
+
+    fn max_padded_destination_identifier_length(route_len: usize) -> usize {
+        // this should evaluate to (3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER
+        Self::max_destination_length(route_len) + IDENTIFIER_LENGTH
+    }
+
+    fn add_padding(self, route_len: usize) -> PaddedFinalRoutingInformation {
+        // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
+        // attack on sphinx described by Kuhn et al.
+        let padding =
+            utils::bytes::random(Self::max_destination_length(route_len) - self.destination.len());
+
+        // return D || I || PAD
+        PaddedFinalRoutingInformation {
+            value: self
+                .destination
                 .iter()
                 .cloned()
-                .take(TRUNCATED_ROUTING_INFO_SIZE),
-        ) // truncate (beta) to the desired length
-        .collect();
-
-    // encrypt (by xor'ing with output of aes keyed with our key)
-    let routing_info =
-        encrypt_routing_info(routing_keys.stream_cipher_key, &routing_info_components);
-
-    // compute hmac for that 'layer'
-    let routing_info_integrity_mac =
-        generate_routing_info_integrity_mac(routing_keys.header_integrity_hmac_key, routing_info);
-
-    HeaderLayerComponents {
-        enc_header: routing_info,
-        header_integrity_hmac: routing_info_integrity_mac,
+                .chain(self.identifier.iter().cloned())
+                .chain(padding.iter().cloned())
+                .collect(),
+        }
     }
 }
 
-pub fn encrypt_routing_info(
-    key: StreamCipherKey,
-    routing_info_components: &[u8],
-) -> RoutingInformation {
-    assert_eq!(ROUTING_INFO_SIZE, routing_info_components.len());
-
-    let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-        &key,
-        &STREAM_CIPHER_INIT_VECTOR,
-        STREAM_CIPHER_OUTPUT_LENGTH,
-    );
-
-    let encrypted_routing_info_vec = utils::bytes::xor(
-        &routing_info_components,
-        &pseudorandom_bytes[..ROUTING_INFO_SIZE],
-    );
-
-    let mut encrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
-    encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
-    encrypted_routing_info
+// in paper D || I || 0
+struct PaddedFinalRoutingInformation {
+    value: Vec<u8>,
 }
 
-pub fn generate_routing_info_integrity_mac(
-    key: HeaderIntegrityMacKey,
-    data: RoutingInformation,
-) -> HeaderIntegrityMac {
-    let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-    let mut integrity_mac = [0u8; INTEGRITY_MAC_SIZE];
-    integrity_mac.copy_from_slice(&routing_info_mac[..INTEGRITY_MAC_SIZE]);
-    integrity_mac
-}
+impl PaddedFinalRoutingInformation {
+    fn encrypt(
+        self,
+        key: StreamCipherKey,
+        route_len: usize,
+    ) -> EncryptedPaddedFinalRoutingInformation {
+        assert_eq!(
+            FinalRoutingInformation::max_padded_destination_identifier_length(route_len),
+            self.value.len()
+        );
 
-fn encrypt_padded_final_destination(
-    key: StreamCipherKey,
-    padded_final_destination: &[u8],
-    route_len: usize,
-) -> Vec<u8> {
-    assert_eq!(
-        ((3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER),
-        padded_final_destination.len()
-    );
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &key,
+            &STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
 
-    let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-        &key,
-        &STREAM_CIPHER_INIT_VECTOR,
-        STREAM_CIPHER_OUTPUT_LENGTH,
-    );
-
-    utils::bytes::xor(
-        padded_final_destination,
-        &pseudorandom_bytes[..((3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER)],
-    )
-}
-
-fn encapsulate_final_routing_info_and_integrity_mac(
-    route: &[RouteElement],
-    routing_keys: &[RoutingKeys],
-    filler_string: Vec<u8>,
-) -> HeaderLayerComponents {
-    let final_keys = routing_keys
-        .last()
-        .expect("The keys should be already initialized");
-    let final_hop = match route.last().expect("The route should not be empty") {
-        RouteElement::FinalHop(destination) => destination,
-        _ => panic!("The last route element must be a destination"),
-    };
-
-    let final_routing_info =
-        generate_final_routing_info(filler_string, route.len(), &final_hop, final_keys);
-
-    let final_routing_info_mac = generate_routing_info_integrity_mac(
-        final_keys.header_integrity_hmac_key,
-        final_routing_info,
-    );
-
-    HeaderLayerComponents {
-        enc_header: final_routing_info,
-        header_integrity_hmac: final_routing_info_mac,
+        EncryptedPaddedFinalRoutingInformation {
+            value: utils::bytes::xor(
+                &self.value,
+                &pseudorandom_bytes[..self.value.len()], // we already asserted it has correct length
+            ),
+        }
     }
 }
 
-fn generate_final_routing_info(
-    filler: Vec<u8>,
-    route_len: usize,
-    destination: &Destination,
-    final_keys: &RoutingKeys,
-) -> RoutingInformation {
-    let address_bytes = destination.address;
-    let surb_identifier = destination.identifier;
-    let final_destination_bytes = [address_bytes.to_vec(), surb_identifier.to_vec()].concat();
-
-    let max_destination_length = (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER;
-    assert!(address_bytes.len() <= max_destination_length);
-    assert_eq!(filler.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
-
-    let padding = utils::bytes::random(max_destination_length - address_bytes.len());
-    let padded_final_destination = [final_destination_bytes.to_vec(), padding].concat();
-    let encrypted_final_destination = encrypt_padded_final_destination(
-        final_keys.stream_cipher_key,
-        &padded_final_destination,
-        route_len,
-    );
-
-    let final_routing_info_vec = [encrypted_final_destination, filler].concat();
-    assert_eq!(final_routing_info_vec.len(), ROUTING_INFO_SIZE);
-    let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
-    final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
-    final_routing_information
+// in paper XOR ( (D || I || 0), rho(h_{rho}(s)) )
+struct EncryptedPaddedFinalRoutingInformation {
+    value: Vec<u8>,
 }
+
+impl EncryptedPaddedFinalRoutingInformation {
+    // technically it's not exactly EncryptedRoutingInformation
+    // as it's EncryptedPaddedFinalRoutingInformation with possibly concatenated filler string
+    // however, for all of our purposes, it behaves exactly like EncryptedRoutingInformation
+    fn combine_with_filler(self, filler: Filler, route_len: usize) -> EncryptedRoutingInformation {
+        let filler_value = filler.get_value();
+        assert_eq!(filler_value.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
+
+        let final_routing_info_vec: Vec<u8> =
+            self.value.iter().cloned().chain(filler_value).collect();
+
+        // sanity check assertion, because we're using vectors
+        assert_eq!(final_routing_info_vec.len(), ROUTING_INFO_SIZE);
+        let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
+        final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
+        EncryptedRoutingInformation {
+            value: [0u8; ROUTING_INFO_SIZE],
+        }
+    }
+}
+
+// TODO: all tests were retrofitted to work with new code structure,
+// they should be rewritten to work better with what we have now.
 
 #[cfg(test)]
 mod encapsulating_all_routing_information {
-    use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::header::{random_final_hop, random_forward_hop};
+    use crate::header::keys::routing_keys_fixture;
+
+    use super::*;
 
     #[test]
     #[should_panic]
@@ -267,7 +384,7 @@ mod encapsulating_all_routing_information {
         let keys = [routing_keys_fixture(), routing_keys_fixture()];
         let filler = filler_fixture(route.len() - 1);
 
-        generate_all_routing_info(&route, &keys, filler);
+        EncapsulatedRoutingInformation::new(&route, &keys, filler).unwrap();
     }
 
     #[test]
@@ -281,54 +398,77 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        generate_all_routing_info(&route, &keys, filler);
+        EncapsulatedRoutingInformation::new(&route, &keys, filler).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_panics_if_empty_route_is_provided() {
+        let route = vec![];
+        let keys = [
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+            routing_keys_fixture(),
+        ];
+        let filler = filler_fixture(route.len() - 1);
+
+        EncapsulatedRoutingInformation::new(&route, &keys, filler).unwrap();
+    }
+
+    #[test]
+    #[should_panic]
+    fn it_panic_if_empty_keys_are_provided() {
+        let route = [random_forward_hop(), random_final_hop()];
+        let keys = vec![];
+        let filler = filler_fixture(route.len() - 1);
+
+        EncapsulatedRoutingInformation::new(&route, &keys, filler).unwrap();
+    }
+
+    #[test]
+    fn it_returns_final_routing_information_for_route_of_length_1() {
+        let route_len = 1;
+        let final_keys = routing_keys_fixture();
+        let destination = random_final_hop();
+        let filler = filler_fixture(route_len - 1);
+        let filler_cpy = filler_fixture(route_len - 1); // required due to variable being moved
+                                                        // this is not a problem in actual implementation as filler is only used once
+        assert_eq!(filler, filler_cpy); // to make sure we detect change in our filler_fixture
+
+        let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
+            &destination,
+            &final_keys,
+            filler,
+            route_len,
+        )
+        .unwrap();
+
+        let route = vec![destination];
+        let routing_info =
+            EncapsulatedRoutingInformation::new(&route, &[final_keys], filler_cpy).unwrap();
+
+        assert_eq!(
+            final_routing_info.enc_routing_information.value.to_vec(),
+            routing_info.enc_routing_information.value.to_vec(),
+        );
+        assert_eq!(
+            final_routing_info.integrity_mac.value.to_vec(),
+            routing_info.integrity_mac.value.to_vec(),
+        );
     }
 }
 
 #[cfg(test)]
-mod encapsulating_routing_information {
-    use super::*;
+mod encapsulating_forward_routing_information {
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{random_destination, random_final_hop, random_forward_hop};
+    use crate::header::header::{random_final_hop, random_forward_hop};
+    use crate::header::keys::routing_keys_fixture;
 
-    #[test]
-    fn it_returns_final_header_components_for_route_of_length_1() {
-        let route_len = 1;
-        let final_keys = routing_keys_fixture();
-        let destination = random_destination();
-        let filler = filler_fixture(route_len - 1);
-
-        let final_routing_info =
-            generate_final_routing_info(filler, route_len, &destination, &final_keys);
-        let final_routing_mac = generate_routing_info_integrity_mac(
-            final_keys.header_integrity_hmac_key,
-            final_routing_info,
-        );
-        let final_header_layer_components = HeaderLayerComponents {
-            enc_header: final_routing_info,
-            header_integrity_hmac: final_routing_mac,
-        };
-
-        let route = vec![RouteElement::FinalHop(destination)];
-        let routing_info = encapsulate_routing_info_and_integrity_macs(
-            final_header_layer_components,
-            &route,
-            &[final_keys],
-        );
-
-        assert_eq!(
-            routing_info.enc_header.to_vec(),
-            final_routing_info.to_vec()
-        );
-        assert_eq!(
-            routing_info.header_integrity_hmac.to_vec(),
-            final_routing_mac.to_vec()
-        );
-    }
+    use super::*;
 
     #[test]
     fn it_correctly_generates_sphinx_routing_information_for_route_of_length_3() {
-        // this is basically loop unwrapping, but considering the complex iterator, it's warranted
+        // this is basically loop unwrapping, but considering the complex logic behind it, it's warranted
         let route = [
             random_forward_hop(),
             random_forward_hop(),
@@ -340,43 +480,64 @@ mod encapsulating_routing_information {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
+        let filler_copy = filler_fixture(route.len() - 1);
+        assert_eq!(filler, filler_copy);
 
-        let final_header_layer_components =
-            encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+        let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
+            &route.last().unwrap(),
+            &routing_keys.last().unwrap(),
+            filler,
+            route.len(),
+        )
+        .unwrap();
 
-        // we need to make an explicit copy of final components because they are consumed (and rightfully so) after encapsulation
-        let final_header_layer_components_copy = final_header_layer_components.clone();
-        let routing_info = encapsulate_routing_info_and_integrity_macs(
-            final_header_layer_components,
+        // we need to make a copy of final routing info because they are consumed
+        // (and rightfully so) after encapsulation with further layers
+        // however, since we're using fixtures, we can just create the same data again
+        let final_routing_info_copy = EncapsulatedRoutingInformation::for_final_hop(
+            &route.last().unwrap(),
+            &routing_keys.last().unwrap(),
+            filler_copy,
+            route.len(),
+        )
+        .unwrap();
+
+        // sanity check to make sure our 'copy' worked
+        assert_eq!(
+            final_routing_info.enc_routing_information.value.to_vec(),
+            final_routing_info_copy
+                .enc_routing_information
+                .value
+                .to_vec()
+        );
+        assert_eq!(
+            final_routing_info.integrity_mac.value.to_vec(),
+            final_routing_info_copy.integrity_mac.value.to_vec()
+        );
+
+        let routing_info = EncapsulatedRoutingInformation::for_forward_hops(
+            final_routing_info,
             &route,
             &routing_keys,
         );
 
-        let layer_2_header = prepare_header_layer(
-            match &route[1] {
-                RouteElement::ForwardHop(mix) => mix.address,
-                _ => panic!(),
-            },
-            &routing_keys[1],
-            final_header_layer_components_copy,
-        );
+        let layer_1_routing = RoutingInformation::new(&route[1], final_routing_info_copy)
+            .unwrap()
+            .encrypt(routing_keys[1].stream_cipher_key)
+            .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
 
-        let layer_1_header = prepare_header_layer(
-            match &route[0] {
-                RouteElement::ForwardHop(mix) => mix.address,
-                _ => panic!(),
-            },
-            &routing_keys[0],
-            layer_2_header,
-        );
+        let layer_0_routing = RoutingInformation::new(&route[0], layer_1_routing)
+            .unwrap()
+            .encrypt(routing_keys[0].stream_cipher_key)
+            .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 
         assert_eq!(
-            routing_info.enc_header.to_vec(),
-            layer_1_header.enc_header.to_vec()
+            routing_info.enc_routing_information.value.to_vec(),
+            layer_0_routing.enc_routing_information.value.to_vec()
         );
         assert_eq!(
-            routing_info.header_integrity_hmac,
-            layer_1_header.header_integrity_hmac
+            routing_info.integrity_mac.value,
+            layer_0_routing.integrity_mac.value
         );
     }
 
@@ -403,20 +564,29 @@ mod encapsulating_routing_information {
 
 #[cfg(test)]
 mod preparing_header_layer {
+    use crate::header::header::{node_address_fixture, MixNode};
+    use crate::header::keys::routing_keys_fixture;
+
     use super::*;
-    use crate::header::header::node_address_fixture;
 
     #[test]
     fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
         let address = node_address_fixture();
-        let routing_keys = routing_keys_fixture();
-        let inner_layer_components = header_layer_components_fixture();
+        let forward_hop = RouteElement::ForwardHop(MixNode {
+            address,
+            pub_key: Default::default(),
+        });
 
+        let routing_keys = routing_keys_fixture();
+        let inner_layer_routing = encapsulated_routing_information_fixture();
+
+        // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
             address.to_vec(),
-            inner_layer_components.header_integrity_hmac.to_vec(),
-            inner_layer_components
-                .enc_header
+            inner_layer_routing.integrity_mac.value.to_vec(),
+            inner_layer_routing
+                .enc_routing_information
+                .value
                 .to_vec()
                 .iter()
                 .cloned()
@@ -425,23 +595,33 @@ mod preparing_header_layer {
         ]
         .concat();
 
-        let next_layer_components =
-            prepare_header_layer(address, &routing_keys, inner_layer_components);
-        let expected_routing_info =
-            encrypt_routing_info(routing_keys.stream_cipher_key, &concatenated_materials);
-        let expected_integrity_mac = generate_routing_info_integrity_mac(
-            routing_keys.header_integrity_hmac_key,
-            expected_routing_info,
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &routing_keys.stream_cipher_key,
+            &STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
         );
 
-        assert_eq!(
-            expected_routing_info.to_vec(),
-            next_layer_components.enc_header.to_vec()
+        let expected_encrypted_routing_info_vec = utils::bytes::xor(
+            &concatenated_materials,
+            &pseudorandom_bytes[..ROUTING_INFO_SIZE],
         );
-        assert_eq!(
-            expected_integrity_mac.to_vec(),
-            next_layer_components.header_integrity_hmac.to_vec()
+
+        let mut expected_routing_mac = crypto::compute_keyed_hmac(
+            routing_keys.header_integrity_hmac_key.to_vec(),
+            &expected_encrypted_routing_info_vec,
         );
+        expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
+
+        let next_layer_routing = RoutingInformation::new(&forward_hop, inner_layer_routing)
+            .unwrap()
+            .encrypt(routing_keys.stream_cipher_key)
+            .encapsulate_with_mac(routing_keys.header_integrity_hmac_key);
+
+        assert_eq!(
+            expected_encrypted_routing_info_vec,
+            next_layer_routing.enc_routing_information.value.to_vec()
+        );
+        assert_eq!(expected_routing_mac, next_layer_routing.integrity_mac.value);
     }
 }
 
@@ -449,11 +629,12 @@ mod preparing_header_layer {
 mod test_encapsulating_final_routing_information_and_mac {
     use super::*;
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{random_destination, random_final_hop, random_forward_hop};
+    use crate::header::header::{random_final_hop, random_forward_hop};
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     #[should_panic]
-    fn it_panics_if_last_route_element_is_not_a_final_hop() {
+    fn it_panics_if_the_route_element_is_not_a_final_hop() {
         let route = [
             random_forward_hop(),
             random_forward_hop(),
@@ -465,20 +646,18 @@ mod test_encapsulating_final_routing_information_and_mac {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
-        encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
-    }
-
-    #[test]
-    #[should_panic]
-    fn it_panics_if_it_doesnt_receive_any_keys() {
-        let route = [random_final_hop()];
-        let routing_keys: Vec<RoutingKeys> = vec![];
-        let filler = filler_fixture(route.len() - 1);
-        encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+        EncapsulatedRoutingInformation::for_final_hop(
+            &route.last().unwrap(),
+            &routing_keys.last().unwrap(),
+            filler,
+            route.len(),
+        )
+        .unwrap();
     }
 
     #[test]
     fn it_returns_mac_on_correct_data() {
+        // this test is created to ensure we MAC the encrypted data BEFORE it is truncated
         let route = [
             random_forward_hop(),
             random_forward_hop(),
@@ -490,17 +669,19 @@ mod test_encapsulating_final_routing_information_and_mac {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
-        let final_header_layer_components =
-            encapsulate_final_routing_info_and_integrity_mac(&route, &routing_keys, filler);
+        let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
+            &route.last().unwrap(),
+            &routing_keys.last().unwrap(),
+            filler,
+            route.len(),
+        )
+        .unwrap();
 
-        let expected_mac = generate_routing_info_integrity_mac(
+        let expected_mac = HeaderIntegrityMac::compute(
             routing_keys.last().unwrap().header_integrity_hmac_key,
-            final_header_layer_components.enc_header,
+            &final_routing_info.enc_routing_information.value,
         );
-        assert_eq!(
-            expected_mac,
-            final_header_layer_components.header_integrity_hmac
-        );
+        assert_eq!(expected_mac.value, final_routing_info.integrity_mac.value);
     }
 }
 
@@ -509,6 +690,7 @@ mod test_encapsulating_final_routing_information {
     use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::header::random_destination;
+    use crate::header::keys::routing_keys_fixture;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
@@ -517,12 +699,15 @@ mod test_encapsulating_final_routing_information {
         let route_len = 5;
         let filler = filler_fixture(route_len - 1);
         let destination = random_destination();
-        let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_keys);
+
+        let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
+            .add_padding(route_len)
+            .encrypt(final_keys.stream_cipher_key, route_len)
+            .combine_with_filler(filler, route_len);
 
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
-        assert_eq!(expected_final_header_len, final_header.len());
+        assert_eq!(expected_final_header_len, final_routing_header.value.len());
     }
 
     #[test]
@@ -532,10 +717,15 @@ mod test_encapsulating_final_routing_information {
         let route_len = 3;
         let filler = filler_fixture(route_len - 1);
         let destination = random_destination();
-        let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_keys);
+
+        let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
+            .add_padding(route_len)
+            .encrypt(final_keys.stream_cipher_key, route_len)
+            .combine_with_filler(filler, route_len);
+
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
-        assert_eq!(expected_final_header_len, final_header.len());
+
+        assert_eq!(expected_final_header_len, final_routing_header.value.len());
     }
 
     #[test]
@@ -545,10 +735,15 @@ mod test_encapsulating_final_routing_information {
         let route_len = 1;
         let filler = filler_fixture(route_len - 1);
         let destination = random_destination();
-        let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_keys);
+
+        let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
+            .add_padding(route_len)
+            .encrypt(final_keys.stream_cipher_key, route_len)
+            .combine_with_filler(filler, route_len);
+
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
-        assert_eq!(expected_final_header_len, final_header.len());
+
+        assert_eq!(expected_final_header_len, final_routing_header.value.len());
     }
 
     #[test]
@@ -558,8 +753,11 @@ mod test_encapsulating_final_routing_information {
         let route_len = 0;
         let filler = filler_fixture(route_len - 1);
         let destination = random_destination();
-        let final_header =
-            generate_final_routing_info(filler, route_len, &destination, &final_keys);
+
+        FinalRoutingInformation::new(&destination, route_len)
+            .add_padding(route_len)
+            .encrypt(final_keys.stream_cipher_key, route_len)
+            .combine_with_filler(filler, route_len);
     }
 
     #[test]
@@ -569,68 +767,154 @@ mod test_encapsulating_final_routing_information {
         let route_len = 3;
         let filler = filler_fixture(route_len);
         let destination = random_destination();
-        generate_final_routing_info(filler, route_len, &destination, &final_keys);
+
+        FinalRoutingInformation::new(&destination, route_len)
+            .add_padding(route_len)
+            .encrypt(final_keys.stream_cipher_key, route_len)
+            .combine_with_filler(filler, route_len);
     }
 }
 
 #[cfg(test)]
 mod encrypting_routing_information {
     use super::*;
+    use crate::header::header::node_address_fixture;
+    use crate::utils::crypto::STREAM_CIPHER_KEY_SIZE;
 
     #[test]
     fn it_is_possible_to_decrypt_it_to_recover_original_data() {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
-        let data = vec![3u8; ROUTING_INFO_SIZE];
-        let encrypted_data = encrypt_routing_info(key, &data);
+        let address = node_address_fixture();
+        let mac = header_integrity_mac_fixture();
+        let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
+
+        let encryption_data =
+            [address.to_vec(), mac.value.to_vec(), next_routing.to_vec()].concat();
+
+        let routing_information = RoutingInformation {
+            node_address: address,
+            header_integrity_mac: mac,
+            next_routing_information: next_routing,
+        };
+
+        let encrypted_data = routing_information.encrypt(key);
         let decryption_key_source = crypto::generate_pseudorandom_bytes(
             &key,
             &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
         let decryption_key = &decryption_key_source[..ROUTING_INFO_SIZE];
-        let decrypted_data = utils::bytes::xor(&encrypted_data, decryption_key);
-        assert_eq!(data, decrypted_data);
+        let decrypted_data = utils::bytes::xor(&encrypted_data.value, decryption_key);
+        assert_eq!(encryption_data, decrypted_data);
+    }
+}
+
+#[cfg(test)]
+mod adding_zero_padding_to_encrypted_routing_info {
+    use super::*;
+
+    #[test]
+    fn returns_a_correctly_padded_bytes() {
+        let enc_routing_info = encrypted_routing_information_fixture();
+        let padded_enc_routing_info = enc_routing_info.add_zero_padding();
+        assert_eq!(
+            PADDED_ENCRYPTED_ROUTING_INFO_SIZE,
+            padded_enc_routing_info.value.len()
+        );
+    }
+}
+
+#[cfg(test)]
+mod decrypting_padded_encrypted_routing_info {
+    use super::*;
+    use crate::header::crypto::STREAM_CIPHER_KEY_SIZE;
+    use crate::header::header::node_address_fixture;
+    #[test]
+    fn returns_original_routing_info() {
+        let key = [2u8; STREAM_CIPHER_KEY_SIZE];
+        let address = node_address_fixture();
+        let mac = header_integrity_mac_fixture();
+        let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
+
+        let encryption_data =
+            [address.to_vec(), mac.value.to_vec(), next_routing.to_vec()].concat();
+
+        let routing_information = RoutingInformation {
+            node_address: address,
+            header_integrity_mac: mac,
+            next_routing_information: next_routing,
+        };
+
+        let encrypted_data = routing_information.encrypt(key);
+        let padded_enc_routing_info = encrypted_data.add_zero_padding();
+
+        let decrypted_routing_info = padded_enc_routing_info.decrypt(key);
+        assert_eq!(
+            PADDED_ENCRYPTED_ROUTING_INFO_SIZE,
+            decrypted_routing_info.len()
+        );
+        assert!(decrypted_routing_info
+            .iter()
+            .take(ROUTING_INFO_SIZE)
+            .eq(encryption_data.iter()));
+    }
+}
+
+#[cfg(test)]
+mod truncating_routing_information {
+    use super::*;
+
+    #[test]
+    fn it_does_not_change_prefixed_data() {
+        let encrypted_routing_info = encrypted_routing_information_fixture();
+        let routing_info_data_copy = encrypted_routing_info.value.clone();
+
+        let truncated_routing_info = encrypted_routing_info.truncate();
+        for i in 0..truncated_routing_info.len() {
+            assert_eq!(truncated_routing_info[i], routing_info_data_copy[i]);
+        }
     }
 }
 
 #[cfg(test)]
 mod computing_integrity_mac {
     use super::*;
+    use crate::constants::INTEGRITY_MAC_KEY_SIZE;
 
     #[test]
     fn it_is_possible_to_verify_correct_mac() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let data = [3u8; ROUTING_INFO_SIZE];
-        let integrity_mac = generate_routing_info_integrity_mac(key, data);
+        let data = vec![3u8; ROUTING_INFO_SIZE];
+        let integrity_mac = HeaderIntegrityMac::compute(key, &data);
 
-        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-        computed_mac.truncate(INTEGRITY_MAC_SIZE);
-        assert_eq!(computed_mac, integrity_mac);
+        assert!(integrity_mac.verify(key, &data));
     }
 
     #[test]
     fn it_lets_detecting_flipped_data_bits() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let mut data = [3u8; ROUTING_INFO_SIZE];
-        let integrity_mac = generate_routing_info_integrity_mac(key, data);
+        let mut data = vec![3u8; ROUTING_INFO_SIZE];
+        let integrity_mac = HeaderIntegrityMac::compute(key, &data);
         data[10] = !data[10];
-        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-        computed_mac.truncate(INTEGRITY_MAC_SIZE);
-        assert_ne!(computed_mac, integrity_mac);
+        assert!(!integrity_mac.verify(key, &data));
     }
 }
 
-pub fn routing_keys_fixture() -> RoutingKeys {
-    RoutingKeys {
-        stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
-        header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
-        payload_key: [3u8; PAYLOAD_KEY_SIZE],
+pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
+    HeaderIntegrityMac {
+        value: [6u8; HEADER_INTEGRITY_MAC_SIZE],
     }
 }
 
-fn header_layer_components_fixture() -> HeaderLayerComponents {
-    HeaderLayerComponents {
-        enc_header: [5u8; ROUTING_INFO_SIZE],
-        header_integrity_hmac: [6u8; INTEGRITY_MAC_SIZE],
+pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
+    EncryptedRoutingInformation {
+        value: [5u8; ROUTING_INFO_SIZE],
+    }
+}
+
+pub fn encapsulated_routing_information_fixture() -> EncapsulatedRoutingInformation {
+    EncapsulatedRoutingInformation {
+        enc_routing_information: encrypted_routing_information_fixture(),
+        integrity_mac: header_integrity_mac_fixture(),
     }
 }

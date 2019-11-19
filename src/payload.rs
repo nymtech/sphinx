@@ -66,7 +66,8 @@ fn encapsulate_payload(
 mod test_encrypting_final_payload {
     use super::*;
     use crate::header::header::destination_address_fixture;
-    use crate::header::routing::routing_keys_fixture;
+    use crate::header::keys::routing_keys_fixture;
+
     #[test]
     fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
         let message = vec![1u8, 16];
@@ -88,8 +89,7 @@ mod test_encapsulating_payload {
     use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
     use crate::header::header::destination_address_fixture;
-    use crate::header::routing::routing_keys_fixture;
-    use crate::header::routing::RoutingKeys;
+    use crate::header::keys::RoutingKeys;
     use crate::utils::crypto;
     #[test]
     fn always_both_input_and_output_are_the_same_length() {
