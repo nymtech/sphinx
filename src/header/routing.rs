@@ -4,12 +4,13 @@ use crate::constants::{
 };
 use crate::header::filler::Filler;
 use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
+use crate::header::mac::HeaderIntegrityMac;
 use crate::route::{
     Destination, DestinationAddressBytes, NodeAddressBytes, RouteElement, SURBIdentifier,
 };
-use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
+use crate::{header, utils};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
@@ -86,14 +87,14 @@ impl EncapsulatedRoutingInformation {
     ) -> Self {
         route
             .iter()
-            .take(route.len() - 1) // we don't want the last element as we already created routing information for it
+            .take(route.len() - 1) // we don't want the last element as we already created header.routing information for it
             .zip(
                 // we need both route (i.e. address field) and corresponding keys
                 routing_keys.iter().take(routing_keys.len() - 1), // again, we don't want last element
             )
             .rev() // we from from the 'inside'
             .fold(
-                final_encapsulated_routing_info, // we start from the already created encrypted final routing info and mac for the destination
+                final_encapsulated_routing_info, // we start from the already created encrypted final header.routing info and mac for the destination
                 |next_encapsulated_routing_information,
                  (current_node_route_element, current_node_routing_keys)| {
                     RoutingInformation::new(
@@ -105,29 +106,6 @@ impl EncapsulatedRoutingInformation {
                     .encapsulate_with_mac(current_node_routing_keys.header_integrity_hmac_key)
                 },
             )
-    }
-}
-
-// In paper gamma
-// the derivation is only required for the tests. please remove it in production
-#[derive(Clone)]
-pub struct HeaderIntegrityMac {
-    value: [u8; HEADER_INTEGRITY_MAC_SIZE],
-}
-
-impl HeaderIntegrityMac {
-    // TODO: perhaps change header_data to concrete type? (but then we have issue with ownership)
-    fn compute(key: HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
-        let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), &header_data);
-        let mut integrity_mac = [0u8; HEADER_INTEGRITY_MAC_SIZE];
-        integrity_mac.copy_from_slice(&routing_info_mac[..HEADER_INTEGRITY_MAC_SIZE]);
-        Self {
-            value: integrity_mac,
-        }
-    }
-
-    fn get_value(self) -> [u8; HEADER_INTEGRITY_MAC_SIZE] {
-        self.value
     }
 }
 
@@ -447,8 +425,8 @@ mod encapsulating_forward_routing_information {
                 .to_vec()
         );
         assert_eq!(
-            final_routing_info.integrity_mac.value.to_vec(),
-            final_routing_info_copy.integrity_mac.value.to_vec()
+            final_routing_info.integrity_mac.get_value_ref(),
+            final_routing_info_copy.integrity_mac.get_value_ref()
         );
 
         let routing_info = EncapsulatedRoutingInformation::for_forward_hops(
@@ -472,8 +450,8 @@ mod encapsulating_forward_routing_information {
             layer_0_routing.enc_routing_information.value.to_vec()
         );
         assert_eq!(
-            routing_info.integrity_mac.value,
-            layer_0_routing.integrity_mac.value
+            routing_info.integrity_mac.get_value(),
+            layer_0_routing.integrity_mac.get_value()
         );
     }
 
@@ -519,7 +497,7 @@ mod preparing_header_layer {
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
             address.to_vec(),
-            inner_layer_routing.integrity_mac.value.to_vec(),
+            inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
                 .enc_routing_information
                 .value
@@ -557,7 +535,10 @@ mod preparing_header_layer {
             expected_encrypted_routing_info_vec,
             next_layer_routing.enc_routing_information.value.to_vec()
         );
-        assert_eq!(expected_routing_mac, next_layer_routing.integrity_mac.value);
+        assert_eq!(
+            expected_routing_mac,
+            next_layer_routing.integrity_mac.get_value()
+        );
     }
 }
 
@@ -617,7 +598,10 @@ mod test_encapsulating_final_routing_information_and_mac {
             routing_keys.last().unwrap().header_integrity_hmac_key,
             &final_routing_info.enc_routing_information.value,
         );
-        assert_eq!(expected_mac.value, final_routing_info.integrity_mac.value);
+        assert_eq!(
+            expected_mac.get_value(),
+            final_routing_info.integrity_mac.get_value()
+        );
     }
 }
 
@@ -714,6 +698,7 @@ mod test_encapsulating_final_routing_information {
 #[cfg(test)]
 mod encrypting_routing_information {
     use super::*;
+    use crate::header::mac::header_integrity_mac_fixture;
     use crate::route::node_address_fixture;
     use crate::utils::crypto::STREAM_CIPHER_KEY_SIZE;
 
@@ -724,8 +709,12 @@ mod encrypting_routing_information {
         let mac = header_integrity_mac_fixture();
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
 
-        let encryption_data =
-            [address.to_vec(), mac.value.to_vec(), next_routing.to_vec()].concat();
+        let encryption_data = [
+            address.to_vec(),
+            mac.get_value_ref().to_vec(),
+            next_routing.to_vec(),
+        ]
+        .concat();
 
         let routing_information = RoutingInformation {
             node_address: address,
@@ -761,40 +750,6 @@ mod truncating_routing_information {
     }
 }
 
-#[cfg(test)]
-mod computing_integrity_mac {
-    use super::*;
-    use crate::constants::INTEGRITY_MAC_KEY_SIZE;
-
-    #[test]
-    fn it_is_possible_to_verify_correct_mac() {
-        let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
-        let integrity_mac = HeaderIntegrityMac::compute(key, &data);
-
-        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-        computed_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
-        assert_eq!(computed_mac, integrity_mac.value);
-    }
-
-    #[test]
-    fn it_lets_detecting_flipped_data_bits() {
-        let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let mut data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
-        let integrity_mac = HeaderIntegrityMac::compute(key, &data);
-        data[10] = !data[10];
-        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-        computed_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
-        assert_ne!(computed_mac, integrity_mac.value);
-    }
-}
-
-pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
-    HeaderIntegrityMac {
-        value: [6u8; HEADER_INTEGRITY_MAC_SIZE],
-    }
-}
-
 pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
     EncryptedRoutingInformation {
         value: [5u8; ENCRYPTED_ROUTING_INFO_SIZE],
@@ -804,6 +759,6 @@ pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
 pub fn encapsulated_routing_information_fixture() -> EncapsulatedRoutingInformation {
     EncapsulatedRoutingInformation {
         enc_routing_information: encrypted_routing_information_fixture(),
-        integrity_mac: header_integrity_mac_fixture(),
+        integrity_mac: header::mac::header_integrity_mac_fixture(),
     }
 }

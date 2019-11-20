@@ -7,6 +7,7 @@ use crate::utils::crypto;
 pub mod delays;
 pub mod filler;
 pub mod keys;
+pub mod mac;
 pub mod routing;
 
 pub struct SphinxHeader {
@@ -28,7 +29,7 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     )
     .unwrap();
 
-    // encapsulate routing information, compute MACs
+    // encapsulate header.routing information, compute MACs
     (
         SphinxHeader {
             shared_secret: key_material.initial_shared_secret,
