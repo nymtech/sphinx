@@ -12,8 +12,8 @@ use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
-    ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
-pub const ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+    ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
+pub const ENCRYPTED_ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
 #[derive(Debug)]
 pub enum RoutingEncapsulationError {
@@ -166,7 +166,7 @@ impl RoutingInformation {
 
     fn encrypt(self, key: StreamCipherKey) -> EncryptedRoutingInformation {
         let routing_info_components = self.concatenate_components();
-        assert_eq!(ROUTING_INFO_SIZE, routing_info_components.len());
+        assert_eq!(ENCRYPTED_ROUTING_INFO_SIZE, routing_info_components.len());
 
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &key,
@@ -176,10 +176,10 @@ impl RoutingInformation {
 
         let encrypted_routing_info_vec = utils::bytes::xor(
             &routing_info_components,
-            &pseudorandom_bytes[..ROUTING_INFO_SIZE],
+            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
         );
 
-        let mut encrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
+        let mut encrypted_routing_info = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
         EncryptedRoutingInformation {
             value: encrypted_routing_info,
@@ -189,7 +189,7 @@ impl RoutingInformation {
 
 // result of xoring beta with rho (output of PRNG)
 pub struct EncryptedRoutingInformation {
-    value: [u8; ROUTING_INFO_SIZE],
+    value: [u8; ENCRYPTED_ROUTING_INFO_SIZE],
 }
 
 impl EncryptedRoutingInformation {
@@ -199,7 +199,7 @@ impl EncryptedRoutingInformation {
         truncated_routing_info
     }
 
-    fn get_value(self) -> [u8; ROUTING_INFO_SIZE] {
+    fn get_value(self) -> [u8; ENCRYPTED_ROUTING_INFO_SIZE] {
         self.value
     }
 
@@ -316,9 +316,10 @@ impl EncryptedPaddedFinalRoutingInformation {
             self.value.iter().cloned().chain(filler_value).collect();
 
         // sanity check assertion, because we're using vectors
-        assert_eq!(final_routing_info_vec.len(), ROUTING_INFO_SIZE);
-        let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
-        final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
+        assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);
+        let mut final_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        final_routing_information
+            .copy_from_slice(&final_routing_info_vec[..ENCRYPTED_ROUTING_INFO_SIZE]);
         EncryptedRoutingInformation {
             value: final_routing_information,
         }
@@ -566,7 +567,7 @@ mod preparing_header_layer {
 
         let expected_encrypted_routing_info_vec = utils::bytes::xor(
             &concatenated_materials,
-            &pseudorandom_bytes[..ROUTING_INFO_SIZE],
+            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
         );
 
         let mut expected_routing_mac = crypto::compute_keyed_hmac(
@@ -766,7 +767,7 @@ mod encrypting_routing_information {
             &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
-        let decryption_key = &decryption_key_source[..ROUTING_INFO_SIZE];
+        let decryption_key = &decryption_key_source[..ENCRYPTED_ROUTING_INFO_SIZE];
         let decrypted_data = utils::bytes::xor(&encrypted_data.value, decryption_key);
         assert_eq!(encryption_data, decrypted_data);
     }
@@ -796,7 +797,7 @@ mod computing_integrity_mac {
     #[test]
     fn it_is_possible_to_verify_correct_mac() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let data = vec![3u8; ROUTING_INFO_SIZE];
+        let data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let integrity_mac = HeaderIntegrityMac::compute(key, &data);
 
         let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
@@ -807,7 +808,7 @@ mod computing_integrity_mac {
     #[test]
     fn it_lets_detecting_flipped_data_bits() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let mut data = vec![3u8; ROUTING_INFO_SIZE];
+        let mut data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let integrity_mac = HeaderIntegrityMac::compute(key, &data);
         data[10] = !data[10];
         let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
@@ -824,7 +825,7 @@ pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
 
 pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
     EncryptedRoutingInformation {
-        value: [5u8; ROUTING_INFO_SIZE],
+        value: [5u8; ENCRYPTED_ROUTING_INFO_SIZE],
     }
 }
 

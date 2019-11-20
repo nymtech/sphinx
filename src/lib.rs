@@ -3,7 +3,7 @@
 
 use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 use crate::header::keys;
-use crate::header::routing::ROUTING_INFO_SIZE;
+use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
 
 use constants::HEADER_INTEGRITY_MAC_SIZE;
 
