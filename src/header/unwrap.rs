@@ -14,7 +14,7 @@ use crate::utils::crypto;
 use crate::Hop;
 
 pub fn unwrap_routing_information(
-    header: SphinxHeader,
+    enc_routing_information: EncryptedRoutingInformation,
     stream_cipher_key: StreamCipherKey,
 ) -> (
     [u8; NODE_ADDRESS_LENGTH],
@@ -22,9 +22,7 @@ pub fn unwrap_routing_information(
     [u8; ROUTING_INFO_SIZE],
 ) {
     // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
-    let decrypted_routing_information = header
-        .routing_info
-        .enc_routing_information
+    let decrypted_routing_information = enc_routing_information
         .add_zero_padding()
         .decrypt(stream_cipher_key);
 
@@ -58,6 +56,53 @@ fn parse_decrypted_routing_information(
         next_hop_integrity_mac,
         next_hop_encrypted_routing_information,
     )
+}
+
+#[cfg(test)]
+mod unwrap_routing_information {
+    use super::*;
+
+    #[test]
+    fn it_returns_correct_unwrapped_routing_information() {
+        let routing_info = [9u8; ROUTING_INFO_SIZE];
+        let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &stream_cipher_key,
+            &crypto::STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
+        let encrypted_routing_info_vec =
+            utils::bytes::xor(&routing_info, &pseudorandom_bytes[..ROUTING_INFO_SIZE]);
+        let mut encrypted_routing_info = EncryptedRoutingInformation {
+            value: [0u8; ROUTING_INFO_SIZE],
+        };
+        encrypted_routing_info
+            .value
+            .copy_from_slice(&encrypted_routing_info_vec);
+
+        let expected_next_hop_encrypted_routing_information = [
+            routing_info[NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
+            pseudorandom_bytes
+                [NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ROUTING_INFO_SIZE..]
+                .to_vec(),
+        ]
+        .concat();
+        let (next_hop_addr, next_hop_integrity_mac, next_hop_encrypted_routing_information) =
+            unwrap_routing_information(encrypted_routing_info, stream_cipher_key);
+
+        assert_eq!(routing_info[..NODE_ADDRESS_LENGTH], next_hop_addr);
+        assert_eq!(
+            routing_info[NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
+            next_hop_integrity_mac
+        );
+
+        for i in 0..expected_next_hop_encrypted_routing_information.len() {
+            assert_eq!(
+                expected_next_hop_encrypted_routing_information[i],
+                next_hop_encrypted_routing_information[i]
+            );
+        }
+    }
 }
 
 #[cfg(test)]

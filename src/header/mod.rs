@@ -65,7 +65,10 @@ pub fn process_header(
     }
 
     let (next_hop_addr, next_hop_integrity_mac, next_hop_encrypted_routing_information) =
-        unwrap::unwrap_routing_information(header, routing_keys.stream_cipher_key);
+        unwrap::unwrap_routing_information(
+            header.routing_info.enc_routing_information,
+            routing_keys.stream_cipher_key,
+        );
     Ok((
         EncapsulatedRoutingInformation {
             enc_routing_information: EncryptedRoutingInformation {

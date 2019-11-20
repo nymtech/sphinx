@@ -366,7 +366,7 @@ impl EncryptedPaddedFinalRoutingInformation {
         let mut final_routing_information = [0u8; ROUTING_INFO_SIZE];
         final_routing_information.copy_from_slice(&final_routing_info_vec[..ROUTING_INFO_SIZE]);
         EncryptedRoutingInformation {
-            value: [0u8; ROUTING_INFO_SIZE],
+            value: [0u8; ROUTING_INFO_SIZE], //should be final_routing_information
         }
     }
 }
