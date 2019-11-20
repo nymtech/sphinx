@@ -1,15 +1,16 @@
 //#![feature(test)]
 //extern crate test;
 
-use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 use crate::header::keys;
-use crate::header::routing::ROUTING_INFO_SIZE;
+use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+use crate::route::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 
 use constants::HEADER_INTEGRITY_MAC_SIZE;
 
 mod constants;
 mod header;
 mod payload;
+mod route;
 mod utils;
 
 pub struct SphinxPacket {
@@ -46,7 +47,7 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
         },
         Hop {
             host: RouteElement::ForwardHop(MixNode {
-                address: header::header::node_address_fixture(),
+                address: route::node_address_fixture(),
                 pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
             }),
             delay: 0.0,

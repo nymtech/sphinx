@@ -1,8 +1,6 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
 use crate::utils::crypto;
 
-// I think everything from below here should be moved to main sphinx file or perhaps to something for route
-
 #[derive(Clone)]
 pub enum RouteElement {
     FinalHop(Destination),
