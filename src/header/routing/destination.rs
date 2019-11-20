@@ -3,11 +3,18 @@ use crate::constants::{
 };
 use crate::header::filler::Filler;
 use crate::header::keys::StreamCipherKey;
-use crate::header::routing::{EncryptedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
+use crate::header::routing::nodes::EncryptedRoutingInformation;
+use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
+
+// this is going through the following transformations:
+/*
+    FinalRoutingInformation -> PaddedFinalRoutingInformation -> EncryptedPaddedFinalRoutingInformation ->
+    Encrypted Padded Destination with Filler - this can be treated as EncryptedRoutingInformation
+*/
 
 // TODO: perhaps add route_len to all final_routing_info related structs to simplify everything?
 // because it seems weird that say 'encrypt' requires route_len argument
@@ -112,9 +119,7 @@ impl EncryptedPaddedFinalRoutingInformation {
         let mut final_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         final_routing_information
             .copy_from_slice(&final_routing_info_vec[..ENCRYPTED_ROUTING_INFO_SIZE]);
-        EncryptedRoutingInformation {
-            value: final_routing_information,
-        }
+        EncryptedRoutingInformation::from_bytes(final_routing_information)
     }
 }
 
@@ -173,7 +178,7 @@ mod test_encapsulating_final_routing_information_and_mac {
 
         let expected_mac = HeaderIntegrityMac::compute(
             routing_keys.last().unwrap().header_integrity_hmac_key,
-            &final_routing_info.enc_routing_information.value,
+            &final_routing_info.enc_routing_information.get_value_ref(),
         );
         assert_eq!(
             expected_mac.get_value(),
@@ -204,7 +209,10 @@ mod test_encapsulating_final_routing_information {
 
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
-        assert_eq!(expected_final_header_len, final_routing_header.value.len());
+        assert_eq!(
+            expected_final_header_len,
+            final_routing_header.get_value_ref().len()
+        );
     }
 
     #[test]
@@ -222,7 +230,10 @@ mod test_encapsulating_final_routing_information {
 
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
-        assert_eq!(expected_final_header_len, final_routing_header.value.len());
+        assert_eq!(
+            expected_final_header_len,
+            final_routing_header.get_value_ref().len()
+        );
     }
 
     #[test]
@@ -240,7 +251,10 @@ mod test_encapsulating_final_routing_information {
 
         let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
-        assert_eq!(expected_final_header_len, final_routing_header.value.len());
+        assert_eq!(
+            expected_final_header_len,
+            final_routing_header.get_value_ref().len()
+        );
     }
 
     #[test]
