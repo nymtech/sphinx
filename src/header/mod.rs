@@ -1,6 +1,6 @@
 use crate::constants::NODE_ADDRESS_LENGTH;
 use crate::header::filler::Filler;
-use crate::header::header::RouteElement;
+use crate::header::header::{random_final_hop, MixNode, RouteElement};
 use crate::header::keys::PayloadKey;
 use crate::header::routing::{
     EncapsulatedRoutingInformation, EncryptedRoutingInformation, HeaderIntegrityMac,
@@ -31,7 +31,7 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     let initial_secret = crypto::generate_secret();
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
     let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
-    let filler_string = Filler::new(&key_material.routing_keys);
+    let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
     let routing_info = routing::EncapsulatedRoutingInformation::new(
         route,
         &key_material.routing_keys,
@@ -80,4 +80,28 @@ pub fn process_header(
         },
         next_hop_addr,
     ))
+}
+
+#[cfg(test)]
+mod create_and_process_sphinx_packet_header {
+    use super::*;
+
+    #[test]
+    fn it_returns_correct_routing_information_at_each_hop_for_route_of_4() {
+        let mixnode1 = RouteElement::ForwardHop(MixNode {
+            address: [5u8; NODE_ADDRESS_LENGTH],
+            pub_key: crypto::generate_random_curve_point(),
+        });
+        let mixnode2 = RouteElement::ForwardHop(MixNode {
+            address: [4u8; NODE_ADDRESS_LENGTH],
+            pub_key: crypto::generate_random_curve_point(),
+        });
+        let mixnode3 = RouteElement::ForwardHop(MixNode {
+            address: [2u8; NODE_ADDRESS_LENGTH],
+            pub_key: crypto::generate_random_curve_point(),
+        });
+        let finaldest = random_final_hop();
+        let route = [mixnode1, mixnode2, mixnode3, finaldest];
+        let (sphinx_header, payload_keys) = create(&route);
+    }
 }
