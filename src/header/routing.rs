@@ -24,6 +24,8 @@ pub enum RoutingEncapsulationError {
     UnequalRouteAndKeysError,
 }
 
+// the derivation is only required for the tests. please remove it in production
+#[derive(Clone)]
 pub struct EncapsulatedRoutingInformation {
     enc_routing_information: EncryptedRoutingInformation,
     integrity_mac: HeaderIntegrityMac,
@@ -107,6 +109,8 @@ impl EncapsulatedRoutingInformation {
 }
 
 // In paper gamma
+// the derivation is only required for the tests. please remove it in production
+#[derive(Clone)]
 pub struct HeaderIntegrityMac {
     value: [u8; HEADER_INTEGRITY_MAC_SIZE],
 }
@@ -181,6 +185,13 @@ impl RoutingInformation {
 
         let mut encrypted_routing_info = [0u8; ROUTING_INFO_SIZE];
         encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
+
+        dbg!(routing_info_components);
+        //        println!(
+        //            "before: {:?}; prng: {:?} after: {:?}",
+        //            routing_info_components, pseudorandom_bytes, encrypted_routing_info_vec
+        //        );
+
         EncryptedRoutingInformation {
             value: encrypted_routing_info,
         }
@@ -188,6 +199,8 @@ impl RoutingInformation {
 }
 
 // result of xoring beta with rho (output of PRNG)
+// the derivation is only required for the tests. please remove it in production
+#[derive(Clone)]
 pub struct EncryptedRoutingInformation {
     value: [u8; ROUTING_INFO_SIZE],
 }
@@ -387,38 +400,6 @@ mod encapsulating_all_routing_information {
 
         EncapsulatedRoutingInformation::new(&route, &keys, filler).unwrap();
     }
-
-    #[test]
-    fn it_returns_final_routing_information_for_route_of_length_1() {
-        let route_len = 1;
-        let final_keys = routing_keys_fixture();
-        let destination = random_final_hop();
-        let filler = filler_fixture(route_len - 1);
-        let filler_cpy = filler_fixture(route_len - 1); // required due to variable being moved
-                                                        // this is not a problem in actual implementation as filler is only used once
-        assert_eq!(filler, filler_cpy); // to make sure we detect change in our filler_fixture
-
-        let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
-            &destination,
-            &final_keys,
-            filler,
-            route_len,
-        )
-        .unwrap();
-
-        let route = vec![destination];
-        let routing_info =
-            EncapsulatedRoutingInformation::new(&route, &[final_keys], filler_cpy).unwrap();
-
-        assert_eq!(
-            final_routing_info.enc_routing_information.value.to_vec(),
-            routing_info.enc_routing_information.value.to_vec(),
-        );
-        assert_eq!(
-            final_routing_info.integrity_mac.value.to_vec(),
-            routing_info.integrity_mac.value.to_vec(),
-        );
-    }
 }
 
 #[cfg(test)]
@@ -454,16 +435,7 @@ mod encapsulating_forward_routing_information {
         )
         .unwrap();
 
-        // we need to make a copy of final routing info because they are consumed
-        // (and rightfully so) after encapsulation with further layers
-        // however, since we're using fixtures, we can just create the same data again
-        let final_routing_info_copy = EncapsulatedRoutingInformation::for_final_hop(
-            &route.last().unwrap(),
-            &routing_keys.last().unwrap(),
-            filler_copy,
-            route.len(),
-        )
-        .unwrap();
+        let final_routing_info_copy = final_routing_info.clone();
 
         // sanity check to make sure our 'copy' worked
         assert_eq!(
