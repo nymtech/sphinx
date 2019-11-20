@@ -1,7 +1,10 @@
+use crate::constants::NODE_ADDRESS_LENGTH;
 use crate::header::filler::Filler;
 use crate::header::header::RouteElement;
 use crate::header::keys::PayloadKey;
-use crate::header::routing::EncapsulatedRoutingInformation;
+use crate::header::routing::{
+    EncapsulatedRoutingInformation, EncryptedRoutingInformation, HeaderIntegrityMac,
+};
 use crate::utils::crypto;
 use crate::Hop;
 
@@ -53,7 +56,7 @@ pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
 pub fn process_header(
     header: SphinxHeader,
     routing_keys: &keys::RoutingKeys,
-) -> Result<(SphinxHeader, Hop), SphinxUnwrapError> {
+) -> Result<(EncapsulatedRoutingInformation, [u8; NODE_ADDRESS_LENGTH]), SphinxUnwrapError> {
     if !header.routing_info.integrity_mac.verify(
         routing_keys.header_integrity_hmac_key,
         header.routing_info.enc_routing_information.get_value_ref(),
@@ -61,18 +64,17 @@ pub fn process_header(
         return Err(SphinxUnwrapError::IntegrityMacError);
     }
 
-    let tmp = unwrap::unwrap_routing_information(header, routing_keys.stream_cipher_key);
+    let (next_hop_addr, next_hop_integrity_mac, next_hop_encrypted_routing_information) =
+        unwrap::unwrap_routing_information(header, routing_keys.stream_cipher_key);
     Ok((
-        SphinxHeader {
-            shared_secret: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-            routing_info: routing::encapsulated_routing_information_fixture(),
+        EncapsulatedRoutingInformation {
+            enc_routing_information: EncryptedRoutingInformation {
+                value: next_hop_encrypted_routing_information,
+            },
+            integrity_mac: HeaderIntegrityMac {
+                value: next_hop_integrity_mac,
+            },
         },
-        Hop {
-            host: header::RouteElement::ForwardHop(header::MixNode {
-                address: header::node_address_fixture(),
-                pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-            }),
-            delay: 0.0,
-        },
+        next_hop_addr,
     ))
 }

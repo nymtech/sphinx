@@ -111,7 +111,7 @@ impl EncapsulatedRoutingInformation {
 
 // In paper gamma
 pub struct HeaderIntegrityMac {
-    value: [u8; HEADER_INTEGRITY_MAC_SIZE],
+    pub value: [u8; HEADER_INTEGRITY_MAC_SIZE],
 }
 
 impl HeaderIntegrityMac {
@@ -201,7 +201,7 @@ impl RoutingInformation {
 
 // result of xoring beta with rho (output of PRNG)
 pub struct EncryptedRoutingInformation {
-    value: [u8; ROUTING_INFO_SIZE],
+    pub value: [u8; ROUTING_INFO_SIZE],
 }
 
 impl EncryptedRoutingInformation {
