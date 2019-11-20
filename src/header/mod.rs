@@ -7,6 +7,7 @@ use crate::header::routing::{
 };
 use crate::utils::crypto;
 use crate::Hop;
+use curve25519_dalek::scalar::Scalar;
 
 pub mod delays;
 pub mod filler;
@@ -27,8 +28,7 @@ pub enum SphinxUnwrapError {
 
 // needs client's secret key, how should we inject this?
 // needs to deal with SURBs too at some point
-pub fn create(route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
-    let initial_secret = crypto::generate_secret();
+pub fn create(initial_secret: Scalar, route: &[RouteElement]) -> (SphinxHeader, Vec<PayloadKey>) {
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
     let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
     let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
@@ -102,6 +102,17 @@ mod create_and_process_sphinx_packet_header {
         });
         let finaldest = random_final_hop();
         let route = [mixnode1, mixnode2, mixnode3, finaldest];
-        let (sphinx_header, payload_keys) = create(&route);
+
+        let initial_secret = crypto::generate_secret();
+        let (sphinx_header, payload_keys) = create(initial_secret, &route);
+
+        let key_material = keys::KeyMaterial::derive(&route, initial_secret);
+
+        let unwrapped_header = match process_header(sphinx_header, &key_material.routing_keys[0]) {
+            Err(error) => panic!("Something went wrong in header unwrapping {:?}", error),
+            Ok(unwrapped_header) => unwrapped_header,
+        };
+        // let (next_hop_encapsulated_routing_info, next_hop_addr) = unwrapped_header;
+        // assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr);
     }
 }

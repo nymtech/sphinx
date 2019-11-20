@@ -76,7 +76,7 @@ impl PartialEq for RoutingKeys {
 }
 
 pub struct KeyMaterial {
-    pub initial_shared_secret: crypto::SharedSecret,
+    pub initial_shared_secret: crypto::SharedSecret, // why this is here?
     pub routing_keys: Vec<RoutingKeys>,
 }
 
