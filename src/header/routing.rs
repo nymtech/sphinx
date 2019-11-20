@@ -3,10 +3,10 @@ use crate::constants::{
     SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::filler::Filler;
-use crate::header::header::{
+use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
+use crate::route::{
     Destination, DestinationAddressBytes, NodeAddressBytes, RouteElement, SURBIdentifier,
 };
-use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
@@ -345,8 +345,8 @@ impl EncryptedPaddedFinalRoutingInformation {
 #[cfg(test)]
 mod encapsulating_all_routing_information {
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{random_final_hop, random_forward_hop};
     use crate::header::keys::routing_keys_fixture;
+    use crate::route::{random_final_hop, random_forward_hop};
 
     use super::*;
 
@@ -406,8 +406,8 @@ mod encapsulating_all_routing_information {
 #[cfg(test)]
 mod encapsulating_forward_routing_information {
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{random_final_hop, random_forward_hop};
     use crate::header::keys::routing_keys_fixture;
+    use crate::route::{random_final_hop, random_forward_hop};
 
     use super::*;
 
@@ -500,8 +500,8 @@ mod encapsulating_forward_routing_information {
 
 #[cfg(test)]
 mod preparing_header_layer {
-    use crate::header::header::{node_address_fixture, MixNode};
     use crate::header::keys::routing_keys_fixture;
+    use crate::route::{node_address_fixture, MixNode};
 
     use super::*;
 
@@ -565,8 +565,8 @@ mod preparing_header_layer {
 mod test_encapsulating_final_routing_information_and_mac {
     use super::*;
     use crate::header::filler::filler_fixture;
-    use crate::header::header::{random_final_hop, random_forward_hop};
     use crate::header::keys::routing_keys_fixture;
+    use crate::route::{random_final_hop, random_forward_hop};
 
     #[test]
     #[should_panic]
@@ -625,8 +625,8 @@ mod test_encapsulating_final_routing_information_and_mac {
 mod test_encapsulating_final_routing_information {
     use super::*;
     use crate::header::filler::filler_fixture;
-    use crate::header::header::random_destination;
     use crate::header::keys::routing_keys_fixture;
+    use crate::route::random_destination;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
@@ -714,7 +714,7 @@ mod test_encapsulating_final_routing_information {
 #[cfg(test)]
 mod encrypting_routing_information {
     use super::*;
-    use crate::header::header::node_address_fixture;
+    use crate::route::node_address_fixture;
     use crate::utils::crypto::STREAM_CIPHER_KEY_SIZE;
 
     #[test]
