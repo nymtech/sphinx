@@ -1,10 +1,11 @@
 use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH, MAX_PATH_LENGTH,
-    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER,
+    STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::header::filler::Filler;
 use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
+use crate::header::routing::destination::FinalRoutingInformation;
 use crate::route::{
     Destination, DestinationAddressBytes, NodeAddressBytes, RouteElement, SURBIdentifier,
 };
@@ -15,6 +16,8 @@ use crate::{header, utils};
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
 pub const ENCRYPTED_ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+
+mod destination;
 
 #[derive(Debug)]
 pub enum RoutingEncapsulationError {
@@ -164,12 +167,6 @@ impl RoutingInformation {
         let mut encrypted_routing_info = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
 
-        dbg!(routing_info_components);
-        //        println!(
-        //            "before: {:?}; prng: {:?} after: {:?}",
-        //            routing_info_components, pseudorandom_bytes, encrypted_routing_info_vec
-        //        );
-
         EncryptedRoutingInformation {
             value: encrypted_routing_info,
         }
@@ -211,111 +208,6 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
     FinalRoutingInformation -> PaddedFinalRoutingInformation -> EncryptedPaddedFinalRoutingInformation ->
     Encrypted Padded Destination with Filler - this can be treated as EncryptedRoutingInformation
 */
-
-// TODO: perhaps add route_len to all final_routing_info related structs to simplify everything?
-// because it seems weird that say 'encrypt' requires route_len argument
-struct FinalRoutingInformation {
-    destination: DestinationAddressBytes,
-    // in paper delta
-    identifier: SURBIdentifier, // in paper I
-}
-
-impl FinalRoutingInformation {
-    // TODO: this should really return a Result in case the assertion failed
-    fn new(dest: &Destination, route_len: usize) -> Self {
-        assert!(dest.address.len() <= Self::max_destination_length(route_len));
-
-        Self {
-            destination: dest.address,
-            identifier: dest.identifier,
-        }
-    }
-
-    fn max_destination_length(route_len: usize) -> usize {
-        (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
-    }
-
-    fn max_padded_destination_identifier_length(route_len: usize) -> usize {
-        // this should evaluate to (3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER
-        Self::max_destination_length(route_len) + IDENTIFIER_LENGTH
-    }
-
-    fn add_padding(self, route_len: usize) -> PaddedFinalRoutingInformation {
-        // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
-        // attack on sphinx described by Kuhn et al.
-        let padding =
-            utils::bytes::random(Self::max_destination_length(route_len) - self.destination.len());
-
-        // return D || I || PAD
-        PaddedFinalRoutingInformation {
-            value: self
-                .destination
-                .iter()
-                .cloned()
-                .chain(self.identifier.iter().cloned())
-                .chain(padding.iter().cloned())
-                .collect(),
-        }
-    }
-}
-
-// in paper D || I || 0
-struct PaddedFinalRoutingInformation {
-    value: Vec<u8>,
-}
-
-impl PaddedFinalRoutingInformation {
-    fn encrypt(
-        self,
-        key: StreamCipherKey,
-        route_len: usize,
-    ) -> EncryptedPaddedFinalRoutingInformation {
-        assert_eq!(
-            FinalRoutingInformation::max_padded_destination_identifier_length(route_len),
-            self.value.len()
-        );
-
-        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-            &key,
-            &STREAM_CIPHER_INIT_VECTOR,
-            STREAM_CIPHER_OUTPUT_LENGTH,
-        );
-
-        EncryptedPaddedFinalRoutingInformation {
-            value: utils::bytes::xor(
-                &self.value,
-                &pseudorandom_bytes[..self.value.len()], // we already asserted it has correct length
-            ),
-        }
-    }
-}
-
-// in paper XOR ( (D || I || 0), rho(h_{rho}(s)) )
-struct EncryptedPaddedFinalRoutingInformation {
-    value: Vec<u8>,
-}
-
-impl EncryptedPaddedFinalRoutingInformation {
-    // technically it's not exactly EncryptedRoutingInformation
-    // as it's EncryptedPaddedFinalRoutingInformation with possibly concatenated filler string
-    // however, for all of our purposes, it behaves exactly like EncryptedRoutingInformation
-    fn combine_with_filler(self, filler: Filler, route_len: usize) -> EncryptedRoutingInformation {
-        let filler_value = filler.get_value();
-        assert_eq!(filler_value.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
-
-        let final_routing_info_vec: Vec<u8> =
-            self.value.iter().cloned().chain(filler_value).collect();
-
-        // sanity check assertion, because we're using vectors
-        assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);
-        let mut final_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
-        final_routing_information
-            .copy_from_slice(&final_routing_info_vec[..ENCRYPTED_ROUTING_INFO_SIZE]);
-        EncryptedRoutingInformation {
-            value: final_routing_information,
-        }
-    }
-}
 
 // TODO: all tests were retrofitted to work with new code structure,
 // they should be rewritten to work better with what we have now.
@@ -478,10 +370,10 @@ mod encapsulating_forward_routing_information {
 
 #[cfg(test)]
 mod preparing_header_layer {
+    use super::*;
+    use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
     use crate::header::keys::routing_keys_fixture;
     use crate::route::{node_address_fixture, MixNode};
-
-    use super::*;
 
     #[test]
     fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
