@@ -1,4 +1,6 @@
-use crate::constants::STREAM_CIPHER_OUTPUT_LENGTH;
+use crate::constants::{
+    HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+};
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
@@ -8,6 +10,9 @@ use crate::route::NodeAddressBytes;
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
+
+pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
+    ENCRYPTED_ROUTING_INFO_SIZE + NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
 
 // In paper beta
 pub(super) struct RoutingInformation {
@@ -73,7 +78,7 @@ pub struct EncryptedRoutingInformation {
 }
 
 impl EncryptedRoutingInformation {
-    pub(super) fn from_bytes(bytes: [u8; ENCRYPTED_ROUTING_INFO_SIZE]) -> Self {
+    pub fn from_bytes(bytes: [u8; ENCRYPTED_ROUTING_INFO_SIZE]) -> Self {
         Self { value: bytes }
     }
 
@@ -101,6 +106,36 @@ impl EncryptedRoutingInformation {
             integrity_mac,
         }
     }
+
+    pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
+        let zero_bytes = vec![0u8; 3 * SECURITY_PARAMETER];
+        let padded_enc_routing_info: Vec<u8> =
+            self.value.iter().cloned().chain(zero_bytes).collect();
+
+        assert_eq!(
+            PADDED_ENCRYPTED_ROUTING_INFO_SIZE,
+            padded_enc_routing_info.len()
+        );
+        PaddedEncryptedRoutingInformation {
+            value: padded_enc_routing_info,
+        }
+    }
+}
+
+pub struct PaddedEncryptedRoutingInformation {
+    value: Vec<u8>, //[u8; PADDED_ENCRYPTED_ROUTING_INFO_SIZE],
+}
+
+impl PaddedEncryptedRoutingInformation {
+    pub fn decrypt(self, key: StreamCipherKey) -> Vec<u8> {
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &key,
+            &crypto::STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
+
+        utils::bytes::xor(&self.value, &pseudorandom_bytes)
+    }
 }
 
 // result of truncating encrypted beta before passing it to next 'layer'
@@ -110,10 +145,10 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 mod preparing_header_layer {
     use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
     use crate::header::keys::routing_keys_fixture;
+    use crate::header::routing::encapsulated_routing_information_fixture;
     use crate::route::{node_address_fixture, Node};
 
     use super::*;
-    use crate::header::routing::encapsulated_routing_information_fixture;
 
     #[test]
     fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {

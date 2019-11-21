@@ -27,6 +27,19 @@ impl HeaderIntegrityMac {
     pub fn get_value_ref(&self) -> &[u8] {
         self.value.as_ref()
     }
+
+    pub fn verify(
+        &self,
+        integrity_mac_key: HeaderIntegrityMacKey,
+        enc_routing_info: &[u8],
+    ) -> bool {
+        let recomputed_integrity_mac = Self::compute(integrity_mac_key, enc_routing_info);
+        self.value == recomputed_integrity_mac.get_value()
+    }
+
+    pub fn from_bytes(bytes: [u8; HEADER_INTEGRITY_MAC_SIZE]) -> Self {
+        Self { value: bytes }
+    }
 }
 
 pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
@@ -37,9 +50,10 @@ pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
 
 #[cfg(test)]
 mod computing_integrity_mac {
-    use super::*;
     use crate::constants::INTEGRITY_MAC_KEY_SIZE;
     use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_verify_correct_mac() {
@@ -47,9 +61,7 @@ mod computing_integrity_mac {
         let data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let integrity_mac = HeaderIntegrityMac::compute(key, &data);
 
-        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-        computed_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
-        assert_eq!(computed_mac, integrity_mac.value);
+        assert!(integrity_mac.verify(key, &data));
     }
 
     #[test]
@@ -58,8 +70,6 @@ mod computing_integrity_mac {
         let mut data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let integrity_mac = HeaderIntegrityMac::compute(key, &data);
         data[10] = !data[10];
-        let mut computed_mac = crypto::compute_keyed_hmac(key.to_vec(), &data.to_vec());
-        computed_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
-        assert_ne!(computed_mac, integrity_mac.value);
+        assert!(!integrity_mac.verify(key, &data));
     }
 }

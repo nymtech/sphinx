@@ -26,6 +26,12 @@ pub fn generate_random_curve_point() -> MontgomeryPoint {
     CURVE_GENERATOR * generate_secret()
 }
 
+pub fn key_pair_fixture() -> (Scalar, MontgomeryPoint) {
+    let secret_key = generate_secret();
+    let public_key = CURVE_GENERATOR * secret_key;
+    (secret_key, public_key)
+}
+
 pub fn generate_pseudorandom_bytes(
     key: &[u8; STREAM_CIPHER_KEY_SIZE],
     iv: &[u8; STREAM_CIPHER_KEY_SIZE],

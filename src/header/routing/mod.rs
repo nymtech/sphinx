@@ -15,17 +15,27 @@ pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
 pub const ENCRYPTED_ROUTING_INFO_SIZE: usize = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
 
-mod destination;
-mod nodes;
+pub mod destination;
+pub mod nodes;
 
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]
 pub struct EncapsulatedRoutingInformation {
-    enc_routing_information: EncryptedRoutingInformation,
-    integrity_mac: HeaderIntegrityMac,
+    pub(crate) enc_routing_information: EncryptedRoutingInformation,
+    pub(crate) integrity_mac: HeaderIntegrityMac,
 }
 
 impl EncapsulatedRoutingInformation {
+    pub fn encapsulate(
+        enc_routing_information: EncryptedRoutingInformation,
+        integrity_mac: HeaderIntegrityMac,
+    ) -> Self {
+        Self {
+            enc_routing_information,
+            integrity_mac,
+        }
+    }
+
     pub fn new(
         route: &[Node],
         destination: &Destination,
