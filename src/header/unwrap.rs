@@ -9,9 +9,9 @@ use crate::header::routing::{
     EncryptedRoutingInformation, PaddedEncryptedRoutingInformation, ROUTING_INFO_SIZE,
 };
 use crate::header::SphinxHeader;
+use crate::Hop;
 use crate::utils;
 use crate::utils::crypto;
-use crate::Hop;
 
 pub fn unwrap_routing_information(
     enc_routing_information: EncryptedRoutingInformation,
@@ -86,7 +86,7 @@ mod unwrap_routing_information {
                 [NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ROUTING_INFO_SIZE..]
                 .to_vec(),
         ]
-        .concat();
+            .concat();
         let (next_hop_addr, next_hop_integrity_mac, next_hop_encrypted_routing_information) =
             unwrap_routing_information(encrypted_routing_info, stream_cipher_key);
 
@@ -107,9 +107,10 @@ mod unwrap_routing_information {
 
 #[cfg(test)]
 mod parse_decrypted_routing_information {
-    use super::*;
     use crate::header::header::node_address_fixture;
     use crate::header::routing::header_integrity_mac_fixture;
+
+    use super::*;
 
     #[test]
     fn it_returns_next_hop_addr_integrity_mac_enc_routing_info() {
@@ -122,7 +123,7 @@ mod parse_decrypted_routing_information {
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),
         ]
-        .concat();
+            .concat();
 
         let (a, b, c) = parse_decrypted_routing_information(data);
         assert_eq!(addr, a);

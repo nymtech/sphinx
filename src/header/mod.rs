@@ -8,6 +8,8 @@ use crate::header::routing::{
 use crate::utils::crypto;
 use crate::Hop;
 use curve25519_dalek::scalar::Scalar;
+use crate::utils::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
+
 
 pub mod delays;
 pub mod filler;
@@ -55,8 +57,14 @@ pub fn create(initial_secret: Scalar, route: &[RouteElement]) -> (SphinxHeader, 
 
 pub fn process_header(
     header: SphinxHeader,
-    routing_keys: &keys::RoutingKeys,
-) -> Result<(EncapsulatedRoutingInformation, [u8; NODE_ADDRESS_LENGTH]), SphinxUnwrapError> {
+    node_secret_key: Scalar,
+) -> Result<(SphinxHeader, [u8; NODE_ADDRESS_LENGTH], PayloadKey), SphinxUnwrapError> {
+
+    let shared_secret = header.shared_secret;
+    let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
+    let routing_keys = keys::RoutingKeys::derive(shared_key);
+    println!("Routing key while processing {:?}", routing_keys);
+
     if !header.routing_info.integrity_mac.verify(
         routing_keys.header_integrity_hmac_key,
         header.routing_info.enc_routing_information.get_value_ref(),
@@ -69,18 +77,43 @@ pub fn process_header(
             header.routing_info.enc_routing_information,
             routing_keys.stream_cipher_key,
         );
-    Ok((
-        EncapsulatedRoutingInformation {
-            enc_routing_information: EncryptedRoutingInformation {
-                value: next_hop_encrypted_routing_information,
-            },
-            integrity_mac: HeaderIntegrityMac {
-                value: next_hop_integrity_mac,
-            },
+
+    // blind the shared_secret in the header
+    let new_shared_secret = blind_the_shared_secret(shared_secret, shared_key);
+
+    let next_hop_encapsulated_routing_info = EncapsulatedRoutingInformation {
+        enc_routing_information: EncryptedRoutingInformation {
+            value: next_hop_encrypted_routing_information,
         },
+        integrity_mac: HeaderIntegrityMac {
+            value: next_hop_integrity_mac,
+        },
+    };
+    let new_header = SphinxHeader {
+            shared_secret: new_shared_secret,
+            routing_info: next_hop_encapsulated_routing_info,
+        };
+
+    Ok((
+        new_header,
         next_hop_addr,
+        routing_keys.payload_key,
     ))
 }
+
+
+fn blind_the_shared_secret(shared_secret: PublicKey, shared_key: SharedKey) -> PublicKey {
+    let hmac_full = compute_keyed_hmac(
+        shared_secret.to_bytes().to_vec(),
+        &shared_key.to_bytes().to_vec(),
+    );
+    let mut hmac = [0u8; 32];
+    hmac.copy_from_slice(&hmac_full[..32]);
+    let blidning_factor = Scalar::from_bytes_mod_order(hmac);
+    shared_secret * blidning_factor
+}
+
+
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
@@ -88,30 +121,32 @@ mod create_and_process_sphinx_packet_header {
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_4() {
-        let mixnode1 = RouteElement::ForwardHop(MixNode {
+        let (node1_sk, node1_pk)= crypto::key_pair_fixture();
+        let node1 = RouteElement::ForwardHop(MixNode {
             address: [5u8; NODE_ADDRESS_LENGTH],
-            pub_key: crypto::generate_random_curve_point(),
+            pub_key: node1_pk,
         });
-        let mixnode2 = RouteElement::ForwardHop(MixNode {
+        let (node2_sk, node2_pk)= crypto::key_pair_fixture();
+        let node2 = RouteElement::ForwardHop(MixNode {
             address: [4u8; NODE_ADDRESS_LENGTH],
-            pub_key: crypto::generate_random_curve_point(),
+            pub_key: node2_pk,
         });
-        let mixnode3 = RouteElement::ForwardHop(MixNode {
+        let (node3_sk, node3_pk)= crypto::key_pair_fixture();
+        let node3 = RouteElement::ForwardHop(MixNode {
             address: [2u8; NODE_ADDRESS_LENGTH],
-            pub_key: crypto::generate_random_curve_point(),
+            pub_key: node3_pk,
         });
-        let finaldest = random_final_hop();
-        let route = [mixnode1, mixnode2, mixnode3, finaldest];
+        let finalnode = random_final_hop();
+        let route = [node1, node2, node3, finalnode];
 
         let initial_secret = crypto::generate_secret();
         let (sphinx_header, payload_keys) = create(initial_secret, &route);
 
-        let key_material = keys::KeyMaterial::derive(&route, initial_secret);
 
-        let unwrapped_header = match process_header(sphinx_header, &key_material.routing_keys[0]) {
-            Err(error) => panic!("Something went wrong in header unwrapping {:?}", error),
-            Ok(unwrapped_header) => unwrapped_header,
-        };
+//        let unwrapped_header = match process_header(sphinx_header, node1_sk) {
+//            Err(error) => panic!("Something went wrong in header unwrapping {:?}", error),
+//            Ok(unwrapped_header) => unwrapped_header,
+//        };
         // let (next_hop_encapsulated_routing_info, next_hop_addr) = unwrapped_header;
         // assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr);
     }

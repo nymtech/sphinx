@@ -4,7 +4,6 @@
 use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
 use crate::header::keys;
 use crate::header::routing::ROUTING_INFO_SIZE;
-use crate::utils::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use constants::{HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH};
 use curve25519_dalek::scalar::Scalar;
 
@@ -46,45 +45,26 @@ pub fn process_packet(
     node_secret_key: Scalar,
 ) -> (SphinxPacket, [u8; NODE_ADDRESS_LENGTH]) {
     //-> Result<(SphinxPacket, Hop), SphinxUnwrapError> {
-    let shared_secret = packet.header.shared_secret;
-    let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
     // TODO: we should have some list of 'seens shared_keys' for replay detection, but this should be handeled by a mix node
-    let routing_keys = keys::RoutingKeys::derive(shared_key);
 
-    let unwrapped_header = match header::process_header(packet.header, &routing_keys) {
+    let unwrapped_header = match header::process_header(packet.header, node_secret_key) {
         Err(error) => panic!("Something went wrong in header unwrapping {:?}", error),
         Ok(unwrapped_header) => unwrapped_header,
     };
-    let (next_hop_encapsulated_routing_info, next_hop_addr) = unwrapped_header;
+    let (new_header, next_hop_addr, payload_key) = unwrapped_header;
 
     // process the payload
-    let unwrapped_payload =
-        unwrap_payload::unwrap_payload(packet.payload, &routing_keys.payload_key);
+    let new_payload =
+        unwrap_payload::unwrap_payload(packet.payload, &payload_key);
 
-    // blind the shared_secret in the header
-    let new_shared_secret = blind_the_shared_secret(shared_secret, shared_key);
 
     (
         SphinxPacket {
-            header: header::SphinxHeader {
-                shared_secret: new_shared_secret,
-                routing_info: next_hop_encapsulated_routing_info,
-            },
-            payload: unwrapped_payload,
+            header: new_header,
+            payload: new_payload,
         },
         next_hop_addr,
     )
-}
-
-fn blind_the_shared_secret(shared_secret: PublicKey, shared_key: SharedKey) -> PublicKey {
-    let hmac_full = compute_keyed_hmac(
-        shared_secret.to_bytes().to_vec(),
-        &shared_key.to_bytes().to_vec(),
-    );
-    let mut hmac = [0u8; 32];
-    hmac.copy_from_slice(&hmac_full[..32]);
-    let blidning_factor = Scalar::from_bytes_mod_order(hmac);
-    shared_secret * blidning_factor
 }
 
 // #[cfg(test)]
