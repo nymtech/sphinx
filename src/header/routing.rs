@@ -10,7 +10,6 @@ use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
-use std::borrow::Borrow;
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;

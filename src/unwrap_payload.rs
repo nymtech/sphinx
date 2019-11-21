@@ -8,7 +8,7 @@ pub fn unwrap_payload(enc_payload: Vec<u8>, payload_key: &PayloadKey) -> Vec<u8>
     let mut new_payload = enc_payload;
     let lioness_cipher =
         Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_key, 0, RAW_KEY_SIZE));
-    lioness_cipher.decrypt(&mut new_payload);
+    lioness_cipher.decrypt(&mut new_payload).unwrap();
     new_payload
 }
 
