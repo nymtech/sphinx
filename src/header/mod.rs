@@ -35,7 +35,7 @@ pub fn create(
     destination: &Destination,
 ) -> (SphinxHeader, Vec<PayloadKey>) {
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
-    let delays = delays::generate(route.len() - 1); // we don't generate delay for the destination
+    let delays = delays::generate(route.len()); // we don't generate delay for the destination
     let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
     let routing_info = routing::EncapsulatedRoutingInformation::new(
         route,
@@ -65,7 +65,6 @@ pub fn process_header(
     let shared_secret = header.shared_secret;
     let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
     let routing_keys = keys::RoutingKeys::derive(shared_key);
-    println!("Routing key while processing {:?}", routing_keys);
 
     if !header.routing_info.integrity_mac.verify(
         routing_keys.header_integrity_hmac_key,
@@ -112,7 +111,7 @@ mod create_and_process_sphinx_packet_header {
     use crate::route::destination_fixture;
 
     #[test]
-    fn it_returns_correct_routing_information_at_each_hop_for_route_of_4() {
+    fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
         let (node1_sk, node1_pk) = crypto::key_pair_fixture();
         let node1 = Node {
             address: [5u8; NODE_ADDRESS_LENGTH],
@@ -133,11 +132,13 @@ mod create_and_process_sphinx_packet_header {
         let initial_secret = crypto::generate_secret();
         let (sphinx_header, payload_keys) = create(initial_secret, &route, &destination);
 
-        //        let unwrapped_header = match process_header(sphinx_header, node1_sk) {
-        //            Err(error) => panic!("Something went wrong in header unwrapping {:?}", error),
-        //            Ok(unwrapped_header) => unwrapped_header,
-        //        };
-        // let (next_hop_encapsulated_routing_info, next_hop_addr) = unwrapped_header;
-        // assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr);
+        let (new_header, next_hop_addr, _) = process_header(sphinx_header, node1_sk).unwrap();
+        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr);
+
+        let (new_header2, next_hop_addr2, _) = process_header(new_header, node2_sk).unwrap();
+        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
+
+        let (new_header3, next_hop_addr3, _) = process_header(new_header2, node3_sk).unwrap();
+        assert_eq!(destination.address, next_hop_addr3);
     }
 }
