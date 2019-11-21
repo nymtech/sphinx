@@ -34,7 +34,7 @@ pub fn create(
     destination: &Destination,
 ) -> (SphinxHeader, Vec<PayloadKey>) {
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
-    let delays = delays::generate(route.len()); // we don't generate delay for the destination
+    let delays = delays::generate(route.len());
     let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
     let routing_info = routing::EncapsulatedRoutingInformation::new(
         route,
