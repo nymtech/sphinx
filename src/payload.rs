@@ -1,6 +1,6 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, SECURITY_PARAMETER};
-use crate::header::header::DestinationAddressBytes;
 use crate::header::keys::PayloadKey;
+use crate::route::{Destination, DestinationAddressBytes};
 use arrayref::array_ref;
 use blake2::VarBlake2b; // we might want to swap this one with a different implementation
 use chacha::ChaCha;
@@ -65,8 +65,8 @@ fn encapsulate_payload(
 #[cfg(test)]
 mod test_encrypting_final_payload {
     use super::*;
-    use crate::header::header::destination_address_fixture;
     use crate::header::keys::routing_keys_fixture;
+    use crate::route::destination_address_fixture;
 
     #[test]
     fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
@@ -88,8 +88,8 @@ mod test_encrypting_final_payload {
 mod test_encapsulating_payload {
     use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
-    use crate::header::header::destination_address_fixture;
     use crate::header::keys::RoutingKeys;
+    use crate::route::destination_address_fixture;
     use crate::utils::crypto;
     #[test]
     fn always_both_input_and_output_are_the_same_length() {

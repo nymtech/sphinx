@@ -1,7 +1,7 @@
 use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
-use crate::header::header::RouteElement;
+use crate::route::Node;
 use crate::utils::crypto;
 use crate::utils::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
 use curve25519_dalek::scalar::Scalar;
@@ -82,23 +82,16 @@ pub struct KeyMaterial {
 
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
-    pub fn derive(route: &[RouteElement], initial_secret: Scalar) -> Self {
+    pub fn derive(route: &[Node], initial_secret: Scalar) -> Self {
         let initial_shared_secret = CURVE_GENERATOR * initial_secret;
 
         let routing_keys = route
             .iter()
-            .scan(initial_secret, |accumulator, route_element| {
-                let shared_key =
-                    Self::compute_shared_key(route_element.get_pub_key(), &accumulator);
+            .scan(initial_secret, |accumulator, node| {
+                let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
 
-                // last element in the route should be the destination and hence don't compute blinding factor
-                // or increment the iterator
-                match route_element {
-                    RouteElement::ForwardHop(_) => {
-                        *accumulator *= Self::compute_blinding_factor(shared_key, &accumulator)
-                    }
-                    RouteElement::FinalHop(_) => (),
-                }
+                // TODO: if we're on last iteration, do NOT compute_blinding_factor (no need for it)
+                *accumulator *= Self::compute_blinding_factor(shared_key, &accumulator);
 
                 Some(shared_key)
             })
@@ -164,31 +157,11 @@ mod computing_blinding_factor {
         assert_eq!(expected_blinding_factor, blinding_factor)
     }
 }
-
+//
 #[cfg(test)]
 mod deriving_key_material {
     use super::*;
-    use crate::header::header::{
-        node_address_fixture, surb_identifier_fixture, Destination, MixNode,
-    };
-
-    fn new_route_forward_hop(pub_key: crypto::PublicKey) -> RouteElement {
-        RouteElement::ForwardHop(MixNode {
-            address: node_address_fixture(),
-            pub_key,
-        })
-    }
-
-    fn new_route_final_hop(
-        pub_key: crypto::PublicKey,
-        address: crate::header::header::DestinationAddressBytes,
-    ) -> RouteElement {
-        RouteElement::FinalHop(Destination {
-            pub_key,
-            address,
-            identifier: surb_identifier_fixture(),
-        })
-    }
+    use crate::route::{node_address_fixture, surb_identifier_fixture, Destination, Node};
 
     #[cfg(test)]
     mod with_an_empty_route {
@@ -196,7 +169,7 @@ mod deriving_key_material {
 
         #[test]
         fn it_returns_no_routing_keys() {
-            let empty_route: Vec<RouteElement> = vec![];
+            let empty_route: Vec<Node> = vec![];
             let initial_secret = crypto::generate_secret();
             let key_material = KeyMaterial::derive(&empty_route, initial_secret);
             assert_eq!(0, key_material.routing_keys.len());
@@ -208,183 +181,12 @@ mod deriving_key_material {
     }
 
     #[cfg(test)]
-    mod for_a_route_with_no_forward_hops_and_a_destination {
+    mod for_a_route_with_3_forward_hops {
         use super::*;
-        use crate::header::header::destination_address_fixture;
+        use crate::route::random_node;
 
-        fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
-            let route: Vec<RouteElement> = vec![new_route_final_hop(
-                crypto::generate_random_curve_point(),
-                destination_address_fixture(),
-            )];
-            let initial_secret = crypto::generate_secret();
-            let key_material = KeyMaterial::derive(&route, initial_secret);
-            (route, initial_secret, key_material)
-        }
-
-        #[test]
-        fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
-            let (route, _, key_material) = setup();
-            assert_eq!(route.len(), key_material.routing_keys.len())
-        }
-
-        #[test]
-        fn it_returns_correctly_inited_shared_secret() {
-            let (_, initial_secret, key_material) = setup();
-            assert_eq!(
-                CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
-            )
-        }
-
-        #[test]
-        fn it_generates_correct_routing_keys() {
-            let (route, initial_secret, key_material) = setup();
-            // The accumulator is the key to our blinding factors working.
-            // If the accumulator value isn't incremented correctly, we risk passing an
-            // incorrectly blinded shared key through the mixnet in the (unencrypted)
-            // Sphinx packet header. So this test ensures that the accumulator gets incremented
-            // properly on each run through the loop.
-            let mut expected_accumulator = initial_secret;
-            for i in 0..route.len() {
-                let expected_shared_key =
-                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder = KeyMaterial::compute_blinding_factor(
-                    expected_shared_key,
-                    &expected_accumulator,
-                );
-                expected_accumulator *= &expected_blinder;
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
-
-                assert_eq!(expected_routing_keys, key_material.routing_keys[i])
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod for_a_route_with_1_forward_hops_and_a_destination {
-        use super::*;
-        use crate::header::header::destination_address_fixture;
-
-        fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
-            let route: Vec<RouteElement> = vec![
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_final_hop(
-                    crypto::generate_random_curve_point(),
-                    destination_address_fixture(),
-                ),
-            ];
-            let initial_secret = crypto::generate_secret();
-            let key_material = KeyMaterial::derive(&route, initial_secret);
-            (route, initial_secret, key_material)
-        }
-
-        #[test]
-        fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
-            let (_, _, key_material) = setup();
-            assert_eq!(2, key_material.routing_keys.len());
-        }
-
-        #[test]
-        fn it_returns_correctly_inited_shared_secret() {
-            let (_, initial_secret, key_material) = setup();
-            assert_eq!(
-                CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
-            );
-        }
-
-        #[test]
-        fn it_generates_correct_routing_keys() {
-            let (route, initial_secret, key_material) = setup();
-            // The accumulator is the key to our blinding factors working.
-            // If the accumulator value isn't incremented correctly, we risk passing an
-            // incorrectly blinded shared key through the mixnet in the (unencrypted)
-            // Sphinx packet header. So this test ensures that the accumulator gets incremented
-            // properly on each run through the loop.
-            let mut expected_accumulator = initial_secret;
-            for i in 0..route.len() {
-                let expected_shared_key =
-                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder = KeyMaterial::compute_blinding_factor(
-                    expected_shared_key,
-                    &expected_accumulator,
-                );
-                expected_accumulator *= &expected_blinder;
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
-                assert_eq!(expected_routing_keys, key_material.routing_keys[i])
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod for_a_route_with_3_forward_hops_and_a_destination {
-        use super::*;
-        use crate::header::header::destination_address_fixture;
-
-        fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
-            let route: Vec<RouteElement> = vec![
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_final_hop(
-                    crypto::generate_random_curve_point(),
-                    destination_address_fixture(),
-                ),
-            ];
-            let initial_secret = crypto::generate_secret();
-            let key_material = KeyMaterial::derive(&route, initial_secret);
-            (route, initial_secret, key_material)
-        }
-
-        #[test]
-        fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
-            let (_, _, key_material) = setup();
-            assert_eq!(4, key_material.routing_keys.len());
-        }
-
-        #[test]
-        fn it_returns_correctly_inited_shared_secret() {
-            let (_, initial_secret, key_material) = setup();
-            assert_eq!(
-                CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
-            );
-        }
-
-        #[test]
-        fn it_generates_correct_routing_keys() {
-            let (route, initial_secret, key_material) = setup();
-            // The accumulator is the key to our blinding factors working.
-            // If the accumulator value isn't incremented correctly, we risk passing an
-            // incorrectly blinded shared key through the mixnet in the (unencrypted)
-            // Sphinx packet header. So this test ensures that the accumulator gets incremented
-            // properly on each run through the loop.
-            let mut expected_accumulator = initial_secret;
-            for i in 0..4 {
-                let expected_shared_key =
-                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
-                let expected_blinder = KeyMaterial::compute_blinding_factor(
-                    expected_shared_key,
-                    &expected_accumulator,
-                );
-                expected_accumulator *= &expected_blinder;
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
-                assert_eq!(expected_routing_keys, key_material.routing_keys[i])
-            }
-        }
-    }
-
-    #[cfg(test)]
-    mod for_a_route_with_3_forward_hops_and_no_destination {
-        use super::*;
-
-        fn setup() -> (Vec<RouteElement>, Scalar, KeyMaterial) {
-            let route: Vec<RouteElement> = vec![
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-                new_route_forward_hop(crypto::generate_random_curve_point()),
-            ];
+        fn setup() -> (Vec<Node>, Scalar, KeyMaterial) {
+            let route: Vec<Node> = vec![random_node(), random_node(), random_node()];
             let initial_secret = crypto::generate_secret();
             let key_material = KeyMaterial::derive(&route, initial_secret);
             (route, initial_secret, key_material)
@@ -416,7 +218,7 @@ mod deriving_key_material {
             let mut expected_accumulator = initial_secret;
             for i in 0..3 {
                 let expected_shared_key =
-                    KeyMaterial::compute_shared_key(route[i].get_pub_key(), &expected_accumulator);
+                    KeyMaterial::compute_shared_key(route[i].pub_key, &expected_accumulator);
                 let expected_blinder = KeyMaterial::compute_blinding_factor(
                     expected_shared_key,
                     &expected_accumulator,

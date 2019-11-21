@@ -16,8 +16,9 @@ pub fn unwrap_payload(enc_payload: Vec<u8>, payload_key: &PayloadKey) -> Vec<u8>
 mod test_unwrapping_payload {
     use super::*;
     use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
-    use crate::header::header::destination_address_fixture;
     use crate::payload::create;
+    use crate::route::destination_address_fixture;
+
     #[test]
     fn unwraping_results_in_original_payload_plaintext() {
         let message = vec![1u8, 16];

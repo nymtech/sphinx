@@ -192,6 +192,6 @@ mod test_generating_filler_bytes {
 
 pub fn filler_fixture(i: usize) -> Filler {
     Filler {
-        value: vec![0u8; 3 * SECURITY_PARAMETER * i],
+        value: vec![9u8; 3 * SECURITY_PARAMETER * i],
     }
 }

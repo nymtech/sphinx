@@ -1,15 +1,16 @@
 //#![feature(test)]
 //extern crate test;
 
-use crate::header::header::{random_final_hop, random_forward_hop, MixNode, RouteElement};
-use crate::header::keys;
-use crate::header::routing::ROUTING_INFO_SIZE;
-use constants::{HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH};
 use curve25519_dalek::scalar::Scalar;
+
+use constants::{HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH};
+
+use crate::route::{node_address_fixture, Destination, Node};
 
 mod constants;
 mod header;
 mod payload;
+mod route;
 mod unwrap_payload;
 mod utils;
 
@@ -21,20 +22,17 @@ pub struct SphinxPacket {
 pub fn create_packet(
     initial_secret: Scalar,
     message: Vec<u8>,
-    route: &[RouteElement],
+    route: &[Node],
+    destination: &Destination,
 ) -> SphinxPacket {
-    let (header, payload_keys) = header::create(initial_secret, route);
-    let destination = match route.last().expect("The route should not be empty") {
-        RouteElement::FinalHop(destination) => destination,
-        _ => panic!("The last route element must be a destination"),
-    };
+    let (header, payload_keys) = header::create(initial_secret, route, destination);
     let payload = payload::create(&message, payload_keys, destination.address);
     SphinxPacket { header, payload }
 }
 
 // TODO: rethink
 pub struct Hop {
-    pub host: RouteElement,
+    pub host: Node,
     pub delay: f64,
 }
 
@@ -54,9 +52,7 @@ pub fn process_packet(
     let (new_header, next_hop_addr, payload_key) = unwrapped_header;
 
     // process the payload
-    let new_payload =
-        unwrap_payload::unwrap_payload(packet.payload, &payload_key);
-
+    let new_payload = unwrap_payload::unwrap_payload(packet.payload, &payload_key);
 
     (
         SphinxPacket {
