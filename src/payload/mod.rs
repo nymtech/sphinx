@@ -44,7 +44,7 @@ fn create_final_encrypted_payload(
     // concatenate zero padding with destination and message
     let mut final_payload = [zero_bytes, destination_addr.to_vec(), message].concat();
 
-    // encrypte the padded plaintext using the payload key
+    // encrypt the padded plaintext using the payload key
     let lioness_cipher =
         Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(final_payload_key, 0, RAW_KEY_SIZE));
     lioness_cipher.encrypt(&mut final_payload).unwrap();
@@ -56,16 +56,24 @@ fn encapsulate_payload(
     final_layer_payload_component: Vec<u8>,
     route_payload_keys: &[PayloadKey],
 ) -> Vec<u8> {
-    let mut prev_payload_layer = final_layer_payload_component;
-    for i in (0..route_payload_keys.len() - 1).rev() {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
-            route_payload_keys[i],
-            0,
-            RAW_KEY_SIZE
-        ));
-        lioness_cipher.encrypt(&mut prev_payload_layer).unwrap();
-    }
-    prev_payload_layer
+    route_payload_keys
+        .iter()
+        .take(route_payload_keys.len() - 1) // don't take the last key as it was used in create_final_encrypted_payload
+        .rev()
+        .fold(
+            final_layer_payload_component,
+            |mut prev_layer_payload_component, payload_key| {
+                let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
+                    payload_key,
+                    0,
+                    RAW_KEY_SIZE
+                ));
+                lioness_cipher
+                    .encrypt(&mut prev_layer_payload_component)
+                    .unwrap();
+                prev_layer_payload_component
+            },
+        )
 }
 
 #[cfg(test)]
