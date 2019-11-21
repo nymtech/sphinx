@@ -1,9 +1,12 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
 use crate::utils::crypto;
 
-pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH]; // in paper delta
-pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH]; // in paper nu
-pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH]; // in paper I
+// in paper delta
+pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
+// in paper nu
+pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH];
+// in paper I
+pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
 //#[derive(Clone)]
 pub struct Destination {

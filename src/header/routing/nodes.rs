@@ -145,10 +145,10 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 mod preparing_header_layer {
     use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
     use crate::header::keys::routing_keys_fixture;
+    use crate::header::routing::encapsulated_routing_information_fixture;
     use crate::route::{node_address_fixture, Node};
 
     use super::*;
-    use crate::header::routing::encapsulated_routing_information_fixture;
 
     #[test]
     fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {

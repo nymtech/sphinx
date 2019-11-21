@@ -1,10 +1,14 @@
-use crate::constants::{DESTINATION_ADDRESS_LENGTH, SECURITY_PARAMETER};
-use crate::header::keys::PayloadKey;
-use crate::route::{Destination, DestinationAddressBytes};
 use arrayref::array_ref;
-use blake2::VarBlake2b; // we might want to swap this one with a different implementation
+use blake2::VarBlake2b;
+// we might want to swap this one with a different implementation
 use chacha::ChaCha;
-use lioness::{Lioness, RAW_KEY_SIZE}; // we might want to swap this one with a different implementation
+use lioness::{Lioness, RAW_KEY_SIZE};
+
+use crate::constants::SECURITY_PARAMETER;
+use crate::header::keys::PayloadKey;
+use crate::route::DestinationAddressBytes;
+
+// we might want to swap this one with a different implementation
 
 // We may be able to switch from Vec to array types as an optimization,
 // as in theory everything will have a constant size which we already know.
@@ -64,9 +68,10 @@ fn encapsulate_payload(
 
 #[cfg(test)]
 mod test_encrypting_final_payload {
-    use super::*;
     use crate::header::keys::routing_keys_fixture;
     use crate::route::destination_address_fixture;
+
+    use super::*;
 
     #[test]
     fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
@@ -86,11 +91,13 @@ mod test_encrypting_final_payload {
 
 #[cfg(test)]
 mod test_encapsulating_payload {
-    use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
     use crate::header::keys::RoutingKeys;
     use crate::route::destination_address_fixture;
     use crate::utils::crypto;
+
+    use super::*;
+
     #[test]
     fn always_both_input_and_output_are_the_same_length() {
         let message = vec![1u8, 16];

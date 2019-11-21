@@ -1,8 +1,9 @@
-use crate::header::keys::PayloadKey;
 use arrayref::array_ref;
 use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
+
+use crate::header::keys::PayloadKey;
 
 pub fn unwrap_payload(enc_payload: Vec<u8>, payload_key: &PayloadKey) -> Vec<u8> {
     let mut new_payload = enc_payload;
@@ -14,13 +15,14 @@ pub fn unwrap_payload(enc_payload: Vec<u8>, payload_key: &PayloadKey) -> Vec<u8>
 
 #[cfg(test)]
 mod test_unwrapping_payload {
-    use super::*;
     use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
     use crate::payload::create;
     use crate::route::destination_address_fixture;
 
+    use super::*;
+
     #[test]
-    fn unwraping_results_in_original_payload_plaintext() {
+    fn unwrapping_results_in_original_payload_plaintext() {
         let message = vec![1u8, 16];
         let destination = destination_address_fixture();
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];

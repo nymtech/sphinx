@@ -7,7 +7,6 @@ use crate::header::routing::EncapsulatedRoutingInformation;
 use crate::route::{Destination, Node};
 use crate::utils::crypto;
 use crate::utils::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
-use crate::Hop;
 use curve25519_dalek::scalar::Scalar;
 
 pub mod delays;
@@ -107,8 +106,9 @@ fn blind_the_shared_secret(shared_secret: PublicKey, shared_key: SharedKey) -> P
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
-    use super::*;
     use crate::route::destination_fixture;
+
+    use super::*;
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {

@@ -1,13 +1,15 @@
+use std::fmt;
+
+use curve25519_dalek::scalar::Scalar;
+use hkdf::Hkdf;
+use sha2::Sha256;
+
 use crate::constants::{
     HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
 };
 use crate::route::Node;
 use crate::utils::crypto;
 use crate::utils::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
-use curve25519_dalek::scalar::Scalar;
-use hkdf::Hkdf;
-use sha2::Sha256;
-use std::fmt;
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -76,7 +78,8 @@ impl PartialEq for RoutingKeys {
 }
 
 pub struct KeyMaterial {
-    pub initial_shared_secret: crypto::SharedSecret, // why this is here?
+    pub initial_shared_secret: crypto::SharedSecret,
+    // why this is here?
     pub routing_keys: Vec<RoutingKeys>,
 }
 
@@ -157,11 +160,13 @@ mod computing_blinding_factor {
         assert_eq!(expected_blinding_factor, blinding_factor)
     }
 }
+
 //
 #[cfg(test)]
 mod deriving_key_material {
-    use super::*;
     use crate::route::{node_address_fixture, surb_identifier_fixture, Destination, Node};
+
+    use super::*;
 
     #[cfg(test)]
     mod with_an_empty_route {
@@ -182,8 +187,9 @@ mod deriving_key_material {
 
     #[cfg(test)]
     mod for_a_route_with_3_forward_hops {
-        use super::*;
         use crate::route::random_node;
+
+        use super::*;
 
         fn setup() -> (Vec<Node>, Scalar, KeyMaterial) {
             let route: Vec<Node> = vec![random_node(), random_node(), random_node()];

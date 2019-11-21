@@ -50,9 +50,10 @@ pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
 
 #[cfg(test)]
 mod computing_integrity_mac {
-    use super::*;
     use crate::constants::INTEGRITY_MAC_KEY_SIZE;
     use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_verify_correct_mac() {

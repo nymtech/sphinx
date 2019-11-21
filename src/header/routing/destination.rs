@@ -162,10 +162,11 @@ mod test_encapsulating_final_routing_information_and_mac {
 
 #[cfg(test)]
 mod test_encapsulating_final_routing_information {
-    use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::keys::routing_keys_fixture;
     use crate::route::destination_fixture;
+
+    use super::*;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(

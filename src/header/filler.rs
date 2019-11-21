@@ -69,8 +69,9 @@ impl Filler {
 
 #[cfg(test)]
 mod test_creating_pseudorandom_bytes {
-    use super::*;
     use crate::header::keys;
+
+    use super::*;
 
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
@@ -146,6 +147,7 @@ mod test_generating_filler_bytes {
                 assert_eq!(0, x); // XOR of 0 + 0 == 0
             }
         }
+
         #[test]
         fn it_returns_the_xored_byte_vector_of_a_correct_length_for_i_3() {
             let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];

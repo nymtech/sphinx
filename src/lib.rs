@@ -3,9 +3,9 @@
 
 use curve25519_dalek::scalar::Scalar;
 
-use constants::{HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH};
+use constants::NODE_ADDRESS_LENGTH;
 
-use crate::route::{node_address_fixture, Destination, Node};
+use crate::route::{Destination, Node};
 
 mod constants;
 mod header;
@@ -65,11 +65,11 @@ pub fn process_packet(
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
+    use crate::constants::SECURITY_PARAMETER;
     use crate::route::destination_fixture;
     use crate::utils::crypto;
 
     use super::*;
-    use crate::constants::SECURITY_PARAMETER;
 
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
         let (node1_sk, node1_pk) = crypto::key_pair_fixture();

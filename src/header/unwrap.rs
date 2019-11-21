@@ -1,14 +1,7 @@
-use crate::constants::{
-    HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
-};
+use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH};
 use crate::header::keys::StreamCipherKey;
-use crate::header::routing;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
-use crate::header::SphinxHeader;
-use crate::utils;
-use crate::utils::crypto;
-use crate::Hop;
 
 pub fn unwrap_routing_information(
     enc_routing_information: EncryptedRoutingInformation,
@@ -104,10 +97,10 @@ mod unwrap_routing_information {
 
 #[cfg(test)]
 mod parse_decrypted_routing_information {
-
-    use super::*;
     use crate::header::mac::header_integrity_mac_fixture;
     use crate::route::node_address_fixture;
+
+    use super::*;
 
     #[test]
     fn it_returns_next_hop_addr_integrity_mac_enc_routing_info() {
