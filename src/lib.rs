@@ -5,7 +5,7 @@ use curve25519_dalek::scalar::Scalar;
 
 use constants::NODE_ADDRESS_LENGTH;
 
-use crate::route::{Destination, Node};
+use crate::route::{Destination, Node, NodeAddressBytes};
 
 mod constants;
 mod header;
@@ -41,7 +41,7 @@ pub struct Hop {
 pub fn process_packet(
     packet: SphinxPacket,
     node_secret_key: Scalar,
-) -> (SphinxPacket, [u8; NODE_ADDRESS_LENGTH]) {
+) -> (SphinxPacket, NodeAddressBytes) {
     //-> Result<(SphinxPacket, Hop), SphinxUnwrapError> {
     // TODO: we should have some list of 'seens shared_keys' for replay detection, but this should be handeled by a mix node
 
