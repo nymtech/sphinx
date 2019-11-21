@@ -72,6 +72,7 @@ mod test_encrypting_final_payload {
     use crate::route::destination_address_fixture;
 
     use super::*;
+    use crate::constants::DESTINATION_ADDRESS_LENGTH;
 
     #[test]
     fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
@@ -91,10 +92,8 @@ mod test_encrypting_final_payload {
 
 #[cfg(test)]
 mod test_encapsulating_payload {
-    use crate::constants::PAYLOAD_KEY_SIZE;
-    use crate::header::keys::RoutingKeys;
+    use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
     use crate::route::destination_address_fixture;
-    use crate::utils::crypto;
 
     use super::*;
 

@@ -72,22 +72,17 @@ pub fn process_header(
         return Err(SphinxUnwrapError::IntegrityMacError);
     }
 
-    let (next_hop_addr, next_hop_integrity_mac, next_hop_encrypted_routing_information) =
-        unwrap::unwrap_routing_information(
-            header.routing_info.enc_routing_information,
-            routing_keys.stream_cipher_key,
-        );
+    let (next_hop_addr, encapsulated_next_hop) = unwrap::unwrap_routing_information(
+        header.routing_info.enc_routing_information,
+        routing_keys.stream_cipher_key,
+    );
 
     // blind the shared_secret in the header
     let new_shared_secret = blind_the_shared_secret(shared_secret, shared_key);
 
-    let next_hop_encapsulated_routing_info = EncapsulatedRoutingInformation::encapsulate(
-        EncryptedRoutingInformation::from_bytes(next_hop_encrypted_routing_information),
-        HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
-    );
     let new_header = SphinxHeader {
         shared_secret: new_shared_secret,
-        routing_info: next_hop_encapsulated_routing_info,
+        routing_info: encapsulated_next_hop,
     };
 
     Ok((new_header, next_hop_addr, routing_keys.payload_key))
