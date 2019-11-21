@@ -2,10 +2,9 @@ use crate::constants::STREAM_CIPHER_OUTPUT_LENGTH;
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
-    EncapsulatedRoutingInformation, RoutingEncapsulationError, ENCRYPTED_ROUTING_INFO_SIZE,
-    TRUNCATED_ROUTING_INFO_SIZE,
+    EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE, TRUNCATED_ROUTING_INFO_SIZE,
 };
-use crate::route::{NodeAddressBytes, RouteElement};
+use crate::route::NodeAddressBytes;
 use crate::utils;
 use crate::utils::crypto;
 use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
@@ -21,21 +20,16 @@ pub(super) struct RoutingInformation {
 
 impl RoutingInformation {
     pub(super) fn new(
-        route_element: &RouteElement,
+        node_address: NodeAddressBytes,
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
-    ) -> Result<Self, RoutingEncapsulationError> {
-        let node_address = match route_element {
-            RouteElement::ForwardHop(mixnode) => mixnode.address,
-            _ => return Err(RoutingEncapsulationError::IsNotForwardHopError),
-        };
-
-        Ok(RoutingInformation {
+    ) -> Self {
+        RoutingInformation {
             node_address,
             header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
             next_routing_information: next_encapsulated_routing_information
                 .enc_routing_information
                 .truncate(),
-        })
+        }
     }
 
     fn concatenate_components(self) -> Vec<u8> {
@@ -116,25 +110,20 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 mod preparing_header_layer {
     use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
     use crate::header::keys::routing_keys_fixture;
-    use crate::route::{node_address_fixture, MixNode};
+    use crate::route::{node_address_fixture, Node};
 
     use super::*;
     use crate::header::routing::encapsulated_routing_information_fixture;
 
     #[test]
     fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
-        let address = node_address_fixture();
-        let forward_hop = RouteElement::ForwardHop(MixNode {
-            address,
-            pub_key: Default::default(),
-        });
-
-        let routing_keys = routing_keys_fixture();
+        let node_address = node_address_fixture();
+        let previous_node_routing_keys = routing_keys_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
-            address.to_vec(),
+            node_address.to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
                 .enc_routing_information
@@ -148,7 +137,7 @@ mod preparing_header_layer {
         .concat();
 
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-            &routing_keys.stream_cipher_key,
+            &previous_node_routing_keys.stream_cipher_key,
             &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
@@ -159,15 +148,16 @@ mod preparing_header_layer {
         );
 
         let mut expected_routing_mac = crypto::compute_keyed_hmac(
-            routing_keys.header_integrity_hmac_key.to_vec(),
+            previous_node_routing_keys
+                .header_integrity_hmac_key
+                .to_vec(),
             &expected_encrypted_routing_info_vec,
         );
         expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
 
-        let next_layer_routing = RoutingInformation::new(&forward_hop, inner_layer_routing)
-            .unwrap()
-            .encrypt(routing_keys.stream_cipher_key)
-            .encapsulate_with_mac(routing_keys.header_integrity_hmac_key);
+        let next_layer_routing = RoutingInformation::new(node_address, inner_layer_routing)
+            .encrypt(previous_node_routing_keys.stream_cipher_key)
+            .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key);
 
         assert_eq!(
             expected_encrypted_routing_info_vec,
@@ -227,7 +217,7 @@ mod truncating_routing_information {
     #[test]
     fn it_does_not_change_prefixed_data() {
         let encrypted_routing_info = encrypted_routing_information_fixture();
-        let routing_info_data_copy = encrypted_routing_info.value.clone();
+        let routing_info_data_copy = encrypted_routing_info.value;
 
         let truncated_routing_info = encrypted_routing_info.truncate();
         for i in 0..truncated_routing_info.len() {

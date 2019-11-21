@@ -129,52 +129,25 @@ mod test_encapsulating_final_routing_information_and_mac {
     use crate::header::keys::routing_keys_fixture;
     use crate::header::mac::HeaderIntegrityMac;
     use crate::header::routing::EncapsulatedRoutingInformation;
-    use crate::route::{random_final_hop, random_forward_hop};
-
-    #[test]
-    #[should_panic]
-    fn it_panics_if_the_route_element_is_not_a_final_hop() {
-        let route = [
-            random_forward_hop(),
-            random_forward_hop(),
-            random_forward_hop(),
-        ];
-        let routing_keys = [
-            routing_keys_fixture(),
-            routing_keys_fixture(),
-            routing_keys_fixture(),
-        ];
-        let filler = filler_fixture(route.len() - 1);
-        EncapsulatedRoutingInformation::for_final_hop(
-            &route.last().unwrap(),
-            &routing_keys.last().unwrap(),
-            filler,
-            route.len(),
-        )
-        .unwrap();
-    }
+    use crate::route::{destination_fixture, random_node};
 
     #[test]
     fn it_returns_mac_on_correct_data() {
         // this test is created to ensure we MAC the encrypted data BEFORE it is truncated
-        let route = [
-            random_forward_hop(),
-            random_forward_hop(),
-            random_final_hop(),
-        ];
+        let route = [random_node(), random_node(), random_node()];
         let routing_keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
-        let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
-            &route.last().unwrap(),
+        let destination = destination_fixture();
+        let final_routing_info = EncapsulatedRoutingInformation::for_destination(
+            &destination,
             &routing_keys.last().unwrap(),
             filler,
             route.len(),
-        )
-        .unwrap();
+        );
 
         let expected_mac = HeaderIntegrityMac::compute(
             routing_keys.last().unwrap().header_integrity_hmac_key,
@@ -192,7 +165,7 @@ mod test_encapsulating_final_routing_information {
     use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::keys::routing_keys_fixture;
-    use crate::route::random_destination;
+    use crate::route::destination_fixture;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
@@ -200,7 +173,7 @@ mod test_encapsulating_final_routing_information {
         let final_keys = routing_keys_fixture();
         let route_len = 5;
         let filler = filler_fixture(route_len - 1);
-        let destination = random_destination();
+        let destination = destination_fixture();
 
         let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
             .add_padding(route_len)
@@ -221,7 +194,7 @@ mod test_encapsulating_final_routing_information {
         let final_keys = routing_keys_fixture();
         let route_len = 3;
         let filler = filler_fixture(route_len - 1);
-        let destination = random_destination();
+        let destination = destination_fixture();
 
         let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
             .add_padding(route_len)
@@ -242,7 +215,7 @@ mod test_encapsulating_final_routing_information {
         let final_keys = routing_keys_fixture();
         let route_len = 1;
         let filler = filler_fixture(route_len - 1);
-        let destination = random_destination();
+        let destination = destination_fixture();
 
         let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
             .add_padding(route_len)
@@ -263,7 +236,7 @@ mod test_encapsulating_final_routing_information {
         let final_keys = routing_keys_fixture();
         let route_len = 0;
         let filler = filler_fixture(route_len - 1);
-        let destination = random_destination();
+        let destination = destination_fixture();
 
         FinalRoutingInformation::new(&destination, route_len)
             .add_padding(route_len)
@@ -277,7 +250,7 @@ mod test_encapsulating_final_routing_information {
         let final_keys = routing_keys_fixture();
         let route_len = 3;
         let filler = filler_fixture(route_len);
-        let destination = random_destination();
+        let destination = destination_fixture();
 
         FinalRoutingInformation::new(&destination, route_len)
             .add_padding(route_len)
