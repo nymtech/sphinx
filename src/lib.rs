@@ -1,11 +1,7 @@
 //#![feature(test)]
 //extern crate test;
 
-use crate::header::keys;
-use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
-use crate::route::{random_final_hop, random_forward_hop, MixNode, RouteElement};
-
-use constants::HEADER_INTEGRITY_MAC_SIZE;
+use crate::route::{node_address_fixture, Destination, Node};
 
 mod constants;
 mod header;
@@ -18,19 +14,15 @@ pub struct SphinxPacket {
     payload: Vec<u8>,
 }
 
-pub fn create_packet(message: Vec<u8>, route: &[RouteElement]) -> SphinxPacket {
-    let (header, payload_keys) = header::create(route);
-    let destination = match route.last().expect("The route should not be empty") {
-        RouteElement::FinalHop(destination) => destination,
-        _ => panic!("The last route element must be a destination"),
-    };
+pub fn create_packet(message: Vec<u8>, route: &[Node], destination: Destination) -> SphinxPacket {
+    let (header, payload_keys) = header::create(route, &destination);
     let payload = payload::create(message, payload_keys, &destination);
     SphinxPacket { header, payload }
 }
 
 // TODO: rethink
 pub struct Hop {
-    pub host: RouteElement,
+    pub host: Node,
     pub delay: f64,
 }
 
@@ -46,10 +38,10 @@ pub fn unwrap_layer(packet: SphinxPacket) -> (SphinxPacket, Hop) {
             payload: vec![],
         },
         Hop {
-            host: RouteElement::ForwardHop(MixNode {
-                address: route::node_address_fixture(),
-                pub_key: curve25519_dalek::montgomery::MontgomeryPoint([0u8; 32]),
-            }),
+            host: Node {
+                address: node_address_fixture(),
+                pub_key: Default::default(),
+            },
             delay: 0.0,
         },
     )
