@@ -8,6 +8,8 @@ use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
 
+pub mod unwrap;
+
 // we might want to swap this one with a different implementation
 
 // We may be able to switch from Vec to array types as an optimization,

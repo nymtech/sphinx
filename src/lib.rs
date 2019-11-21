@@ -3,15 +3,12 @@
 
 use curve25519_dalek::scalar::Scalar;
 
-use constants::NODE_ADDRESS_LENGTH;
-
 use crate::route::{Destination, Node, NodeAddressBytes};
 
 mod constants;
 mod header;
 mod payload;
 mod route;
-mod unwrap_payload;
 mod utils;
 
 pub struct SphinxPacket {
@@ -52,7 +49,7 @@ pub fn process_packet(
     let (new_header, next_hop_addr, payload_key) = unwrapped_header;
 
     // process the payload
-    let new_payload = unwrap_payload::unwrap_payload(packet.payload, &payload_key);
+    let new_payload = payload::unwrap::unwrap_payload(packet.payload, &payload_key);
 
     (
         SphinxPacket {
@@ -65,7 +62,7 @@ pub fn process_packet(
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
-    use crate::constants::SECURITY_PARAMETER;
+    use crate::constants::{NODE_ADDRESS_LENGTH, SECURITY_PARAMETER};
     use crate::route::destination_fixture;
     use crate::utils::crypto;
 
