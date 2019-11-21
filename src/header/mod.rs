@@ -4,7 +4,7 @@ use crate::header::keys::PayloadKey;
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::EncapsulatedRoutingInformation;
-use crate::route::{Destination, Node};
+use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::utils::crypto;
 use crate::utils::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use curve25519_dalek::scalar::Scalar;
@@ -60,7 +60,7 @@ pub fn create(
 pub fn process_header(
     header: SphinxHeader,
     node_secret_key: Scalar,
-) -> Result<(SphinxHeader, [u8; NODE_ADDRESS_LENGTH], PayloadKey), SphinxUnwrapError> {
+) -> Result<(SphinxHeader, NodeAddressBytes, PayloadKey), SphinxUnwrapError> {
     let shared_secret = header.shared_secret;
     let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
     let routing_keys = keys::RoutingKeys::derive(shared_key);
