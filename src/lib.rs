@@ -16,6 +16,7 @@ pub struct SphinxPacket {
     payload: Vec<u8>,
 }
 
+// andrew: if this is our public facing API, should we require users to pass an initial secret?
 pub fn create_packet(
     initial_secret: Scalar,
     message: Vec<u8>,
@@ -40,12 +41,9 @@ pub fn process_packet(
     node_secret_key: Scalar,
 ) -> (SphinxPacket, NodeAddressBytes) {
     //-> Result<(SphinxPacket, Hop), SphinxUnwrapError> {
-    // TODO: we should have some list of 'seens shared_keys' for replay detection, but this should be handeled by a mix node
+    // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
 
-    let unwrapped_header = match header::process_header(packet.header, node_secret_key) {
-        Err(error) => panic!("Something went wrong in header unwrapping {:?}", error),
-        Ok(unwrapped_header) => unwrapped_header,
-    };
+    let unwrapped_header = header::process_header(packet.header, node_secret_key).unwrap();
     let (new_header, next_hop_addr, payload_key) = unwrapped_header;
 
     // process the payload

@@ -36,7 +36,7 @@ pub fn create(
 // final means most inner
 fn create_final_encrypted_payload(
     message: Vec<u8>,
-    destination_addr: [u8; 32],
+    destination_addr: DestinationAddressBytes,
     final_payload_key: &PayloadKey,
 ) -> Vec<u8> {
     // generate zero-padding
