@@ -14,13 +14,14 @@ use crate::utils;
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE + NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
 
-// In paper beta
+// in paper beta
 pub(super) struct RoutingInformation {
-    node_address: NodeAddressBytes,
     // in paper nu
-    header_integrity_mac: HeaderIntegrityMac,
+    node_address: NodeAddressBytes,
     // in paper gamma
-    next_routing_information: TruncatedRoutingInformation, // in paper also beta
+    header_integrity_mac: HeaderIntegrityMac,
+    // in paper also beta (!)
+    next_routing_information: TruncatedRoutingInformation,
 }
 
 impl RoutingInformation {
