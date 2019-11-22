@@ -14,11 +14,11 @@ pub mod unwrap;
 
 // We may be able to switch from Vec to array types as an optimization,
 // as in theory everything will have a constant size which we already know.
-// For now we'll stick with Vecs.
+// For now we'll stick with Vectors.
 pub fn create(
     plaintext_payload: &[u8], //Vec<u8>,
     payload_keys: Vec<PayloadKey>,
-    destination_addr: DestinationAddressBytes,
+    destination_address: DestinationAddressBytes,
 ) -> Vec<u8> {
     let final_payload_key = payload_keys
         .last()
@@ -26,7 +26,7 @@ pub fn create(
     // encapsulate_most_inner_payload
     let encrypted_final_payload = create_final_encrypted_payload(
         plaintext_payload.to_vec(),
-        destination_addr,
+        destination_address,
         final_payload_key,
     );
     // encapsulate the rest
@@ -36,13 +36,13 @@ pub fn create(
 // final means most inner
 fn create_final_encrypted_payload(
     message: Vec<u8>,
-    destination_addr: DestinationAddressBytes,
+    destination_address: DestinationAddressBytes,
     final_payload_key: &PayloadKey,
 ) -> Vec<u8> {
     // generate zero-padding
     let zero_bytes = vec![0u8; SECURITY_PARAMETER];
     // concatenate zero padding with destination and message
-    let mut final_payload = [zero_bytes, destination_addr.to_vec(), message].concat();
+    let mut final_payload = [zero_bytes, destination_address.to_vec(), message].concat();
 
     // encrypt the padded plaintext using the payload key
     let lioness_cipher =

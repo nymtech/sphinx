@@ -192,6 +192,7 @@ mod test_generating_filler_bytes {
     }
 }
 
+#[allow(dead_code)]
 pub fn filler_fixture(i: usize) -> Filler {
     Filler {
         value: vec![9u8; 3 * SECURITY_PARAMETER * i],

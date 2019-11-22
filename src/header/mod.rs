@@ -1,12 +1,9 @@
 use curve25519_dalek::scalar::Scalar;
 
-use crate::constants::NODE_ADDRESS_LENGTH;
 use crate::crypto;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
 use crate::header::keys::PayloadKey;
-use crate::header::mac::HeaderIntegrityMac;
-use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::EncapsulatedRoutingInformation;
 use crate::route::{Destination, Node, NodeAddressBytes};
 
@@ -35,7 +32,7 @@ pub fn create(
     destination: &Destination,
 ) -> (SphinxHeader, Vec<PayloadKey>) {
     let key_material = keys::KeyMaterial::derive(route, initial_secret);
-    let delays = delays::generate(route.len());
+    let _ = delays::generate(route.len());
     let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
     let routing_info = routing::EncapsulatedRoutingInformation::new(
         route,
@@ -73,7 +70,7 @@ pub fn process_header(
         return Err(SphinxUnwrapError::IntegrityMacError);
     }
 
-    let (next_hop_addr, encapsulated_next_hop) = unwrap::unwrap_routing_information(
+    let (next_hop_address, encapsulated_next_hop) = unwrap::unwrap_routing_information(
         header.routing_info.enc_routing_information,
         routing_keys.stream_cipher_key,
     );
@@ -86,7 +83,7 @@ pub fn process_header(
         routing_info: encapsulated_next_hop,
     };
 
-    Ok((new_header, next_hop_addr, routing_keys.payload_key))
+    Ok((new_header, next_hop_address, routing_keys.payload_key))
 }
 
 fn blind_the_shared_secret(shared_secret: PublicKey, shared_key: SharedKey) -> PublicKey {
@@ -96,12 +93,13 @@ fn blind_the_shared_secret(shared_secret: PublicKey, shared_key: SharedKey) -> P
     );
     let mut hmac = [0u8; 32];
     hmac.copy_from_slice(&hmac_full[..32]);
-    let blidning_factor = Scalar::from_bytes_mod_order(hmac);
-    shared_secret * blidning_factor
+    let blinding_factor = Scalar::from_bytes_mod_order(hmac);
+    shared_secret * blinding_factor
 }
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
+    use crate::constants::NODE_ADDRESS_LENGTH;
     use crate::route::destination_fixture;
 
     use super::*;
@@ -126,15 +124,15 @@ mod create_and_process_sphinx_packet_header {
         let route = [node1, node2, node3];
         let destination = destination_fixture();
         let initial_secret = crypto::generate_secret();
-        let (sphinx_header, payload_keys) = create(initial_secret, &route, &destination);
+        let (sphinx_header, _) = create(initial_secret, &route, &destination);
 
-        let (new_header, next_hop_addr, _) = process_header(sphinx_header, node1_sk).unwrap();
-        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr);
+        let (new_header, next_hop_address, _) = process_header(sphinx_header, node1_sk).unwrap();
+        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
 
-        let (new_header2, next_hop_addr2, _) = process_header(new_header, node2_sk).unwrap();
-        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
+        let (new_header2, next_hop_address2, _) = process_header(new_header, node2_sk).unwrap();
+        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address2);
 
-        let (new_header3, next_hop_addr3, _) = process_header(new_header2, node3_sk).unwrap();
-        assert_eq!(destination.address, next_hop_addr3);
+        let (_, next_hop_address3, _) = process_header(new_header2, node3_sk).unwrap();
+        assert_eq!(destination.address, next_hop_address3);
     }
 }

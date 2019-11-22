@@ -23,8 +23,8 @@ fn parse_decrypted_routing_information(
     let mut i = 0;
 
     // first NODE_ADDRESS_LENGTH bytes represents the next hop address
-    let mut next_hop_addr: [u8; NODE_ADDRESS_LENGTH] = Default::default();
-    next_hop_addr.copy_from_slice(&decrypted_routing_information[i..i + NODE_ADDRESS_LENGTH]);
+    let mut next_hop_address: [u8; NODE_ADDRESS_LENGTH] = Default::default();
+    next_hop_address.copy_from_slice(&decrypted_routing_information[i..i + NODE_ADDRESS_LENGTH]);
     i += NODE_ADDRESS_LENGTH;
 
     // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
@@ -43,7 +43,7 @@ fn parse_decrypted_routing_information(
         HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
     );
 
-    (next_hop_addr, next_hop_encapsulated_routing_info)
+    (next_hop_address, next_hop_encapsulated_routing_info)
 }
 
 #[cfg(test)]
@@ -79,10 +79,10 @@ mod unwrap_routing_information {
                 .to_vec(),
         ]
         .concat();
-        let (next_hop_addr, next_hop_encapsulated_routing_info) =
+        let (next_hop_address, next_hop_encapsulated_routing_info) =
             unwrap_routing_information(enc_routing_info, stream_cipher_key);
 
-        assert_eq!(routing_info[..NODE_ADDRESS_LENGTH], next_hop_addr);
+        assert_eq!(routing_info[..NODE_ADDRESS_LENGTH], next_hop_address);
         assert_eq!(
             routing_info[NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
             next_hop_encapsulated_routing_info.integrity_mac.get_value()
@@ -109,20 +109,20 @@ mod parse_decrypted_routing_information {
     use super::*;
 
     #[test]
-    fn it_returns_next_hop_addr_integrity_mac_enc_routing_info() {
-        let addr = node_address_fixture();
+    fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
+        let address_fixture = node_address_fixture();
         let integrity_mac = header_integrity_mac_fixture().get_value();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
 
         let data = [
-            addr.to_vec(),
+            address_fixture.to_vec(),
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),
         ]
         .concat();
 
         let (address, encapsulated_routing_info) = parse_decrypted_routing_information(data);
-        assert_eq!(addr, address);
+        assert_eq!(address_fixture, address);
         assert_eq!(
             integrity_mac,
             encapsulated_routing_info.integrity_mac.get_value()
