@@ -147,7 +147,7 @@ mod preparing_header_layer {
     use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
     use crate::header::keys::routing_keys_fixture;
     use crate::header::routing::encapsulated_routing_information_fixture;
-    use crate::route::{node_address_fixture, Node};
+    use crate::route::node_address_fixture;
 
     use super::*;
 
