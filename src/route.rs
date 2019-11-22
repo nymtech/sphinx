@@ -16,10 +16,25 @@ pub struct Destination {
     pub identifier: SURBIdentifier,
 }
 
+impl Destination {
+    pub fn new(address: DestinationAddressBytes, identifier: SURBIdentifier) -> Self {
+        Self {
+            address,
+            identifier,
+        }
+    }
+}
+
 //#[derive(Clone)]
 pub struct Node {
     pub address: NodeAddressBytes,
     pub pub_key: crypto::PublicKey,
+}
+
+impl Node {
+    pub fn new(address: NodeAddressBytes, pub_key: crypto::PublicKey) -> Self {
+        Self { address, pub_key }
+    }
 }
 
 pub fn destination_address_fixture() -> DestinationAddressBytes {

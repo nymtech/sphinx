@@ -107,17 +107,17 @@ mod create_and_process_sphinx_packet_header {
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = crypto::key_pair_fixture();
+        let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: [5u8; NODE_ADDRESS_LENGTH],
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::key_pair_fixture();
+        let (node2_sk, node2_pk) = crypto::keygen();
         let node2 = Node {
             address: [4u8; NODE_ADDRESS_LENGTH],
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::key_pair_fixture();
+        let (node3_sk, node3_pk) = crypto::keygen();
         let node3 = Node {
             address: [2u8; NODE_ADDRESS_LENGTH],
             pub_key: node3_pk,
