@@ -25,12 +25,6 @@ pub fn create_packet(
     SphinxPacket { header, payload }
 }
 
-// TODO: rethink
-pub struct Hop {
-    pub host: Node,
-    pub delay: f64,
-}
-
 // needs the processor's secret key somehow, so far I'm just passing it
 // the return value could also be a message, handle this
 pub fn process_packet(
