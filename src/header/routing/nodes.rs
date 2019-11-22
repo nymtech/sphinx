@@ -89,10 +89,6 @@ impl EncryptedRoutingInformation {
         truncated_routing_info
     }
 
-    fn get_value(self) -> [u8; ENCRYPTED_ROUTING_INFO_SIZE] {
-        self.value
-    }
-
     pub fn get_value_ref(&self) -> &[u8] {
         self.value.as_ref()
     }
@@ -262,6 +258,7 @@ mod truncating_routing_information {
     }
 }
 
+#[allow(dead_code)]
 pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
     EncryptedRoutingInformation {
         value: [5u8; ENCRYPTED_ROUTING_INFO_SIZE],
