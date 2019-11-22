@@ -123,7 +123,7 @@ impl EncryptedRoutingInformation {
 }
 
 pub struct PaddedEncryptedRoutingInformation {
-    value: Vec<u8>, //[u8; PADDED_ENCRYPTED_ROUTING_INFO_SIZE],
+    value: Vec<u8>,
 }
 
 impl PaddedEncryptedRoutingInformation {
