@@ -3,13 +3,14 @@ extern crate sphinx;
 use sphinx::create_packet;
 use sphinx::crypto;
 use sphinx::process_packet;
-use sphinx::route::destination_fixture;
+use sphinx::route::{Destination, Node};
 
-const NODE_ADDRESS_LENGTH: usize = 32; // needs to be the same as what's in constants file.
+const NODE_ADDRESS_LENGTH: usize = 32;
+const DESTINATION_ADDRESS_LENGTH: usize = 32;
+const IDENTIFIER_LENGTH: usize = 16;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
-    use sphinx::route::Node;
 
     use super::*;
 
@@ -18,17 +19,13 @@ mod create_and_process_sphinx_packet {
         let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node::new([5u8; NODE_ADDRESS_LENGTH], node1_pk);
         let (node2_sk, node2_pk) = crypto::keygen();
-        let node2 = Node {
-            address: [4u8; NODE_ADDRESS_LENGTH],
-            pub_key: node2_pk,
-        };
+        let node2 = Node::new([4u8; NODE_ADDRESS_LENGTH], node2_pk);
         let (node3_sk, node3_pk) = crypto::keygen();
-        let node3 = Node {
-            address: [2u8; NODE_ADDRESS_LENGTH],
-            pub_key: node3_pk,
-        };
+        let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
+
         let route = [node1, node2, node3];
-        let destination = destination_fixture();
+        let destination =
+            Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
         let initial_secret = crypto::generate_secret();
 
         let message = vec![13u8, 16];
