@@ -39,4 +39,22 @@ impl SphinxPacket {
             next_hop_address,
         )
     }
+
+    pub fn to_bytes() -> Vec<u8> {
+        vec![]
+    }
+
+    pub fn from_bytes() -> Option<SphinxPacket> {
+        //        SphinxPacket {
+        //            header: SphinxHeader {
+        //                shared_secret: Default::default(),
+        //                routing_info: EncapsulatedRoutingInformation {
+        //                    enc_routing_information: (),
+        //                    integrity_mac: (),
+        //                },
+        //            },
+        //            payload: vec![],
+        //        }
+        None
+    }
 }
