@@ -8,10 +8,10 @@ use sphinx::route::{Destination, Node};
 const NODE_ADDRESS_LENGTH: usize = 32;
 const DESTINATION_ADDRESS_LENGTH: usize = 32;
 const IDENTIFIER_LENGTH: usize = 16;
+const SECURITY_PARAMETER: usize = 16;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
-
     use super::*;
 
     #[test]
@@ -40,7 +40,7 @@ mod create_and_process_sphinx_packet {
         let (next_sphinx_packet_3, next_hop_addr3) = process_packet(next_sphinx_packet_2, node3_sk);
         assert_eq!(destination.address, next_hop_addr3);
 
-        let zero_bytes = vec![0u8; 16];
+        let zero_bytes = vec![0u8; SECURITY_PARAMETER];
         let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
         assert_eq!(expected_payload, next_sphinx_packet_3.payload);
     }
