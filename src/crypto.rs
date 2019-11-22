@@ -26,7 +26,7 @@ pub fn generate_random_curve_point() -> MontgomeryPoint {
     CURVE_GENERATOR * generate_secret()
 }
 
-pub fn key_pair_fixture() -> (Scalar, MontgomeryPoint) {
+pub fn keygen() -> (Scalar, MontgomeryPoint) {
     let secret_key = generate_secret();
     let public_key = CURVE_GENERATOR * secret_key;
     (secret_key, public_key)

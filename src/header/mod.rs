@@ -1,13 +1,14 @@
+use curve25519_dalek::scalar::Scalar;
+
 use crate::constants::NODE_ADDRESS_LENGTH;
+use crate::crypto;
+use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
 use crate::header::keys::PayloadKey;
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::EncapsulatedRoutingInformation;
 use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::utils::crypto;
-use crate::utils::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
-use curve25519_dalek::scalar::Scalar;
 
 pub mod delays;
 pub mod filler;
@@ -107,17 +108,17 @@ mod create_and_process_sphinx_packet_header {
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = crypto::key_pair_fixture();
+        let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: [5u8; NODE_ADDRESS_LENGTH],
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::key_pair_fixture();
+        let (node2_sk, node2_pk) = crypto::keygen();
         let node2 = Node {
             address: [4u8; NODE_ADDRESS_LENGTH],
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::key_pair_fixture();
+        let (node3_sk, node3_pk) = crypto::keygen();
         let node3 = Node {
             address: [2u8; NODE_ADDRESS_LENGTH],
             pub_key: node3_pk,

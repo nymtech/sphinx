@@ -1,6 +1,6 @@
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
+use crate::crypto;
 use crate::header::keys::HeaderIntegrityMacKey;
-use crate::utils::crypto;
 
 // In paper gamma
 // the derivation is only required for the tests. please remove it in production

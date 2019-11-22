@@ -1,4 +1,4 @@
-use crate::utils::crypto;
+use crate::crypto;
 
 // AVERAGE_DELAY SHOULD NEVER BE ZERO!!
 pub const AVERAGE_DELAY: f64 = 10.0;

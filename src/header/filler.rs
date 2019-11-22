@@ -1,6 +1,6 @@
 use crate::constants::{MAX_PATH_LENGTH, SECURITY_PARAMETER};
+use crate::crypto;
 use crate::header::keys::RoutingKeys;
-use crate::utils::crypto;
 use crate::{constants, utils};
 
 const FILLER_STEP_SIZE_INCREASE: usize = 3 * SECURITY_PARAMETER;

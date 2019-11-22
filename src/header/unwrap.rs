@@ -48,10 +48,11 @@ fn parse_decrypted_routing_information(
 
 #[cfg(test)]
 mod unwrap_routing_information {
-    use super::*;
     use crate::constants::STREAM_CIPHER_OUTPUT_LENGTH;
+    use crate::crypto;
     use crate::utils;
-    use crate::utils::crypto;
+
+    use super::*;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
