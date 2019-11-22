@@ -1,9 +1,8 @@
 extern crate sphinx;
 
-use sphinx::create_packet;
 use sphinx::crypto;
-use sphinx::process_packet;
 use sphinx::route::{Destination, Node};
+use sphinx::SphinxPacket;
 
 const NODE_ADDRESS_LENGTH: usize = 32;
 const DESTINATION_ADDRESS_LENGTH: usize = 32;
@@ -26,18 +25,17 @@ mod create_and_process_sphinx_packet {
         let route = [node1, node2, node3];
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
-        let initial_secret = crypto::generate_secret();
 
         let message = vec![13u8, 16];
-        let sphinx_packet = create_packet(initial_secret, message.clone(), &route, &destination);
+        let sphinx_packet = SphinxPacket::create(message.clone(), &route, &destination);
 
-        let (next_sphinx_packet_1, next_hop_addr1) = process_packet(sphinx_packet, node1_sk);
+        let (next_sphinx_packet_1, next_hop_addr1) = sphinx_packet.process(node1_sk);
         assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr1);
 
-        let (next_sphinx_packet_2, next_hop_addr2) = process_packet(next_sphinx_packet_1, node2_sk);
+        let (next_sphinx_packet_2, next_hop_addr2) = next_sphinx_packet_1.process(node2_sk);
         assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
 
-        let (next_sphinx_packet_3, next_hop_addr3) = process_packet(next_sphinx_packet_2, node3_sk);
+        let (next_sphinx_packet_3, next_hop_addr3) = next_sphinx_packet_2.process(node3_sk);
         assert_eq!(destination.address, next_hop_addr3);
 
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
