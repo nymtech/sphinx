@@ -1,14 +1,14 @@
 use crate::constants::{
     IDENTIFIER_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
+use crate::crypto;
+use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::filler::Filler;
 use crate::header::keys::StreamCipherKey;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
-use crate::utils::crypto;
-use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
 
 // this is going through the following transformations:
 /*

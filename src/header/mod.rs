@@ -1,13 +1,14 @@
+use curve25519_dalek::scalar::Scalar;
+
 use crate::constants::NODE_ADDRESS_LENGTH;
+use crate::crypto;
+use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
 use crate::header::keys::PayloadKey;
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::EncapsulatedRoutingInformation;
 use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::utils::crypto;
-use crate::utils::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
-use curve25519_dalek::scalar::Scalar;
 
 pub mod delays;
 pub mod filler;

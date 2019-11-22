@@ -3,10 +3,11 @@ use curve25519_dalek::scalar::Scalar;
 use crate::route::{Destination, Node, NodeAddressBytes};
 
 mod constants;
+pub mod crypto;
 mod header;
 mod payload;
 pub mod route;
-pub mod utils;
+mod utils;
 
 pub struct SphinxPacket {
     header: header::SphinxHeader,

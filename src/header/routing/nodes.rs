@@ -1,6 +1,8 @@
 use crate::constants::{
     HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
+use crate::crypto;
+use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
@@ -8,8 +10,6 @@ use crate::header::routing::{
 };
 use crate::route::NodeAddressBytes;
 use crate::utils;
-use crate::utils::crypto;
-use crate::utils::crypto::STREAM_CIPHER_INIT_VECTOR;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE + NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
@@ -207,9 +207,9 @@ mod preparing_header_layer {
 
 #[cfg(test)]
 mod encrypting_routing_information {
+    use crate::crypto::STREAM_CIPHER_KEY_SIZE;
     use crate::header::mac::header_integrity_mac_fixture;
     use crate::route::node_address_fixture;
-    use crate::utils::crypto::STREAM_CIPHER_KEY_SIZE;
 
     use super::*;
 

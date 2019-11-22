@@ -1,9 +1,9 @@
 extern crate sphinx;
 
 use sphinx::create_packet;
+use sphinx::crypto;
 use sphinx::process_packet;
 use sphinx::route::destination_fixture;
-use sphinx::utils::crypto;
 
 const NODE_ADDRESS_LENGTH: usize = 32; // needs to be the same as what's in constants file.
 

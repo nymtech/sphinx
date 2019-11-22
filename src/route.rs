@@ -1,5 +1,5 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
-use crate::utils::crypto;
+use crate::crypto;
 
 // in paper delta
 pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
