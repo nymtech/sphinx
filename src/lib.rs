@@ -57,6 +57,7 @@ mod create_and_process_sphinx_packet {
 
     use super::*;
 
+    #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
         let (node1_sk, node1_pk) = crypto::key_pair_fixture();
         let node1 = Node {
