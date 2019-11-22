@@ -27,7 +27,7 @@ mod create_and_process_sphinx_packet {
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::create(message.clone(), &route, &destination);
+        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination);
 
         let (next_sphinx_packet_1, next_hop_addr1) = sphinx_packet.process(node1_sk);
         assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr1);
