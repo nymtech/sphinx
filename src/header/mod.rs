@@ -1,20 +1,23 @@
+use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
-use crate::crypto;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
 use crate::header::keys::{PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, Node, NodeAddressBytes};
-use curve25519_dalek::montgomery::MontgomeryPoint;
+use crate::{crypto, ProcessingError};
 
 pub mod delays;
 pub mod filler;
 pub mod keys;
 pub mod mac;
 pub mod routing;
+
+// 32 represents size of a MontgomeryPoint on Curve25519
+pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE;
 
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
@@ -24,7 +27,6 @@ pub struct SphinxHeader {
 #[derive(Debug)]
 pub enum SphinxUnwrapError {
     IntegrityMacError,
-    InvalidLengthError,
 }
 
 impl SphinxHeader {
@@ -110,10 +112,9 @@ impl SphinxHeader {
             .collect()
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, SphinxUnwrapError> {
-        // 32 represents size of a MontgomeryPoint on Curve25519
-        if bytes.len() != 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE {
-            return Err(SphinxUnwrapError::InvalidLengthError);
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+        if bytes.len() != HEADER_SIZE {
+            return Err(ProcessingError::InvalidHeaderLengthError);
         }
 
         let mut shared_secret_bytes = [0u8; 32];
@@ -121,8 +122,7 @@ impl SphinxHeader {
         shared_secret_bytes.copy_from_slice(&bytes[..32]);
 
         // the rest are for the encapsulated routing info
-        let encapsulated_routing_info_bytes =
-            bytes[32..32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE].to_vec();
+        let encapsulated_routing_info_bytes = bytes[32..HEADER_SIZE].to_vec();
 
         let routing_info =
             EncapsulatedRoutingInformation::from_bytes(encapsulated_routing_info_bytes)?;
@@ -191,13 +191,14 @@ mod create_and_process_sphinx_packet_header {
 
 #[cfg(test)]
 mod unwrap_routing_information {
-    use super::*;
     use crate::constants::{
         HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
     use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
     use crate::utils;
+
+    use super::*;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
@@ -248,9 +249,10 @@ mod unwrap_routing_information {
 
 #[cfg(test)]
 mod converting_header_to_bytes {
-    use super::*;
     use crate::crypto::generate_random_curve_point;
     use crate::header::routing::encapsulated_routing_information_fixture;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_convert_back_and_forth() {

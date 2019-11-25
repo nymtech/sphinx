@@ -2,7 +2,6 @@ use crate::constants::{
     DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH, MAX_PATH_LENGTH,
     SECURITY_PARAMETER,
 };
-use crate::header;
 use crate::header::filler::Filler;
 use crate::header::keys::RoutingKeys;
 use crate::header::mac::HeaderIntegrityMac;
@@ -10,8 +9,8 @@ use crate::header::routing::destination::FinalRoutingInformation;
 use crate::header::routing::nodes::{
     encrypted_routing_information_fixture, EncryptedRoutingInformation, RoutingInformation,
 };
-use crate::header::SphinxUnwrapError;
 use crate::route::{Destination, Node};
+use crate::{header, ProcessingError};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
@@ -112,9 +111,9 @@ impl EncapsulatedRoutingInformation {
             .collect()
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, SphinxUnwrapError> {
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
         if bytes.len() != HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE {
-            return Err(SphinxUnwrapError::InvalidLengthError);
+            return Err(ProcessingError::InvalidRoutingInformationLengthError);
         }
 
         let mut integrity_mac_bytes = [0u8; HEADER_INTEGRITY_MAC_SIZE];
