@@ -4,9 +4,14 @@ use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-use crate::constants::SECURITY_PARAMETER;
+use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
+use crate::ProcessingError;
+
+// TODO: at minimum it HAS TO be at least equal to length of the key block used in lioness
+// but this value needs to be adjusted
+pub const PAYLOAD_SIZE: usize = 32;
 
 // we might want to swap this one with a different implementation
 pub struct Payload {
@@ -36,6 +41,10 @@ impl Payload {
     // as the payload object should no longer be used
     pub fn get_content(self) -> Vec<u8> {
         self.content
+    }
+
+    pub fn get_content_ref(&self) -> &[u8] {
+        self.content.as_ref()
     }
 
     // in this context final means most inner layer
@@ -99,14 +108,25 @@ impl Payload {
             content: payload_content,
         }
     }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+        // TODO: currently it's defined as minimum size. It should be always constant length in the future
+        // once we decide on payload size
+        if bytes.len() < PAYLOAD_SIZE {
+            return Err(ProcessingError::InvalidPayloadLengthError);
+        }
+
+        Ok(Payload { content: bytes })
+    }
 }
 
 #[cfg(test)]
 mod test_encrypting_final_payload {
-    use super::*;
     use crate::constants::DESTINATION_ADDRESS_LENGTH;
     use crate::header::keys::routing_keys_fixture;
     use crate::route::destination_address_fixture;
+
+    use super::*;
 
     #[test]
     fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
@@ -126,9 +146,10 @@ mod test_encrypting_final_payload {
 
 #[cfg(test)]
 mod test_encapsulating_payload {
-    use super::*;
     use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
     use crate::route::destination_address_fixture;
+
+    use super::*;
 
     #[test]
     fn always_both_input_and_output_are_the_same_length() {
@@ -151,9 +172,11 @@ mod test_encapsulating_payload {
 
 #[cfg(test)]
 mod test_unwrapping_payload {
-    use super::*;
     use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
     use crate::route::destination_address_fixture;
+
+    use super::*;
+
     #[test]
     fn unwrapping_results_in_original_payload_plaintext() {
         let message = vec![1u8, 16];
