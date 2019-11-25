@@ -40,6 +40,6 @@ mod create_and_process_sphinx_packet {
 
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
         let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
-        assert_eq!(expected_payload, next_sphinx_packet_3.payload);
+        assert_eq!(expected_payload, next_sphinx_packet_3.payload.get_content());
     }
 }

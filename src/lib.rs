@@ -1,6 +1,6 @@
-use curve25519_dalek::scalar::Scalar;
-
+use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
+use curve25519_dalek::scalar::Scalar;
 
 mod constants;
 pub mod crypto;
@@ -11,14 +11,14 @@ mod utils;
 
 pub struct SphinxPacket {
     header: header::SphinxHeader,
-    pub payload: Vec<u8>,
+    pub payload: Payload,
 }
 
 impl SphinxPacket {
     pub fn new(message: Vec<u8>, route: &[Node], destination: &Destination) -> SphinxPacket {
         let initial_secret = crypto::generate_secret();
         let (header, payload_keys) = header::SphinxHeader::new(initial_secret, route, destination);
-        let payload = payload::create(&message, payload_keys, destination.address);
+        let payload = Payload::encapsulate_message(&message, &payload_keys, destination.address);
         SphinxPacket { header, payload }
     }
 
@@ -28,7 +28,7 @@ impl SphinxPacket {
         let (new_header, next_hop_address, payload_key) = unwrapped_header;
 
         // process the payload
-        let new_payload = payload::unwrap::unwrap_payload(self.payload, &payload_key);
+        let new_payload = self.payload.unwrap(&payload_key);
 
         (
             SphinxPacket {

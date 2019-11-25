@@ -8,81 +8,105 @@ use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
 
-pub mod unwrap;
-
 // we might want to swap this one with a different implementation
-
-// We may be able to switch from Vec to array types as an optimization,
-// as in theory everything will have a constant size which we already know.
-// For now we'll stick with Vectors.
-pub fn create(
-    plaintext_payload: &[u8], //Vec<u8>,
-    payload_keys: Vec<PayloadKey>,
-    destination_address: DestinationAddressBytes,
-) -> Vec<u8> {
-    let final_payload_key = payload_keys
-        .last()
-        .expect("The keys should be already initialized");
-    // encapsulate_most_inner_payload
-    let encrypted_final_payload = create_final_encrypted_payload(
-        plaintext_payload.to_vec(),
-        destination_address,
-        final_payload_key,
-    );
-    // encapsulate the rest
-    encapsulate_payload(encrypted_final_payload, &payload_keys)
+pub struct Payload {
+    // We may be able to switch from Vec to array types as an optimization,
+    // as in theory everything will have a constant size which we already know.
+    // For now we'll stick with Vectors.
+    content: Vec<u8>,
 }
 
-// final means most inner
-fn create_final_encrypted_payload(
-    message: Vec<u8>,
-    destination_address: DestinationAddressBytes,
-    final_payload_key: &PayloadKey,
-) -> Vec<u8> {
-    // generate zero-padding
-    let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-    // concatenate zero padding with destination and message
-    let mut final_payload = [zero_bytes, destination_address.to_vec(), message].concat();
+impl Payload {
+    pub fn encapsulate_message(
+        plaintext_message: &[u8],
+        payload_keys: &[PayloadKey],
+        destination_address: DestinationAddressBytes,
+    ) -> Self {
+        let final_payload_key = payload_keys
+            .last()
+            .expect("The keys should be already initialized");
+        // encapsulate_most_inner_payload
+        let final_payload_layer =
+            Self::encrypt_final_layer(plaintext_message, final_payload_key, destination_address);
 
-    // encrypt the padded plaintext using the payload key
-    let lioness_cipher =
-        Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(final_payload_key, 0, RAW_KEY_SIZE));
-    lioness_cipher.encrypt(&mut final_payload).unwrap();
+        Self::encrypt_outer_layers(final_payload_layer, payload_keys)
+    }
 
-    final_payload
-}
+    // this is expected to get called after unwrapping all layers so it should be fine to get ownership of the content
+    // as the payload object should no longer be used
+    pub fn get_content(self) -> Vec<u8> {
+        self.content
+    }
 
-fn encapsulate_payload(
-    final_layer_payload_component: Vec<u8>,
-    route_payload_keys: &[PayloadKey],
-) -> Vec<u8> {
-    route_payload_keys
-        .iter()
-        .take(route_payload_keys.len() - 1) // don't take the last key as it was used in create_final_encrypted_payload
-        .rev()
-        .fold(
-            final_layer_payload_component,
-            |mut prev_layer_payload_component, payload_key| {
-                let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
-                    payload_key,
-                    0,
-                    RAW_KEY_SIZE
-                ));
-                lioness_cipher
-                    .encrypt(&mut prev_layer_payload_component)
-                    .unwrap();
-                prev_layer_payload_component
-            },
-        )
+    // in this context final means most inner layer
+    fn encrypt_final_layer(
+        message: &[u8],
+        final_payload_key: &PayloadKey,
+        destination_address: DestinationAddressBytes,
+    ) -> Self {
+        // generate zero-padding
+        let zero_bytes = vec![0u8; SECURITY_PARAMETER];
+
+        // concatenate zero padding with destination and message
+        let mut final_payload: Vec<u8> = zero_bytes
+            .iter()
+            .cloned()
+            .chain(destination_address.to_vec().iter().cloned())
+            .chain(message.iter().cloned())
+            .collect();
+
+        // encrypt the padded plaintext using the payload key
+        let lioness_cipher =
+            Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(final_payload_key, 0, RAW_KEY_SIZE));
+        lioness_cipher.encrypt(&mut final_payload).unwrap();
+
+        Payload {
+            content: final_payload,
+        }
+    }
+
+    fn encrypt_outer_layers(final_payload_layer: Self, route_payload_keys: &[PayloadKey]) -> Self {
+        route_payload_keys
+            .iter()
+            .take(route_payload_keys.len() - 1) // don't take the last key as it was used in create_final_encrypted_payload
+            .rev()
+            .fold(
+                final_payload_layer,
+                |previous_payload_layer, payload_key| {
+                    Self::add_layer_of_encryption(previous_payload_layer, payload_key)
+                },
+            )
+    }
+
+    fn add_layer_of_encryption(current_layer: Self, payload_enc_key: &PayloadKey) -> Self {
+        let lioness_cipher =
+            Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_enc_key, 0, RAW_KEY_SIZE));
+
+        let mut payload_content = current_layer.content.clone();
+        lioness_cipher.encrypt(&mut payload_content).unwrap();
+
+        Payload {
+            content: payload_content,
+        }
+    }
+
+    pub fn unwrap(self, payload_key: &PayloadKey) -> Self {
+        let mut payload_content = self.content.clone();
+        let lioness_cipher =
+            Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_key, 0, RAW_KEY_SIZE));
+        lioness_cipher.decrypt(&mut payload_content).unwrap();
+        Payload {
+            content: payload_content,
+        }
+    }
 }
 
 #[cfg(test)]
 mod test_encrypting_final_payload {
-    use crate::header::keys::routing_keys_fixture;
-    use crate::route::destination_address_fixture;
-
     use super::*;
     use crate::constants::DESTINATION_ADDRESS_LENGTH;
+    use crate::header::keys::routing_keys_fixture;
+    use crate::route::destination_address_fixture;
 
     #[test]
     fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
@@ -91,21 +115,20 @@ mod test_encrypting_final_payload {
         let destination = destination_address_fixture();
         let routing_keys = routing_keys_fixture();
         let final_enc_payload =
-            create_final_encrypted_payload(message, destination, &routing_keys.payload_key);
+            Payload::encrypt_final_layer(&message, &routing_keys.payload_key, destination);
 
         assert_eq!(
             SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + message_len,
-            final_enc_payload.len()
+            final_enc_payload.content.len()
         );
     }
 }
 
 #[cfg(test)]
 mod test_encapsulating_payload {
+    use super::*;
     use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
     use crate::route::destination_address_fixture;
-
-    use super::*;
 
     #[test]
     fn always_both_input_and_output_are_the_same_length() {
@@ -117,13 +140,39 @@ mod test_encapsulating_payload {
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = vec![payload_key_1, payload_key_2, payload_key_3];
 
-        let final_enc_payload =
-            create_final_encrypted_payload(message, destination, &payload_key_1);
-
-        let payload_encapsulation = encapsulate_payload(final_enc_payload, &payload_keys);
+        let final_enc_payload = Payload::encrypt_final_layer(&message, &payload_key_1, destination);
+        let payload_encapsulation = Payload::encrypt_outer_layers(final_enc_payload, &payload_keys);
         assert_eq!(
             SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + message_len,
-            payload_encapsulation.len()
+            payload_encapsulation.content.len()
         );
+    }
+}
+
+#[cfg(test)]
+mod test_unwrapping_payload {
+    use super::*;
+    use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
+    use crate::route::destination_address_fixture;
+    #[test]
+    fn unwrapping_results_in_original_payload_plaintext() {
+        let message = vec![1u8, 16];
+        let destination = destination_address_fixture();
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+        let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
+        let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
+        let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
+
+        let encrypted_payload = Payload::encapsulate_message(&message, &payload_keys, destination);
+
+        let unwrapped_payload = payload_keys
+            .iter()
+            .fold(encrypted_payload, |current_layer, payload_key| {
+                current_layer.unwrap(payload_key)
+            });
+
+        let zero_bytes = vec![0u8; SECURITY_PARAMETER];
+        let expected_payload = [zero_bytes, destination.to_vec(), message].concat();
+        assert_eq!(expected_payload, unwrapped_payload.get_content());
     }
 }
