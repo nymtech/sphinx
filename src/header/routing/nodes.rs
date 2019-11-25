@@ -124,15 +124,63 @@ pub struct PaddedEncryptedRoutingInformation {
 }
 
 impl PaddedEncryptedRoutingInformation {
-    pub fn decrypt(self, key: StreamCipherKey) -> Vec<u8> {
+    pub fn decrypt(self, key: StreamCipherKey) -> RawRoutingInformation {
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &key,
             &crypto::STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
 
-        utils::bytes::xor(&self.value, &pseudorandom_bytes)
+        RawRoutingInformation {
+            value: utils::bytes::xor(&self.value, &pseudorandom_bytes),
+        }
     }
+}
+
+pub struct RawRoutingInformation {
+    value: Vec<u8>,
+}
+
+impl RawRoutingInformation {
+    pub fn parse(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+        assert_eq!(
+            3 * SECURITY_PARAMETER + ENCRYPTED_ROUTING_INFO_SIZE,
+            self.value.len()
+        );
+
+        // TODO: first byte (or equivalent) to say 'final hop' to read destination information
+        // or 'forward hop' to treat it as next mix data
+        self.parse_as_forward_hop()
+    }
+
+    fn parse_as_forward_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+        let mut i = 0;
+
+        // first NODE_ADDRESS_LENGTH bytes represents the next hop address
+        let mut next_hop_address: [u8; NODE_ADDRESS_LENGTH] = Default::default();
+        next_hop_address.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
+        i += NODE_ADDRESS_LENGTH;
+
+        // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
+        let mut next_hop_integrity_mac: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
+        next_hop_integrity_mac.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
+        i += HEADER_INTEGRITY_MAC_SIZE;
+
+        // the next ENCRYPTED_ROUTING_INFO_SIZE bytes represent the routing information for the next hop
+        let mut next_hop_encrypted_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        next_hop_encrypted_routing_information
+            .copy_from_slice(&self.value[i..i + ENCRYPTED_ROUTING_INFO_SIZE]);
+
+        let next_hop_encapsulated_routing_info = EncapsulatedRoutingInformation::encapsulate(
+            EncryptedRoutingInformation::from_bytes(next_hop_encrypted_routing_information),
+            HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
+        );
+
+        (next_hop_address, next_hop_encapsulated_routing_info)
+    }
+
+    // TODO:
+    fn parse_as_final_hop(self) {}
 }
 
 // result of truncating encrypted beta before passing it to next 'layer'
@@ -255,6 +303,44 @@ mod truncating_routing_information {
         for i in 0..truncated_routing_info.len() {
             assert_eq!(truncated_routing_info[i], routing_info_data_copy[i]);
         }
+    }
+}
+
+#[cfg(test)]
+mod parse_decrypted_routing_information {
+    use super::*;
+    use crate::header::mac::header_integrity_mac_fixture;
+    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::route::node_address_fixture;
+
+    #[test]
+    fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
+        let address_fixture = node_address_fixture();
+        let integrity_mac = header_integrity_mac_fixture().get_value();
+        let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
+
+        let data = [
+            address_fixture.to_vec(),
+            integrity_mac.to_vec(),
+            next_routing_information.to_vec(),
+        ]
+        .concat();
+
+        let raw_routing_info = RawRoutingInformation { value: data };
+
+        let (address, encapsulated_routing_info) = raw_routing_info.parse();
+        assert_eq!(address_fixture, address);
+        assert_eq!(
+            integrity_mac,
+            encapsulated_routing_info.integrity_mac.get_value()
+        );
+        assert_eq!(
+            next_routing_information.to_vec(),
+            encapsulated_routing_info
+                .enc_routing_information
+                .get_value_ref()
+                .to_vec()
+        );
     }
 }
 

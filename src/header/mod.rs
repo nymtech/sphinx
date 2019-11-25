@@ -3,7 +3,8 @@ use curve25519_dalek::scalar::Scalar;
 use crate::crypto;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
-use crate::header::keys::PayloadKey;
+use crate::header::keys::{PayloadKey, StreamCipherKey};
+use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::EncapsulatedRoutingInformation;
 use crate::route::{Destination, Node, NodeAddressBytes};
 
@@ -12,7 +13,6 @@ pub mod filler;
 pub mod keys;
 pub mod mac;
 pub mod routing;
-pub mod unwrap;
 
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
@@ -56,6 +56,17 @@ impl SphinxHeader {
         )
     }
 
+    fn unwrap_routing_information(
+        enc_routing_information: EncryptedRoutingInformation,
+        stream_cipher_key: StreamCipherKey,
+    ) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+        // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
+        enc_routing_information
+            .add_zero_padding()
+            .decrypt(stream_cipher_key)
+            .parse()
+    }
+
     pub fn process(
         self,
         node_secret_key: Scalar,
@@ -74,7 +85,7 @@ impl SphinxHeader {
         // blind the shared_secret in the header
         let new_shared_secret = self.blind_the_shared_secret(shared_secret, shared_key);
 
-        let (next_hop_address, encapsulated_next_hop) = unwrap::unwrap_routing_information(
+        let (next_hop_address, encapsulated_next_hop) = Self::unwrap_routing_information(
             self.routing_info.enc_routing_information,
             routing_keys.stream_cipher_key,
         );
@@ -140,5 +151,62 @@ mod create_and_process_sphinx_packet_header {
 
         let (_, next_hop_address3, _) = new_header2.process(node3_sk).unwrap();
         assert_eq!(destination.address, next_hop_address3);
+    }
+}
+
+#[cfg(test)]
+mod unwrap_routing_information {
+    use super::*;
+    use crate::constants::{
+        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, STREAM_CIPHER_OUTPUT_LENGTH,
+    };
+    use crate::crypto;
+    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::utils;
+
+    #[test]
+    fn it_returns_correct_unwrapped_routing_information() {
+        let routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
+        let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
+            &stream_cipher_key,
+            &crypto::STREAM_CIPHER_INIT_VECTOR,
+            STREAM_CIPHER_OUTPUT_LENGTH,
+        );
+        let encrypted_routing_info_vec = utils::bytes::xor(
+            &routing_info,
+            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
+        );
+        let mut encrypted_routing_info_array = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        encrypted_routing_info_array.copy_from_slice(&encrypted_routing_info_vec);
+
+        let enc_routing_info =
+            EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
+        let expected_next_hop_encrypted_routing_information = [
+            routing_info[NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
+            pseudorandom_bytes
+                [NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
+                .to_vec(),
+        ]
+        .concat();
+        let (next_hop_address, next_hop_encapsulated_routing_info) =
+            SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key);
+
+        assert_eq!(routing_info[..NODE_ADDRESS_LENGTH], next_hop_address);
+        assert_eq!(
+            routing_info[NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
+            next_hop_encapsulated_routing_info.integrity_mac.get_value()
+        );
+
+        let next_hop_encrypted_routing_information = next_hop_encapsulated_routing_info
+            .enc_routing_information
+            .get_value_ref();
+
+        for i in 0..expected_next_hop_encrypted_routing_information.len() {
+            assert_eq!(
+                expected_next_hop_encrypted_routing_information[i],
+                next_hop_encrypted_routing_information[i]
+            );
+        }
     }
 }
