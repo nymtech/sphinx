@@ -261,11 +261,12 @@ mod encapsulating_forward_routing_information {
         p is destination padding
         */
 
-        // TODO: IMPLEMENT SPHINX HEADER LAYER UNWRAPING
-        // HOWEVER! to test it, we need to first wrap function to unwrap header layer because each consequtive (ni, mi) pair is encrypted
+        // TODO: IMPLEMENT SPHINX HEADER LAYER UNWRAPPING
+        // HOWEVER! to test it, we need to first wrap function to unwrap header layer because each consecutive (ni, mi) pair is encrypted
     }
 }
 
+#[allow(dead_code)]
 pub fn encapsulated_routing_information_fixture() -> EncapsulatedRoutingInformation {
     EncapsulatedRoutingInformation {
         enc_routing_information: encrypted_routing_information_fixture(),

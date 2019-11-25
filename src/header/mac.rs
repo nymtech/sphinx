@@ -24,6 +24,7 @@ impl HeaderIntegrityMac {
         self.value
     }
 
+    #[allow(dead_code)]
     pub fn get_value_ref(&self) -> &[u8] {
         self.value.as_ref()
     }

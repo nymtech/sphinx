@@ -164,7 +164,7 @@ mod computing_blinding_factor {
 //
 #[cfg(test)]
 mod deriving_key_material {
-    use crate::route::{node_address_fixture, surb_identifier_fixture, Destination, Node};
+    use crate::route::Node;
 
     use super::*;
 
@@ -260,6 +260,7 @@ mod key_derivation_function {
     }
 }
 
+#[allow(dead_code)]
 pub fn routing_keys_fixture() -> RoutingKeys {
     RoutingKeys {
         stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],

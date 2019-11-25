@@ -28,6 +28,7 @@ pub fn random(number: usize) -> Vec<u8> {
 mod test_random {
     use super::*;
 
+    #[test]
     fn test_generating_specified_number_of_bytes() {
         let random_bytes = random(10);
         assert_eq!(10, random_bytes.len());
@@ -47,7 +48,7 @@ mod test_xor_with {
             use super::*;
 
             #[test]
-            fn does_not_change_intitial_value() {
+            fn does_not_change_initial_value() {
                 let mut a: Vec<u8> = vec![];
                 let b: Vec<u8> = vec![];
                 xor_with(&mut a, &b);
@@ -122,7 +123,7 @@ mod test_xor {
         fn panics_for_inputs_of_different_lengths() {
             let a: Vec<u8> = vec![1, 2, 3];
             let b: Vec<u8> = vec![4, 5];
-            let c = xor(&a, &b);
+            let _ = xor(&a, &b);
         }
     }
 }
