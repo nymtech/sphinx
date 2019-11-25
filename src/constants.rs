@@ -16,3 +16,4 @@ pub const IDENTIFIER_LENGTH: usize = SECURITY_PARAMETER;
 pub const INTEGRITY_MAC_KEY_SIZE: usize = SECURITY_PARAMETER;
 pub const HEADER_INTEGRITY_MAC_SIZE: usize = SECURITY_PARAMETER;
 pub const PAYLOAD_KEY_SIZE: usize = 192; // must be 192 because of the Lioness implementation we're using
+pub const HOP_META_INFO: usize = NODE_ADDRESS_LENGTH;

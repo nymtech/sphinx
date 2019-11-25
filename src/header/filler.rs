@@ -1,9 +1,11 @@
-use crate::constants::{MAX_PATH_LENGTH, SECURITY_PARAMETER};
+use crate::constants::{
+    HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO, MAX_PATH_LENGTH, SECURITY_PARAMETER,
+};
 use crate::crypto;
 use crate::header::keys::RoutingKeys;
 use crate::{constants, utils};
 
-const FILLER_STEP_SIZE_INCREASE: usize = 3 * SECURITY_PARAMETER;
+const FILLER_STEP_SIZE_INCREASE: usize = HOP_META_INFO + HEADER_INTEGRITY_MAC_SIZE;
 
 #[derive(Debug, PartialEq)]
 pub struct Filler {
@@ -90,10 +92,7 @@ mod test_creating_pseudorandom_bytes {
             .collect();
         let filler_string = Filler::new(&routing_keys);
 
-        assert_eq!(
-            1 * 3 * constants::SECURITY_PARAMETER,
-            filler_string.value.len()
-        );
+        assert_eq!(1 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
     }
 
     #[test]
@@ -108,10 +107,7 @@ mod test_creating_pseudorandom_bytes {
             .map(|&key| keys::RoutingKeys::derive(key))
             .collect();
         let filler_string = Filler::new(&routing_keys);
-        assert_eq!(
-            3 * 3 * constants::SECURITY_PARAMETER,
-            filler_string.value.len()
-        );
+        assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
     }
 
     #[test]
@@ -195,6 +191,6 @@ mod test_generating_filler_bytes {
 #[allow(dead_code)]
 pub fn filler_fixture(i: usize) -> Filler {
     Filler {
-        value: vec![9u8; 3 * SECURITY_PARAMETER * i],
+        value: vec![9u8; FILLER_STEP_SIZE_INCREASE * i],
     }
 }
