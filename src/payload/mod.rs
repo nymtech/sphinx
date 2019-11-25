@@ -4,9 +4,13 @@ use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-use crate::constants::SECURITY_PARAMETER;
+use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
 use crate::header::keys::PayloadKey;
+use crate::header::SphinxUnwrapError;
 use crate::route::DestinationAddressBytes;
+
+// TODO: at minimum it HAS TO be at least equal to length of the key but this value needs to be adjusted
+pub const PAYLOAD_SIZE: usize = PAYLOAD_KEY_SIZE;
 
 // we might want to swap this one with a different implementation
 pub struct Payload {
@@ -36,6 +40,10 @@ impl Payload {
     // as the payload object should no longer be used
     pub fn get_content(self) -> Vec<u8> {
         self.content
+    }
+
+    pub fn get_content_ref(&self) -> &[u8] {
+        self.content.as_ref()
     }
 
     // in this context final means most inner layer
@@ -98,6 +106,16 @@ impl Payload {
         Payload {
             content: payload_content,
         }
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, SphinxUnwrapError> {
+        // TODO: currently it's defined as minimum size. It should be always constant length in the future
+        // once we decide on payload size
+        if bytes.len() < PAYLOAD_SIZE {
+            return Err(SphinxUnwrapError::InvalidLengthError);
+        }
+
+        Ok(Payload { content: bytes })
     }
 }
 
