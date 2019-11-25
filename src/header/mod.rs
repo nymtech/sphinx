@@ -22,6 +22,7 @@ pub struct SphinxHeader {
 #[derive(Debug)]
 pub enum SphinxUnwrapError {
     IntegrityMacError,
+    InvalidLengthError,
 }
 
 impl SphinxHeader {
@@ -31,7 +32,7 @@ impl SphinxHeader {
         initial_secret: Scalar,
         route: &[Node],
         destination: &Destination,
-    ) -> (SphinxHeader, Vec<PayloadKey>) {
+    ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
         let _ = delays::generate(route.len());
         let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
@@ -97,6 +98,10 @@ impl SphinxHeader {
 
         Ok((new_header, next_hop_address, routing_keys.payload_key))
     }
+
+    pub fn to_bytes() {}
+
+    pub fn from_bytes() {}
 
     fn blind_the_shared_secret(
         &self,
