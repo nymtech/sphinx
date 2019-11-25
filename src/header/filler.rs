@@ -5,7 +5,7 @@ use crate::crypto;
 use crate::header::keys::RoutingKeys;
 use crate::{constants, utils};
 
-const FILLER_STEP_SIZE_INCREASE: usize = HOP_META_INFO + HEADER_INTEGRITY_MAC_SIZE;
+pub const FILLER_STEP_SIZE_INCREASE: usize = HOP_META_INFO + HEADER_INTEGRITY_MAC_SIZE;
 
 #[derive(Debug, PartialEq)]
 pub struct Filler {

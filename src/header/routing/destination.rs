@@ -3,10 +3,10 @@ use crate::constants::{
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
-use crate::header::filler::Filler;
+use crate::header::filler::{Filler, FILLER_STEP_SIZE_INCREASE};
 use crate::header::keys::StreamCipherKey;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
-use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+use crate::header::routing::MAX_ENCRYPTED_ROUTING_INFO_SIZE;
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
 
@@ -41,14 +41,18 @@ impl FinalRoutingInformation {
 
     fn max_padded_destination_identifier_length(route_len: usize) -> usize {
         // this should evaluate to (3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER
-        Self::max_destination_length(route_len) + IDENTIFIER_LENGTH
+        MAX_ENCRYPTED_ROUTING_INFO_SIZE - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
     }
 
     pub(super) fn add_padding(self, route_len: usize) -> PaddedFinalRoutingInformation {
         // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
         // attack on sphinx described by Kuhn et al.
-        let padding =
-            utils::bytes::random(Self::max_destination_length(route_len) - self.destination.len());
+        let padding = utils::bytes::random(
+            MAX_ENCRYPTED_ROUTING_INFO_SIZE
+                - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
+                - self.destination.len()
+                - self.identifier.len(),
+        );
 
         // return D || I || PAD
         PaddedFinalRoutingInformation {
@@ -109,16 +113,22 @@ impl EncryptedPaddedFinalRoutingInformation {
         route_len: usize,
     ) -> EncryptedRoutingInformation {
         let filler_value = filler.get_value();
-        assert_eq!(filler_value.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
+        assert_eq!(
+            filler_value.len(),
+            FILLER_STEP_SIZE_INCREASE * (route_len - 1)
+        );
 
         let final_routing_info_vec: Vec<u8> =
             self.value.iter().cloned().chain(filler_value).collect();
 
         // sanity check assertion, because we're using vectors
-        assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);
-        let mut final_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        assert_eq!(
+            final_routing_info_vec.len(),
+            MAX_ENCRYPTED_ROUTING_INFO_SIZE
+        );
+        let mut final_routing_information = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
         final_routing_information
-            .copy_from_slice(&final_routing_info_vec[..ENCRYPTED_ROUTING_INFO_SIZE]);
+            .copy_from_slice(&final_routing_info_vec[..MAX_ENCRYPTED_ROUTING_INFO_SIZE]);
         EncryptedRoutingInformation::from_bytes(final_routing_information)
     }
 }
@@ -181,7 +191,7 @@ mod test_encapsulating_final_routing_information {
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
-        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+        let expected_final_header_len = MAX_ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
@@ -202,7 +212,7 @@ mod test_encapsulating_final_routing_information {
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
-        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+        let expected_final_header_len = MAX_ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
@@ -223,7 +233,7 @@ mod test_encapsulating_final_routing_information {
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
-        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+        let expected_final_header_len = MAX_ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,

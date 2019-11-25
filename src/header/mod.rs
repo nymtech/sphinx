@@ -161,12 +161,12 @@ mod unwrap_routing_information {
         HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
-    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::header::routing::MAX_ENCRYPTED_ROUTING_INFO_SIZE;
     use crate::utils;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
-        let routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        let routing_info = [9u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
         let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &stream_cipher_key,
@@ -175,17 +175,18 @@ mod unwrap_routing_information {
         );
         let encrypted_routing_info_vec = utils::bytes::xor(
             &routing_info,
-            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
+            &pseudorandom_bytes[..MAX_ENCRYPTED_ROUTING_INFO_SIZE],
         );
-        let mut encrypted_routing_info_array = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut encrypted_routing_info_array = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
         encrypted_routing_info_array.copy_from_slice(&encrypted_routing_info_vec);
 
         let enc_routing_info =
             EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
         let expected_next_hop_encrypted_routing_information = [
             routing_info[NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
-            pseudorandom_bytes
-                [NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
+            pseudorandom_bytes[NODE_ADDRESS_LENGTH
+                + HEADER_INTEGRITY_MAC_SIZE
+                + MAX_ENCRYPTED_ROUTING_INFO_SIZE..]
                 .to_vec(),
         ]
         .concat();
