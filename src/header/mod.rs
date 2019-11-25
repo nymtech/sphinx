@@ -1,12 +1,14 @@
 use curve25519_dalek::scalar::Scalar;
 
+use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
 use crate::header::keys::{PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::EncryptedRoutingInformation;
-use crate::header::routing::EncapsulatedRoutingInformation;
+use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, Node, NodeAddressBytes};
+use curve25519_dalek::montgomery::MontgomeryPoint;
 
 pub mod delays;
 pub mod filler;
@@ -99,9 +101,37 @@ impl SphinxHeader {
         Ok((new_header, next_hop_address, routing_keys.payload_key))
     }
 
-    pub fn to_bytes() {}
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.shared_secret
+            .as_bytes()
+            .iter()
+            .cloned()
+            .chain(self.routing_info.to_bytes())
+            .collect()
+    }
 
-    pub fn from_bytes() {}
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, SphinxUnwrapError> {
+        // 32 represents size of a MontgomeryPoint on Curve25519
+        if bytes.len() != 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE {
+            return Err(SphinxUnwrapError::InvalidLengthError);
+        }
+
+        let mut shared_secret_bytes = [0u8; 32];
+        // first 32 bytes represent the shared secret
+        shared_secret_bytes.copy_from_slice(&bytes[..32]);
+
+        // the rest are for the encapsulated routing info
+        let encapsulated_routing_info_bytes =
+            bytes[32..32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE].to_vec();
+
+        let routing_info =
+            EncapsulatedRoutingInformation::from_bytes(encapsulated_routing_info_bytes)?;
+
+        Ok(SphinxHeader {
+            shared_secret: MontgomeryPoint(shared_secret_bytes),
+            routing_info,
+        })
+    }
 
     fn blind_the_shared_secret(
         &self,
@@ -213,5 +243,30 @@ mod unwrap_routing_information {
                 next_hop_encrypted_routing_information[i]
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod converting_header_to_bytes {
+    use super::*;
+    use crate::crypto::generate_random_curve_point;
+    use crate::header::routing::encapsulated_routing_information_fixture;
+
+    #[test]
+    fn it_is_possible_to_convert_back_and_forth() {
+        let encapsulated_routing_info = encapsulated_routing_information_fixture();
+        let header = SphinxHeader {
+            shared_secret: generate_random_curve_point(),
+            routing_info: encapsulated_routing_info,
+        };
+
+        let header_bytes = header.to_bytes();
+        let recovered_header = SphinxHeader::from_bytes(header_bytes).unwrap();
+
+        assert_eq!(header.shared_secret, recovered_header.shared_secret);
+        assert_eq!(
+            header.routing_info.to_bytes(),
+            recovered_header.routing_info.to_bytes()
+        );
     }
 }
