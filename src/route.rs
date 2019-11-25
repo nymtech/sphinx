@@ -25,7 +25,7 @@ impl Destination {
     }
 }
 
-//#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Node {
     pub address: NodeAddressBytes,
     pub pub_key: crypto::PublicKey,
