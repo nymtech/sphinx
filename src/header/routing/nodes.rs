@@ -195,6 +195,7 @@ impl RawRoutingInformation {
         (next_hop_address, next_hop_encapsulated_routing_info)
     }
 
+    // TODO: this needs to be updated as a correct parse as final hop function!
     fn parse_as_final_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
         let mut i = 1;
 
