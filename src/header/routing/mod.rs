@@ -2,7 +2,6 @@ use crate::constants::{
     DESTINATION_ADDRESS_LENGTH, FLAG_LENGTH, HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH,
     IDENTIFIER_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER,
 };
-use crate::header;
 use crate::header::filler::Filler;
 use crate::header::keys::RoutingKeys;
 use crate::header::mac::HeaderIntegrityMac;
@@ -11,6 +10,7 @@ use crate::header::routing::nodes::{
     encrypted_routing_information_fixture, EncryptedRoutingInformation, RoutingInformation,
 };
 use crate::route::{Destination, Node};
+use crate::{header, ProcessingError};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     MAX_ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH - FLAG_LENGTH;
@@ -105,10 +105,42 @@ impl EncapsulatedRoutingInformation {
                 },
             )
     }
-}
 
-// TODO: all tests were retrofitted to work with new code structure,
-// they should be rewritten to work better with what we have now.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.integrity_mac
+            .get_value_ref()
+            .iter()
+            .cloned()
+            .chain(self.enc_routing_information.get_value_ref().iter().cloned())
+            .collect()
+    }
+
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+        if bytes.len() != HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE {
+            return Err(ProcessingError::InvalidRoutingInformationLengthError);
+        }
+
+        let mut integrity_mac_bytes = [0u8; HEADER_INTEGRITY_MAC_SIZE];
+        let mut enc_routing_info_bytes = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+
+        // first bytes represent the mac
+        integrity_mac_bytes.copy_from_slice(&bytes[..HEADER_INTEGRITY_MAC_SIZE]);
+        // the rest are for the routing info
+        enc_routing_info_bytes.copy_from_slice(
+            &bytes[HEADER_INTEGRITY_MAC_SIZE
+                ..HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+        );
+
+        let integrity_mac = HeaderIntegrityMac::from_bytes(integrity_mac_bytes);
+        let enc_routing_information =
+            EncryptedRoutingInformation::from_bytes(enc_routing_info_bytes);
+
+        Ok(EncapsulatedRoutingInformation {
+            enc_routing_information,
+            integrity_mac,
+        })
+    }
+}
 
 #[cfg(test)]
 mod encapsulating_all_routing_information {
@@ -268,6 +300,41 @@ mod encapsulating_forward_routing_information {
 
         // TODO: IMPLEMENT SPHINX HEADER LAYER UNWRAPPING
         // HOWEVER! to test it, we need to first wrap function to unwrap header layer because each consecutive (ni, mi) pair is encrypted
+    }
+}
+
+#[cfg(test)]
+mod converting_encapsulated_routing_info_to_bytes {
+    use super::*;
+
+    #[test]
+    fn it_is_possible_to_convert_back_and_forth() {
+        let encapsulated_routing_info = encapsulated_routing_information_fixture();
+        let encapsulated_routing_info_bytes = encapsulated_routing_info.to_bytes();
+
+        let recovered_routing_info =
+            EncapsulatedRoutingInformation::from_bytes(encapsulated_routing_info_bytes).unwrap();
+        assert_eq!(
+            encapsulated_routing_info
+                .enc_routing_information
+                .get_value_ref()
+                .to_vec(),
+            recovered_routing_info
+                .enc_routing_information
+                .get_value_ref()
+                .to_vec()
+        );
+
+        assert_eq!(
+            encapsulated_routing_info
+                .integrity_mac
+                .get_value_ref()
+                .to_vec(),
+            recovered_routing_info
+                .integrity_mac
+                .get_value_ref()
+                .to_vec()
+        );
     }
 }
 

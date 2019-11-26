@@ -1,6 +1,9 @@
-use crate::payload::Payload;
-use crate::route::{Destination, Node, NodeAddressBytes};
 use curve25519_dalek::scalar::Scalar;
+
+use crate::constants::PAYLOAD_KEY_SIZE;
+use crate::header::{SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
+use crate::payload::{Payload, PAYLOAD_SIZE};
+use crate::route::{Destination, Node, NodeAddressBytes};
 
 mod constants;
 pub mod crypto;
@@ -8,6 +11,14 @@ mod header;
 mod payload;
 pub mod route;
 mod utils;
+
+#[derive(Debug)]
+pub enum ProcessingError {
+    InvalidRoutingInformationLengthError,
+    InvalidHeaderLengthError,
+    InvalidPayloadLengthError,
+    InvalidPacketLengthError,
+}
 
 pub struct SphinxPacket {
     header: header::SphinxHeader,
@@ -39,21 +50,27 @@ impl SphinxPacket {
         )
     }
 
-    pub fn to_bytes() -> Vec<u8> {
-        vec![]
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.header
+            .to_bytes()
+            .iter()
+            .cloned()
+            .chain(self.payload.get_content_ref().iter().cloned())
+            .collect()
     }
 
-    pub fn from_bytes() -> Option<SphinxPacket> {
-        //        SphinxPacket {
-        //            header: SphinxHeader {
-        //                shared_secret: Default::default(),
-        //                routing_info: EncapsulatedRoutingInformation {
-        //                    enc_routing_information: (),
-        //                    integrity_mac: (),
-        //                },
-        //            },
-        //            payload: vec![],
-        //        }
-        None
+    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+        // TODO: currently it's defined as minimum size. It should be always constant length in the future
+        // once we decide on payload size
+        if bytes.len() < HEADER_SIZE + PAYLOAD_SIZE {
+            return Err(ProcessingError::InvalidPacketLengthError);
+        }
+
+        let header_bytes = bytes[..HEADER_SIZE].to_vec();
+        let payload_bytes = bytes[HEADER_SIZE..].to_vec();
+        let header = SphinxHeader::from_bytes(header_bytes)?;
+        let payload = Payload::from_bytes(payload_bytes)?;
+
+        Ok(SphinxPacket { header, payload })
     }
 }
