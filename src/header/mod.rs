@@ -22,6 +22,7 @@ pub struct SphinxHeader {
 #[derive(Debug)]
 pub enum SphinxUnwrapError {
     IntegrityMacError,
+    RoutingFlagNotRecognized,
 }
 
 impl SphinxHeader {
@@ -59,7 +60,7 @@ impl SphinxHeader {
     fn unwrap_routing_information(
         enc_routing_information: EncryptedRoutingInformation,
         stream_cipher_key: StreamCipherKey,
-    ) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+    ) -> Result<(NodeAddressBytes, EncapsulatedRoutingInformation), SphinxUnwrapError> {
         // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
         enc_routing_information
             .add_zero_padding()
@@ -88,7 +89,8 @@ impl SphinxHeader {
         let (next_hop_address, encapsulated_next_hop) = Self::unwrap_routing_information(
             self.routing_info.enc_routing_information,
             routing_keys.stream_cipher_key,
-        );
+        )
+        .unwrap();
 
         let new_header = SphinxHeader {
             shared_secret: new_shared_secret,
@@ -158,15 +160,17 @@ mod create_and_process_sphinx_packet_header {
 mod unwrap_routing_information {
     use super::*;
     use crate::constants::{
-        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, STREAM_CIPHER_OUTPUT_LENGTH,
+        HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH, NODE_ADDRESS_LENGTH,
+        STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
-    use crate::header::routing::MAX_ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::header::routing::{MAX_ENCRYPTED_ROUTING_INFO_SIZE, ROUTING_FLAG};
     use crate::utils;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
-        let routing_info = [9u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut routing_info = [9u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        routing_info[0] = ROUTING_FLAG;
         let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &stream_cipher_key,
@@ -183,17 +187,17 @@ mod unwrap_routing_information {
         let enc_routing_info =
             EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
         let expected_next_hop_encrypted_routing_information = [
-            routing_info[NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
-            pseudorandom_bytes[NODE_ADDRESS_LENGTH
+            routing_info[HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
+            pseudorandom_bytes[HOP_META_INFO_LENGTH
                 + HEADER_INTEGRITY_MAC_SIZE
                 + MAX_ENCRYPTED_ROUTING_INFO_SIZE..]
                 .to_vec(),
         ]
         .concat();
         let (next_hop_address, next_hop_encapsulated_routing_info) =
-            SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key);
+            SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key).unwrap();
 
-        assert_eq!(routing_info[..NODE_ADDRESS_LENGTH], next_hop_address);
+        assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address);
         assert_eq!(
             routing_info[NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
             next_hop_encapsulated_routing_info.integrity_mac.get_value()

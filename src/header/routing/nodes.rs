@@ -1,21 +1,25 @@
 use crate::constants::{
-    HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER,
+    STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
-    EncapsulatedRoutingInformation, MAX_ENCRYPTED_ROUTING_INFO_SIZE, TRUNCATED_ROUTING_INFO_SIZE,
+    EncapsulatedRoutingInformation, FINAL_FLAG, MAX_ENCRYPTED_ROUTING_INFO_SIZE, ROUTING_FLAG,
+    TRUNCATED_ROUTING_INFO_SIZE,
 };
+use crate::header::SphinxUnwrapError;
 use crate::route::NodeAddressBytes;
 use crate::utils;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
-    MAX_ENCRYPTED_ROUTING_INFO_SIZE + NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
+    MAX_ENCRYPTED_ROUTING_INFO_SIZE + HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
 
 // in paper beta
 pub(super) struct RoutingInformation {
+    flag: u8,
     // in paper nu
     node_address: NodeAddressBytes,
     // in paper gamma
@@ -30,6 +34,7 @@ impl RoutingInformation {
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
     ) -> Self {
         RoutingInformation {
+            flag: ROUTING_FLAG,
             node_address,
             header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
             next_routing_information: next_encapsulated_routing_information
@@ -39,9 +44,10 @@ impl RoutingInformation {
     }
 
     fn concatenate_components(self) -> Vec<u8> {
-        self.node_address
+        vec![self.flag]
             .iter()
             .cloned()
+            .chain(self.node_address.iter().cloned())
             .chain(self.header_integrity_mac.get_value().iter().cloned())
             .chain(self.next_routing_information.iter().cloned())
             .collect()
@@ -108,7 +114,7 @@ impl EncryptedRoutingInformation {
     }
 
     pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
-        let zero_bytes = vec![0u8; 3 * SECURITY_PARAMETER];
+        let zero_bytes = vec![0u8; HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE];
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().cloned().chain(zero_bytes).collect();
 
@@ -134,6 +140,7 @@ impl PaddedEncryptedRoutingInformation {
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
 
+        assert_eq!(self.value.len(), pseudorandom_bytes.len());
         RawRoutingInformation {
             value: utils::bytes::xor(&self.value, &pseudorandom_bytes),
         }
@@ -145,19 +152,25 @@ pub struct RawRoutingInformation {
 }
 
 impl RawRoutingInformation {
-    pub fn parse(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+    pub fn parse(
+        self,
+    ) -> Result<(NodeAddressBytes, EncapsulatedRoutingInformation), SphinxUnwrapError> {
         assert_eq!(
-            3 * SECURITY_PARAMETER + MAX_ENCRYPTED_ROUTING_INFO_SIZE,
+            HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE,
             self.value.len()
         );
 
         // TODO: first byte (or equivalent) to say 'final hop' to read destination information
-        // or 'forward hop' to treat it as next mix data
-        self.parse_as_forward_hop()
+        let flag = self.value[0];
+        match flag {
+            ROUTING_FLAG => Ok(self.parse_as_forward_hop()),
+            FINAL_FLAG => Ok(self.parse_as_final_hop()),
+            _ => Err(SphinxUnwrapError::RoutingFlagNotRecognized),
+        }
     }
 
     fn parse_as_forward_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
-        let mut i = 0;
+        let mut i = 1;
 
         // first NODE_ADDRESS_LENGTH bytes represents the next hop address
         let mut next_hop_address: [u8; NODE_ADDRESS_LENGTH] = Default::default();
@@ -182,8 +195,31 @@ impl RawRoutingInformation {
         (next_hop_address, next_hop_encapsulated_routing_info)
     }
 
-    // TODO:
-    fn parse_as_final_hop(self) {}
+    fn parse_as_final_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+        let mut i = 1;
+
+        // first NODE_ADDRESS_LENGTH bytes represents the next hop address
+        let mut next_hop_address: [u8; NODE_ADDRESS_LENGTH] = Default::default();
+        next_hop_address.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
+        i += NODE_ADDRESS_LENGTH;
+
+        // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
+        let mut next_hop_integrity_mac: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
+        next_hop_integrity_mac.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
+        i += HEADER_INTEGRITY_MAC_SIZE;
+
+        // the next ENCRYPTED_ROUTING_INFO_SIZE bytes represent the routing information for the next hop
+        let mut next_hop_encrypted_routing_information = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        next_hop_encrypted_routing_information
+            .copy_from_slice(&self.value[i..i + MAX_ENCRYPTED_ROUTING_INFO_SIZE]);
+
+        let next_hop_encapsulated_routing_info = EncapsulatedRoutingInformation::encapsulate(
+            EncryptedRoutingInformation::from_bytes(next_hop_encrypted_routing_information),
+            HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
+        );
+
+        (next_hop_address, next_hop_encapsulated_routing_info)
+    }
 }
 
 // result of truncating encrypted beta before passing it to next 'layer'
@@ -199,13 +235,15 @@ mod preparing_header_layer {
     use super::*;
 
     #[test]
-    fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
+    fn it_returns_encrypted_truncated_address_and_flag_concatenated_with_inner_layer_and_mac_on_it()
+    {
         let node_address = node_address_fixture();
         let previous_node_routing_keys = routing_keys_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
+            vec![ROUTING_FLAG],
             node_address.to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
@@ -264,11 +302,13 @@ mod encrypting_routing_information {
     #[test]
     fn it_is_possible_to_decrypt_it_to_recover_original_data() {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
+        let flag = ROUTING_FLAG;
         let address = node_address_fixture();
         let mac = header_integrity_mac_fixture();
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
 
         let encryption_data = [
+            vec![flag],
             address.to_vec(),
             mac.get_value_ref().to_vec(),
             next_routing.to_vec(),
@@ -276,6 +316,7 @@ mod encrypting_routing_information {
         .concat();
 
         let routing_information = RoutingInformation {
+            flag: ROUTING_FLAG,
             node_address: address,
             header_integrity_mac: mac,
             next_routing_information: next_routing,
@@ -318,11 +359,13 @@ mod parse_decrypted_routing_information {
 
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
+        let flag = ROUTING_FLAG;
         let address_fixture = node_address_fixture();
         let integrity_mac = header_integrity_mac_fixture().get_value();
         let next_routing_information = [1u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
 
         let data = [
+            vec![flag],
             address_fixture.to_vec(),
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),
@@ -331,7 +374,7 @@ mod parse_decrypted_routing_information {
 
         let raw_routing_info = RawRoutingInformation { value: data };
 
-        let (address, encapsulated_routing_info) = raw_routing_info.parse();
+        let (address, encapsulated_routing_info) = raw_routing_info.parse().unwrap();
         assert_eq!(address_fixture, address);
         assert_eq!(
             integrity_mac,

@@ -1,6 +1,6 @@
 use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO, IDENTIFIER_LENGTH,
-    MAX_PATH_LENGTH, SECURITY_PARAMETER,
+    DESTINATION_ADDRESS_LENGTH, FLAG_LENGTH, HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH,
+    IDENTIFIER_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER,
 };
 use crate::header;
 use crate::header::filler::Filler;
@@ -13,12 +13,15 @@ use crate::header::routing::nodes::{
 use crate::route::{Destination, Node};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
-    MAX_ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH;
+    MAX_ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH - FLAG_LENGTH;
 pub const MAX_ENCRYPTED_ROUTING_INFO_SIZE: usize =
-    (HOP_META_INFO + HEADER_INTEGRITY_MAC_SIZE) * MAX_PATH_LENGTH;
+    (HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE) * MAX_PATH_LENGTH;
 
 pub mod destination;
 pub mod nodes;
+
+pub const ROUTING_FLAG: u8 = 1;
+pub const FINAL_FLAG: u8 = 2;
 
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]
