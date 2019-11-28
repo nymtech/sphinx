@@ -5,9 +5,9 @@ use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
 use crate::header::keys::{PayloadKey, StreamCipherKey};
-use crate::header::routing::nodes::EncryptedRoutingInformation;
+use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
 use crate::header::routing::{EncapsulatedRoutingInformation, MAX_ENCRYPTED_ROUTING_INFO_SIZE};
-use crate::route::{Destination, Node, NodeAddressBytes};
+use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{crypto, ProcessingError};
 
 pub mod delays;
@@ -28,6 +28,12 @@ pub struct SphinxHeader {
 pub enum SphinxUnwrapError {
     IntegrityMacError,
     RoutingFlagNotRecognized,
+    ProcessingHeaderError,
+}
+
+pub enum ProcessedHeader {
+    ProcessedHeaderForwardHop(SphinxHeader, NodeAddressBytes, PayloadKey),
+    ProcessedHeaderFinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
 }
 
 impl SphinxHeader {
@@ -65,7 +71,7 @@ impl SphinxHeader {
     fn unwrap_routing_information(
         enc_routing_information: EncryptedRoutingInformation,
         stream_cipher_key: StreamCipherKey,
-    ) -> Result<(NodeAddressBytes, EncapsulatedRoutingInformation), SphinxUnwrapError> {
+    ) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
         // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
         enc_routing_information
             .add_zero_padding()
@@ -73,10 +79,7 @@ impl SphinxHeader {
             .parse()
     }
 
-    pub fn process(
-        self,
-        node_secret_key: Scalar,
-    ) -> Result<(SphinxHeader, NodeAddressBytes, PayloadKey), SphinxUnwrapError> {
+    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader, SphinxUnwrapError> {
         let shared_secret = self.shared_secret;
         let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
         let routing_keys = keys::RoutingKeys::derive(shared_key);
@@ -91,18 +94,33 @@ impl SphinxHeader {
         // blind the shared_secret in the header
         let new_shared_secret = self.blind_the_shared_secret(shared_secret, shared_key);
 
-        let (next_hop_address, encapsulated_next_hop) = Self::unwrap_routing_information(
+        let unwrapped_routing_information = Self::unwrap_routing_information(
             self.routing_info.enc_routing_information,
             routing_keys.stream_cipher_key,
         )
         .unwrap();
-
-        let new_header = SphinxHeader {
-            shared_secret: new_shared_secret,
-            routing_info: encapsulated_next_hop,
-        };
-
-        Ok((new_header, next_hop_address, routing_keys.payload_key))
+        match unwrapped_routing_information {
+            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                next_hop_address,
+                new_encapsulated_routing_info,
+            ) => Ok(ProcessedHeader::ProcessedHeaderForwardHop(
+                SphinxHeader {
+                    shared_secret: new_shared_secret,
+                    routing_info: new_encapsulated_routing_info,
+                },
+                next_hop_address,
+                routing_keys.payload_key,
+            )),
+            ParsedRawRoutingInformation::FinalHopRoutingInformation(
+                destination_address,
+                identifier,
+            ) => Ok(ProcessedHeader::ProcessedHeaderFinalHop(
+                destination_address,
+                identifier,
+                routing_keys.payload_key,
+            )),
+            _ => Err(SphinxUnwrapError::ProcessingHeaderError),
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -180,14 +198,28 @@ mod create_and_process_sphinx_packet_header {
         let initial_secret = crypto::generate_secret();
         let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &destination);
 
-        let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
-        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+        //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
+        let new_header = match sphinx_header.process(node1_sk).unwrap() {
+            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, _) => {
+                assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                new_header
+            }
+            _ => panic!(),
+        };
 
-        let (new_header2, next_hop_address2, _) = new_header.process(node2_sk).unwrap();
-        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address2);
-
-        let (_, next_hop_address3, _) = new_header2.process(node3_sk).unwrap();
-        assert_eq!(destination.address, next_hop_address3);
+        let new_header2 = match new_header.process(node2_sk).unwrap() {
+            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, _) => {
+                assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                new_header
+            }
+            _ => panic!(),
+        };
+        let fianl_hop = match new_header2.process(node3_sk).unwrap() {
+            ProcessedHeader::ProcessedHeaderFinalHop(final_destination, identifier, _) => {
+                assert_eq!(destination.address, final_destination);
+            }
+            _ => panic!(),
+        };
     }
 }
 
@@ -230,14 +262,24 @@ mod unwrap_routing_information {
                 .to_vec(),
         ]
         .concat();
-        let (next_hop_address, next_hop_encapsulated_routing_info) =
-            SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key).unwrap();
-
-        assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address);
-        assert_eq!(
-            routing_info[NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
-            next_hop_encapsulated_routing_info.integrity_mac.get_value()
-        );
+        let next_hop_encapsulated_routing_info =
+            match SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key)
+                .unwrap()
+            {
+                ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                    next_hop_address,
+                    next_hop_encapsulated_routing_info,
+                ) => {
+                    assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address);
+                    assert_eq!(
+                        routing_info
+                            [NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
+                        next_hop_encapsulated_routing_info.integrity_mac.get_value()
+                    );
+                    next_hop_encapsulated_routing_info
+                }
+                _ => panic!(),
+            };
 
         let next_hop_encrypted_routing_information = next_hop_encapsulated_routing_info
             .enc_routing_information

@@ -1,9 +1,9 @@
 use curve25519_dalek::scalar::Scalar;
 
 use crate::constants::PAYLOAD_KEY_SIZE;
-use crate::header::{SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
+use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
 use crate::payload::{Payload, PAYLOAD_SIZE};
-use crate::route::{Destination, Node, NodeAddressBytes};
+use crate::route::{Destination, Node, NodeAddressBytes, SURBIdentifier};
 
 mod constants;
 pub mod crypto;
@@ -20,6 +20,11 @@ pub enum ProcessingError {
     InvalidPacketLengthError,
 }
 
+pub enum ProcessedPacket {
+    ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes),
+    ProcessedPacketFinalHop(SURBIdentifier, Payload),
+}
+
 pub struct SphinxPacket {
     header: header::SphinxHeader,
     pub payload: Payload,
@@ -34,20 +39,26 @@ impl SphinxPacket {
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
-    pub fn process(self, node_secret_key: Scalar) -> (SphinxPacket, NodeAddressBytes) {
+    pub fn process(self, node_secret_key: Scalar) -> ProcessedPacket {
         let unwrapped_header = self.header.process(node_secret_key).unwrap();
-        let (new_header, next_hop_address, payload_key) = unwrapped_header;
-
-        // process the payload
-        let new_payload = self.payload.unwrap(&payload_key);
-
-        (
-            SphinxPacket {
-                header: new_header,
-                payload: new_payload,
-            },
-            next_hop_address,
-        )
+        match unwrapped_header {
+            ProcessedHeader::ProcessedHeaderForwardHop(
+                new_header,
+                next_hop_address,
+                payload_key,
+            ) => {
+                let new_payload = self.payload.unwrap(&payload_key);
+                let new_packet = SphinxPacket {
+                    header: new_header,
+                    payload: new_payload,
+                };
+                ProcessedPacket::ProcessedPacketForwardHop(new_packet, next_hop_address)
+            }
+            ProcessedHeader::ProcessedHeaderFinalHop(destination, identifier, payload_key) => {
+                let new_payload = self.payload.unwrap(&payload_key);
+                ProcessedPacket::ProcessedPacketFinalHop(identifier, new_payload)
+            }
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {

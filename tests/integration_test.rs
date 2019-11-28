@@ -12,6 +12,7 @@ const SECURITY_PARAMETER: usize = 16;
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
+    use sphinx::ProcessedPacket;
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
@@ -29,24 +30,37 @@ mod create_and_process_sphinx_packet {
         let message = vec![13u8, 16];
         let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination);
 
-        let (next_sphinx_packet_1, next_hop_addr1) = sphinx_packet.process(node1_sk);
-        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr1);
+        let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk) {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1) => {
+                assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr1);
+                next_packet
+            }
+            _ => panic!(),
+        };
 
-        let (next_sphinx_packet_2, next_hop_addr2) = next_sphinx_packet_1.process(node2_sk);
-        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk) {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr2) => {
+                assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
+                next_packet
+            }
+            _ => panic!(),
+        };
 
-        let (next_sphinx_packet_3, next_hop_addr3) = next_sphinx_packet_2.process(node3_sk);
-        assert_eq!(destination.address, next_hop_addr3);
-
-        let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-        let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
-        assert_eq!(expected_payload, next_sphinx_packet_3.payload.get_content());
+        match next_sphinx_packet_2.process(node3_sk) {
+            ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
+                let zero_bytes = vec![0u8; SECURITY_PARAMETER];
+                let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
+                assert_eq!(expected_payload, payload.get_content());
+            }
+            _ => panic!(),
+        };
     }
 }
 
 #[cfg(test)]
 mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
+    use sphinx::ProcessedPacket;
 
     #[test]
     fn it_is_possible_to_do_the_conversion_without_data_loss() {
@@ -67,18 +81,30 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
 
-        let (next_sphinx_packet_1, next_hop_addr1) = recovered_packet.process(node1_sk);
-        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr1);
+        let next_sphinx_packet_1 = match recovered_packet.process(node1_sk) {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address) => {
+                assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                next_packet
+            }
+            _ => panic!(),
+        };
 
-        let (next_sphinx_packet_2, next_hop_addr2) = next_sphinx_packet_1.process(node2_sk);
-        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk) {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address) => {
+                assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                next_packet
+            }
+            _ => panic!(),
+        };
 
-        let (next_sphinx_packet_3, next_hop_addr3) = next_sphinx_packet_2.process(node3_sk);
-        assert_eq!(destination.address, next_hop_addr3);
-
-        let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-        let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
-        assert_eq!(expected_payload, next_sphinx_packet_3.payload.get_content());
+        match next_sphinx_packet_2.process(node3_sk) {
+            ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
+                let zero_bytes = vec![0u8; SECURITY_PARAMETER];
+                let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
+                assert_eq!(expected_payload, payload.get_content());
+            }
+            _ => panic!(),
+        };
     }
 
     #[test]

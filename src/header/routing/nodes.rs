@@ -11,7 +11,7 @@ use crate::header::routing::{
     TRUNCATED_ROUTING_INFO_SIZE,
 };
 use crate::header::SphinxUnwrapError;
-use crate::route::NodeAddressBytes;
+use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
@@ -151,10 +151,13 @@ pub struct RawRoutingInformation {
     value: Vec<u8>,
 }
 
+pub enum ParsedRawRoutingInformation {
+    ForwardHopRoutingInformation(NodeAddressBytes, EncapsulatedRoutingInformation),
+    FinalHopRoutingInformation(DestinationAddressBytes, SURBIdentifier),
+}
+
 impl RawRoutingInformation {
-    pub fn parse(
-        self,
-    ) -> Result<(NodeAddressBytes, EncapsulatedRoutingInformation), SphinxUnwrapError> {
+    pub fn parse(self) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
         assert_eq!(
             HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE,
             self.value.len()
@@ -169,7 +172,7 @@ impl RawRoutingInformation {
         }
     }
 
-    fn parse_as_forward_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+    fn parse_as_forward_hop(self) -> ParsedRawRoutingInformation {
         let mut i = 1;
 
         // first NODE_ADDRESS_LENGTH bytes represents the next hop address
@@ -192,34 +195,27 @@ impl RawRoutingInformation {
             HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
         );
 
-        (next_hop_address, next_hop_encapsulated_routing_info)
+        ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+            next_hop_address,
+            next_hop_encapsulated_routing_info,
+        )
     }
 
     // TODO: this needs to be updated as a correct parse as final hop function!
-    fn parse_as_final_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+    fn parse_as_final_hop(self) -> ParsedRawRoutingInformation {
         let mut i = 1;
 
         // first NODE_ADDRESS_LENGTH bytes represents the next hop address
-        let mut next_hop_address: [u8; NODE_ADDRESS_LENGTH] = Default::default();
-        next_hop_address.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
+        let mut destination: [u8; NODE_ADDRESS_LENGTH] = Default::default();
+        destination.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
         i += NODE_ADDRESS_LENGTH;
 
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
-        let mut next_hop_integrity_mac: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
-        next_hop_integrity_mac.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
+        let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
+        identifier.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
         i += HEADER_INTEGRITY_MAC_SIZE;
 
-        // the next ENCRYPTED_ROUTING_INFO_SIZE bytes represent the routing information for the next hop
-        let mut next_hop_encrypted_routing_information = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
-        next_hop_encrypted_routing_information
-            .copy_from_slice(&self.value[i..i + MAX_ENCRYPTED_ROUTING_INFO_SIZE]);
-
-        let next_hop_encapsulated_routing_info = EncapsulatedRoutingInformation::encapsulate(
-            EncryptedRoutingInformation::from_bytes(next_hop_encrypted_routing_information),
-            HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
-        );
-
-        (next_hop_address, next_hop_encapsulated_routing_info)
+        ParsedRawRoutingInformation::FinalHopRoutingInformation(destination, identifier)
     }
 }
 
@@ -375,19 +371,28 @@ mod parse_decrypted_routing_information {
 
         let raw_routing_info = RawRoutingInformation { value: data };
 
-        let (address, encapsulated_routing_info) = raw_routing_info.parse().unwrap();
-        assert_eq!(address_fixture, address);
-        assert_eq!(
-            integrity_mac,
-            encapsulated_routing_info.integrity_mac.get_value()
-        );
-        assert_eq!(
-            next_routing_information.to_vec(),
-            encapsulated_routing_info
-                .enc_routing_information
-                .get_value_ref()
-                .to_vec()
-        );
+        match raw_routing_info.parse().unwrap() {
+            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                next_address,
+                encapsulated_routing_info,
+            ) => {
+                assert_eq!(address_fixture, next_address);
+                assert_eq!(
+                    integrity_mac,
+                    encapsulated_routing_info.integrity_mac.get_value()
+                );
+                assert_eq!(
+                    next_routing_information.to_vec(),
+                    encapsulated_routing_info
+                        .enc_routing_information
+                        .get_value_ref()
+                        .to_vec()
+                );
+            }
+            ParsedRawRoutingInformation::FinalHopRoutingInformation(destination, identifier) => {
+                panic!()
+            }
+        }
     }
 }
 
