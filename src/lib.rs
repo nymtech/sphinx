@@ -22,7 +22,7 @@ pub enum ProcessingError {
 }
 
 pub enum ProcessedPacket {
-    ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes),
+    ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes, Delay),
     ProcessedPacketFinalHop(SURBIdentifier, Payload),
 }
 
@@ -52,6 +52,7 @@ impl SphinxPacket {
             ProcessedHeader::ProcessedHeaderForwardHop(
                 new_header,
                 next_hop_address,
+                delay,
                 payload_key,
             ) => {
                 let new_payload = self.payload.unwrap(&payload_key);
@@ -59,7 +60,7 @@ impl SphinxPacket {
                     header: new_header,
                     payload: new_payload,
                 };
-                ProcessedPacket::ProcessedPacketForwardHop(new_packet, next_hop_address)
+                ProcessedPacket::ProcessedPacketForwardHop(new_packet, next_hop_address, delay)
             }
             ProcessedHeader::ProcessedHeaderFinalHop(destination, identifier, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key);

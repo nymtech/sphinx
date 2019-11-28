@@ -4,7 +4,7 @@ use crate::constants;
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
 
-#[derive(Clone, Copy)]
+#[derive(Debug, Clone, Copy)]
 pub struct Delay {
     value: u64,
 }
@@ -17,6 +17,16 @@ impl Delay {
         let mut delay_bytes = [0; DELAY_LENGTH];
         BigEndian::write_u64(&mut delay_bytes, self.value);
         delay_bytes
+    }
+
+    pub fn from_bytes(delay_bytes: [u8; DELAY_LENGTH]) -> Self {
+        Self {
+            value: BigEndian::read_u64(&delay_bytes),
+        }
+    }
+
+    pub fn get_value(&self) -> u64 {
+        self.value
     }
 }
 

@@ -33,7 +33,7 @@ pub enum SphinxUnwrapError {
 }
 
 pub enum ProcessedHeader {
-    ProcessedHeaderForwardHop(SphinxHeader, NodeAddressBytes, PayloadKey),
+    ProcessedHeaderForwardHop(SphinxHeader, NodeAddressBytes, Delay, PayloadKey),
     ProcessedHeaderFinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
 }
 
@@ -104,6 +104,7 @@ impl SphinxHeader {
         match unwrapped_routing_information {
             ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                 next_hop_address,
+                delay,
                 new_encapsulated_routing_info,
             ) => Ok(ProcessedHeader::ProcessedHeaderForwardHop(
                 SphinxHeader {
@@ -111,6 +112,7 @@ impl SphinxHeader {
                     routing_info: new_encapsulated_routing_info,
                 },
                 next_hop_address,
+                delay,
                 routing_keys.payload_key,
             )),
             ParsedRawRoutingInformation::FinalHopRoutingInformation(
@@ -203,16 +205,18 @@ mod create_and_process_sphinx_packet_header {
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header.process(node1_sk).unwrap() {
-            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, _) => {
+            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                assert_eq!(delays[0].get_value(), delay.get_value());
                 new_header
             }
             _ => panic!(),
         };
 
         let new_header2 = match new_header.process(node2_sk).unwrap() {
-            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, _) => {
+            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                assert_eq!(delays[1].get_value(), delay.get_value());
                 new_header
             }
             _ => panic!(),
@@ -273,6 +277,7 @@ mod unwrap_routing_information {
             {
                 ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                     next_hop_address,
+                    delay,
                     next_hop_encapsulated_routing_info,
                 ) => {
                     assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address);

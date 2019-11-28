@@ -33,7 +33,7 @@ mod create_and_process_sphinx_packet {
         let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
 
         let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk) {
-            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1) => {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1, delay1) => {
                 assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_addr1);
                 next_packet
             }
@@ -41,7 +41,7 @@ mod create_and_process_sphinx_packet {
         };
 
         let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk) {
-            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr2) => {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr2, delay2) => {
                 assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_addr2);
                 next_packet
             }
@@ -85,16 +85,18 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
 
         let next_sphinx_packet_1 = match recovered_packet.process(node1_sk) {
-            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address) => {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address, delay) => {
                 assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                assert_eq!(delays[0].get_value(), delay.get_value());
                 next_packet
             }
             _ => panic!(),
         };
 
         let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk) {
-            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address) => {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address, delay) => {
                 assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                assert_eq!(delays[1].get_value(), delay.get_value());
                 next_packet
             }
             _ => panic!(),

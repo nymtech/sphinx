@@ -154,7 +154,7 @@ pub struct RawRoutingInformation {
 }
 
 pub enum ParsedRawRoutingInformation {
-    ForwardHopRoutingInformation(NodeAddressBytes, EncapsulatedRoutingInformation),
+    ForwardHopRoutingInformation(NodeAddressBytes, Delay, EncapsulatedRoutingInformation),
     FinalHopRoutingInformation(DestinationAddressBytes, SURBIdentifier),
 }
 
@@ -202,6 +202,7 @@ impl RawRoutingInformation {
 
         ParsedRawRoutingInformation::ForwardHopRoutingInformation(
             next_hop_address,
+            Delay::from_bytes(delay_bytes),
             next_hop_encapsulated_routing_info,
         )
     }
@@ -386,6 +387,7 @@ mod parse_decrypted_routing_information {
         match raw_routing_info.parse().unwrap() {
             ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                 next_address,
+                delay,
                 encapsulated_routing_info,
             ) => {
                 assert_eq!(address_fixture, next_address);
