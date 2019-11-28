@@ -1,11 +1,9 @@
-use crate::constants::{
-    HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER,
-};
+use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_LENGTH};
 use crate::crypto;
 use crate::header::keys::RoutingKeys;
 use crate::{constants, utils};
 
-pub const FILLER_STEP_SIZE_INCREASE: usize = HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
+pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
 
 #[derive(Debug, PartialEq)]
 pub struct Filler {
@@ -127,8 +125,9 @@ mod test_creating_pseudorandom_bytes {
 
 #[cfg(test)]
 mod test_new_filler_bytes {
-    use super::*;
     use crate::header::keys::routing_keys_fixture;
+
+    use super::*;
 
     #[test]
     fn it_retusn_filler_bytes_of_correct_length_for_3_routing_keys() {
@@ -157,6 +156,7 @@ mod test_new_filler_bytes {
         )
     }
 }
+
 #[cfg(test)]
 mod test_generating_filler_bytes {
     use super::*;

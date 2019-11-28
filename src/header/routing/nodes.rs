@@ -1,13 +1,14 @@
 use crate::constants::{
-    HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER,
-    STREAM_CIPHER_OUTPUT_LENGTH,
+    DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_LENGTH,
+    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
+use crate::header::delays::Delay;
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
-    EncapsulatedRoutingInformation, FINAL_FLAG, MAX_ENCRYPTED_ROUTING_INFO_SIZE, ROUTING_FLAG,
+    EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_FLAG, ROUTING_FLAG,
     TRUNCATED_ROUTING_INFO_SIZE,
 };
 use crate::header::SphinxUnwrapError;
@@ -15,13 +16,14 @@ use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
-    MAX_ENCRYPTED_ROUTING_INFO_SIZE + HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
+    ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
 
 // in paper beta
 pub(super) struct RoutingInformation {
     flag: u8,
     // in paper nu
     node_address: NodeAddressBytes,
+    delay: Delay,
     // in paper gamma
     header_integrity_mac: HeaderIntegrityMac,
     // in paper also beta (!)
@@ -31,11 +33,13 @@ pub(super) struct RoutingInformation {
 impl RoutingInformation {
     pub(super) fn new(
         node_address: NodeAddressBytes,
+        delay: Delay,
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
     ) -> Self {
         RoutingInformation {
             flag: ROUTING_FLAG,
             node_address,
+            delay,
             header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
             next_routing_information: next_encapsulated_routing_information
                 .enc_routing_information
@@ -48,6 +52,7 @@ impl RoutingInformation {
             .iter()
             .cloned()
             .chain(self.node_address.iter().cloned())
+            .chain(self.delay.to_bytes().iter().cloned())
             .chain(self.header_integrity_mac.get_value().iter().cloned())
             .chain(self.next_routing_information.iter().cloned())
             .collect()
@@ -55,10 +60,7 @@ impl RoutingInformation {
 
     pub(super) fn encrypt(self, key: StreamCipherKey) -> EncryptedRoutingInformation {
         let routing_info_components = self.concatenate_components();
-        assert_eq!(
-            MAX_ENCRYPTED_ROUTING_INFO_SIZE,
-            routing_info_components.len()
-        );
+        assert_eq!(ENCRYPTED_ROUTING_INFO_SIZE, routing_info_components.len());
 
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &key,
@@ -68,10 +70,10 @@ impl RoutingInformation {
 
         let encrypted_routing_info_vec = utils::bytes::xor(
             &routing_info_components,
-            &pseudorandom_bytes[..MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
         );
 
-        let mut encrypted_routing_info = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut encrypted_routing_info = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         encrypted_routing_info.copy_from_slice(&encrypted_routing_info_vec);
 
         EncryptedRoutingInformation {
@@ -84,11 +86,11 @@ impl RoutingInformation {
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]
 pub struct EncryptedRoutingInformation {
-    value: [u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+    value: [u8; ENCRYPTED_ROUTING_INFO_SIZE],
 }
 
 impl EncryptedRoutingInformation {
-    pub fn from_bytes(bytes: [u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE]) -> Self {
+    pub fn from_bytes(bytes: [u8; ENCRYPTED_ROUTING_INFO_SIZE]) -> Self {
         Self { value: bytes }
     }
 
@@ -114,7 +116,7 @@ impl EncryptedRoutingInformation {
     }
 
     pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
-        let zero_bytes = vec![0u8; HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE];
+        let zero_bytes = vec![0u8; NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE];
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().cloned().chain(zero_bytes).collect();
 
@@ -159,11 +161,10 @@ pub enum ParsedRawRoutingInformation {
 impl RawRoutingInformation {
     pub fn parse(self) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
         assert_eq!(
-            HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE,
+            NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE,
             self.value.len()
         );
 
-        // TODO: first byte (or equivalent) to say 'final hop' to read destination information
         let flag = self.value[0];
         match flag {
             ROUTING_FLAG => Ok(self.parse_as_forward_hop()),
@@ -180,15 +181,19 @@ impl RawRoutingInformation {
         next_hop_address.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
         i += NODE_ADDRESS_LENGTH;
 
+        let mut delay_bytes: [u8; DELAY_LENGTH] = Default::default();
+        delay_bytes.copy_from_slice(&self.value[i..i + DELAY_LENGTH]);
+        i += DELAY_LENGTH;
+
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut next_hop_integrity_mac: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
         next_hop_integrity_mac.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
         i += HEADER_INTEGRITY_MAC_SIZE;
 
         // the next ENCRYPTED_ROUTING_INFO_SIZE bytes represent the routing information for the next hop
-        let mut next_hop_encrypted_routing_information = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut next_hop_encrypted_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         next_hop_encrypted_routing_information
-            .copy_from_slice(&self.value[i..i + MAX_ENCRYPTED_ROUTING_INFO_SIZE]);
+            .copy_from_slice(&self.value[i..i + ENCRYPTED_ROUTING_INFO_SIZE]);
 
         let next_hop_encapsulated_routing_info = EncapsulatedRoutingInformation::encapsulate(
             EncryptedRoutingInformation::from_bytes(next_hop_encrypted_routing_information),
@@ -235,6 +240,7 @@ mod preparing_header_layer {
     fn it_returns_encrypted_truncated_address_and_flag_concatenated_with_inner_layer_and_mac_on_it()
     {
         let node_address = node_address_fixture();
+        let delay = Delay::new(10);
         let previous_node_routing_keys = routing_keys_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
@@ -242,6 +248,7 @@ mod preparing_header_layer {
         let concatenated_materials: Vec<u8> = [
             vec![ROUTING_FLAG],
             node_address.to_vec(),
+            delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
                 .enc_routing_information
@@ -262,7 +269,7 @@ mod preparing_header_layer {
 
         let expected_encrypted_routing_info_vec = utils::bytes::xor(
             &concatenated_materials,
-            &pseudorandom_bytes[..MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
         );
 
         let mut expected_routing_mac = crypto::compute_keyed_hmac(
@@ -273,7 +280,7 @@ mod preparing_header_layer {
         );
         expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
 
-        let next_layer_routing = RoutingInformation::new(node_address, inner_layer_routing)
+        let next_layer_routing = RoutingInformation::new(node_address, delay, inner_layer_routing)
             .encrypt(previous_node_routing_keys.stream_cipher_key)
             .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key);
 
@@ -301,12 +308,14 @@ mod encrypting_routing_information {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
         let flag = ROUTING_FLAG;
         let address = node_address_fixture();
+        let delay = Delay::new(15);
         let mac = header_integrity_mac_fixture();
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
 
         let encryption_data = [
             vec![flag],
             address.to_vec(),
+            delay.to_bytes().to_vec(),
             mac.get_value_ref().to_vec(),
             next_routing.to_vec(),
         ]
@@ -315,6 +324,7 @@ mod encrypting_routing_information {
         let routing_information = RoutingInformation {
             flag: ROUTING_FLAG,
             node_address: address,
+            delay: delay,
             header_integrity_mac: mac,
             next_routing_information: next_routing,
         };
@@ -325,7 +335,7 @@ mod encrypting_routing_information {
             &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
-        let decryption_key = &decryption_key_source[..MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let decryption_key = &decryption_key_source[..ENCRYPTED_ROUTING_INFO_SIZE];
         let decrypted_data = utils::bytes::xor(&encrypted_data.value, decryption_key);
         assert_eq!(encryption_data, decrypted_data);
     }
@@ -351,19 +361,21 @@ mod truncating_routing_information {
 mod parse_decrypted_routing_information {
     use super::*;
     use crate::header::mac::header_integrity_mac_fixture;
-    use crate::header::routing::MAX_ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
     use crate::route::node_address_fixture;
 
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
         let flag = ROUTING_FLAG;
         let address_fixture = node_address_fixture();
+        let delay = Delay::new(10);
         let integrity_mac = header_integrity_mac_fixture().get_value();
-        let next_routing_information = [1u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
 
         let data = [
             vec![flag],
             address_fixture.to_vec(),
+            delay.to_bytes().to_vec(),
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),
         ]
@@ -399,6 +411,6 @@ mod parse_decrypted_routing_information {
 #[allow(dead_code)]
 pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
     EncryptedRoutingInformation {
-        value: [5u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+        value: [5u8; ENCRYPTED_ROUTING_INFO_SIZE],
     }
 }

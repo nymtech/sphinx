@@ -1,7 +1,8 @@
 use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, FLAG_LENGTH, HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH,
-    IDENTIFIER_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER,
+    DESTINATION_ADDRESS_LENGTH, FLAG_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH,
+    MAX_PATH_LENGTH, NODE_META_INFO_LENGTH, SECURITY_PARAMETER,
 };
+use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::RoutingKeys;
 use crate::header::mac::HeaderIntegrityMac;
@@ -13,9 +14,9 @@ use crate::route::{Destination, Node};
 use crate::{header, ProcessingError};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
-    MAX_ENCRYPTED_ROUTING_INFO_SIZE - DESTINATION_ADDRESS_LENGTH - IDENTIFIER_LENGTH - FLAG_LENGTH;
-pub const MAX_ENCRYPTED_ROUTING_INFO_SIZE: usize =
-    (HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE) * MAX_PATH_LENGTH;
+    ENCRYPTED_ROUTING_INFO_SIZE - (NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE);
+pub const ENCRYPTED_ROUTING_INFO_SIZE: usize =
+    (NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE) * MAX_PATH_LENGTH;
 
 pub mod destination;
 pub mod nodes;
@@ -44,10 +45,12 @@ impl EncapsulatedRoutingInformation {
     pub fn new(
         route: &[Node],
         destination: &Destination,
+        delays: &[Delay],
         routing_keys: &[RoutingKeys],
         filler: Filler,
     ) -> Self {
         assert_eq!(route.len(), routing_keys.len());
+        assert_eq!(delays.len(), route.len());
 
         let final_keys = match routing_keys.last() {
             Some(k) => k,
@@ -55,12 +58,17 @@ impl EncapsulatedRoutingInformation {
         };
 
         let encapsulated_destination_routing_info =
-            Self::for_destination(destination, final_keys, filler, route.len());
+            Self::for_final_hop(destination, final_keys, filler, route.len());
 
-        Self::for_forward_hops(encapsulated_destination_routing_info, route, routing_keys)
+        Self::for_forward_hops(
+            encapsulated_destination_routing_info,
+            &delays,
+            route,
+            routing_keys,
+        )
     }
 
-    fn for_destination(
+    fn for_final_hop(
         dest: &Destination,
         routing_keys: &RoutingKeys,
         filler: Filler,
@@ -76,6 +84,7 @@ impl EncapsulatedRoutingInformation {
 
     fn for_forward_hops(
         encapsulated_destination_routing_info: Self,
+        delays: &[Delay],
         route: &[Node],               // [Mix0, Mix1, Mix2, ..., Mix_{v-1}, Mix_v]
         routing_keys: &[RoutingKeys], // [Keys0, Keys1, Keys2, ..., Keys_{v-1}, Keys_v]
     ) -> Self {
@@ -87,17 +96,19 @@ impl EncapsulatedRoutingInformation {
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 routing_keys.iter().take(routing_keys.len() - 1), // we don't want last element - it was already used to encrypt the destination
             )
+            .zip(delays.iter().take(delays.len() - 1)) // no need for the delay for the final node
             .rev() // we are working from the 'inside'
             // we should be getting here
-            // [(Mix_v, Keys_{v-1}), (Mix_{v-1}, Keys_{v-2}), ..., (Mix2, Keys1), (Mix1, Keys0)]
+            // [(Mix_v, Keys_{v-1}, Delay_{v-1}), (Mix_{v-1}, Keys_{v-2}, Delay_{v-2}), ..., (Mix2, Keys1, Delay1), (Mix1, Keys0, Delay0)]
             .fold(
                 // we start from the already created encrypted final routing info and mac for the destination
                 // (encrypted with Keys_v)
                 encapsulated_destination_routing_info,
                 |next_hop_encapsulated_routing_information,
-                 (current_node_address, previous_node_routing_keys)| {
+                 ((current_node_address, previous_node_routing_keys), delay)| {
                     RoutingInformation::new(
                         current_node_address,
+                        *delay,
                         next_hop_encapsulated_routing_information,
                     )
                     .encrypt(previous_node_routing_keys.stream_cipher_key)
@@ -116,19 +127,19 @@ impl EncapsulatedRoutingInformation {
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
-        if bytes.len() != HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE {
+        if bytes.len() != HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE {
             return Err(ProcessingError::InvalidRoutingInformationLengthError);
         }
 
         let mut integrity_mac_bytes = [0u8; HEADER_INTEGRITY_MAC_SIZE];
-        let mut enc_routing_info_bytes = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut enc_routing_info_bytes = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
 
         // first bytes represent the mac
         integrity_mac_bytes.copy_from_slice(&bytes[..HEADER_INTEGRITY_MAC_SIZE]);
         // the rest are for the routing info
         enc_routing_info_bytes.copy_from_slice(
             &bytes[HEADER_INTEGRITY_MAC_SIZE
-                ..HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+                ..HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE],
         );
 
         let integrity_mac = HeaderIntegrityMac::from_bytes(integrity_mac_bytes);
@@ -155,10 +166,11 @@ mod encapsulating_all_routing_information {
     fn it_panics_if_route_is_longer_than_keys() {
         let route = [random_node(), random_node(), random_node()];
         let destination = destination_fixture();
+        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
         let keys = [routing_keys_fixture(), routing_keys_fixture()];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &keys, filler);
+        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
     }
 
     #[test]
@@ -166,6 +178,7 @@ mod encapsulating_all_routing_information {
     fn it_panics_if_keys_are_longer_than_route() {
         let route = [random_node(), random_node()];
         let destination = destination_fixture();
+        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
         let keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
@@ -173,7 +186,7 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &keys, filler);
+        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
     }
 
     #[test]
@@ -181,6 +194,7 @@ mod encapsulating_all_routing_information {
     fn it_panics_if_empty_route_is_provided() {
         let route = vec![];
         let destination = destination_fixture();
+        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
         let keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
@@ -188,7 +202,7 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &keys, filler);
+        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
     }
 
     #[test]
@@ -196,10 +210,11 @@ mod encapsulating_all_routing_information {
     fn it_panic_if_empty_keys_are_provided() {
         let route = [random_node(), random_node()];
         let destination = destination_fixture();
+        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
         let keys = vec![];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &keys, filler);
+        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
     }
 }
 
@@ -216,6 +231,10 @@ mod encapsulating_forward_routing_information {
         // this is basically loop unwrapping, but considering the complex logic behind it, it's warranted
         let route = [random_node(), random_node(), random_node()];
         let destination = destination_fixture();
+        let delay0 = Delay::new(10);
+        let delay1 = Delay::new(20);
+        let delay2 = Delay::new(30);
+        let delays = [delay0, delay1, delay2].to_vec();
         let routing_keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
@@ -225,7 +244,7 @@ mod encapsulating_forward_routing_information {
         let filler_copy = filler_fixture(route.len() - 1);
         assert_eq!(filler, filler_copy);
 
-        let destination_routing_info = EncapsulatedRoutingInformation::for_destination(
+        let destination_routing_info = EncapsulatedRoutingInformation::for_final_hop(
             &destination,
             &routing_keys.last().unwrap(),
             filler,
@@ -252,17 +271,18 @@ mod encapsulating_forward_routing_information {
 
         let routing_info = EncapsulatedRoutingInformation::for_forward_hops(
             destination_routing_info,
+            &delays,
             &route,
             &routing_keys,
         );
 
         let layer_1_routing =
-            RoutingInformation::new(route[2].address, destination_routing_info_copy)
+            RoutingInformation::new(route[2].address, delay1, destination_routing_info_copy)
                 .encrypt(routing_keys[1].stream_cipher_key)
                 .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
 
         // this is what first mix should receive
-        let layer_0_routing = RoutingInformation::new(route[1].address, layer_1_routing)
+        let layer_0_routing = RoutingInformation::new(route[1].address, delay0, layer_1_routing)
             .encrypt(routing_keys[0].stream_cipher_key)
             .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 

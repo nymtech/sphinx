@@ -3,10 +3,11 @@ use curve25519_dalek::scalar::Scalar;
 
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
+use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::{PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
-use crate::header::routing::{EncapsulatedRoutingInformation, MAX_ENCRYPTED_ROUTING_INFO_SIZE};
+use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{crypto, ProcessingError};
 
@@ -17,7 +18,7 @@ pub mod mac;
 pub mod routing;
 
 // 32 represents size of a MontgomeryPoint on Curve25519
-pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + MAX_ENCRYPTED_ROUTING_INFO_SIZE;
+pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE;
 
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
@@ -42,14 +43,15 @@ impl SphinxHeader {
     pub fn new(
         initial_secret: Scalar,
         route: &[Node],
+        delays: &[Delay],
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
-        let _ = delays::generate(route.len());
         let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
         let routing_info = routing::EncapsulatedRoutingInformation::new(
             route,
             destination,
+            &delays,
             &key_material.routing_keys,
             filler_string,
         );
@@ -196,7 +198,8 @@ mod create_and_process_sphinx_packet_header {
         let route = [node1, node2, node3];
         let destination = destination_fixture();
         let initial_secret = crypto::generate_secret();
-        let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &destination);
+        let delays = delays::generate(route.len());
+        let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &delays, &destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header.process(node1_sk).unwrap() {
@@ -214,7 +217,7 @@ mod create_and_process_sphinx_packet_header {
             }
             _ => panic!(),
         };
-        let fianl_hop = match new_header2.process(node3_sk).unwrap() {
+        match new_header2.process(node3_sk).unwrap() {
             ProcessedHeader::ProcessedHeaderFinalHop(final_destination, identifier, _) => {
                 assert_eq!(destination.address, final_destination);
             }
@@ -226,18 +229,18 @@ mod create_and_process_sphinx_packet_header {
 #[cfg(test)]
 mod unwrap_routing_information {
     use crate::constants::{
-        HEADER_INTEGRITY_MAC_SIZE, HOP_META_INFO_LENGTH, NODE_ADDRESS_LENGTH,
+        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_LENGTH,
         STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
-    use crate::header::routing::{MAX_ENCRYPTED_ROUTING_INFO_SIZE, ROUTING_FLAG};
+    use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, ROUTING_FLAG};
     use crate::utils;
 
     use super::*;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
-        let mut routing_info = [9u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
         routing_info[0] = ROUTING_FLAG;
         let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
@@ -247,18 +250,20 @@ mod unwrap_routing_information {
         );
         let encrypted_routing_info_vec = utils::bytes::xor(
             &routing_info,
-            &pseudorandom_bytes[..MAX_ENCRYPTED_ROUTING_INFO_SIZE],
+            &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
         );
-        let mut encrypted_routing_info_array = [0u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut encrypted_routing_info_array = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         encrypted_routing_info_array.copy_from_slice(&encrypted_routing_info_vec);
 
         let enc_routing_info =
             EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
+
+        println!("{:?}", routing_info.len());
+        println!("{:?}", pseudorandom_bytes.len());
         let expected_next_hop_encrypted_routing_information = [
-            routing_info[HOP_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
-            pseudorandom_bytes[HOP_META_INFO_LENGTH
-                + HEADER_INTEGRITY_MAC_SIZE
-                + MAX_ENCRYPTED_ROUTING_INFO_SIZE..]
+            routing_info[NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
+            pseudorandom_bytes
+                [NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
                 .to_vec(),
         ]
         .concat();

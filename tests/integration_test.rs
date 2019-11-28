@@ -1,6 +1,7 @@
 extern crate sphinx;
 
 use sphinx::crypto;
+use sphinx::header::delays;
 use sphinx::route::{Destination, Node};
 use sphinx::SphinxPacket;
 
@@ -24,11 +25,12 @@ mod create_and_process_sphinx_packet {
         let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
 
         let route = [node1, node2, node3];
+        let delays = delays::generate(route.len());
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination);
+        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
 
         let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk) {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1) => {
@@ -72,11 +74,12 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
 
         let route = [node1, node2, node3];
+        let delays = delays::generate(route.len());
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination);
+        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
@@ -118,11 +121,12 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
 
         let route = [node1, node2, node3];
+        let delays = delays::generate(route.len());
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination);
+        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes()[..300].to_vec();
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();

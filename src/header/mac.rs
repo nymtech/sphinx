@@ -52,14 +52,14 @@ pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
 #[cfg(test)]
 mod computing_integrity_mac {
     use crate::constants::INTEGRITY_MAC_KEY_SIZE;
-    use crate::header::routing::MAX_ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
 
     use super::*;
 
     #[test]
     fn it_is_possible_to_verify_correct_mac() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let data = vec![3u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let integrity_mac = HeaderIntegrityMac::compute(key, &data);
 
         assert!(integrity_mac.verify(key, &data));
@@ -68,7 +68,7 @@ mod computing_integrity_mac {
     #[test]
     fn it_lets_detecting_flipped_data_bits() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
-        let mut data = vec![3u8; MAX_ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let integrity_mac = HeaderIntegrityMac::compute(key, &data);
         data[10] = !data[10];
         assert!(!integrity_mac.verify(key, &data));
