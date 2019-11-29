@@ -9,6 +9,7 @@ const NODE_ADDRESS_LENGTH: usize = 32;
 const DESTINATION_ADDRESS_LENGTH: usize = 32;
 const IDENTIFIER_LENGTH: usize = 16;
 const SECURITY_PARAMETER: usize = 16;
+const PAYLOAD_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
@@ -51,7 +52,20 @@ mod create_and_process_sphinx_packet {
         match next_sphinx_packet_2.process(node3_sk) {
             ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
+                let additional_padding = vec![
+                    0u8;
+                    PAYLOAD_SIZE
+                        - SECURITY_PARAMETER
+                        - message.len()
+                        - destination.address.len()
+                ];
+                let expected_payload = [
+                    zero_bytes,
+                    destination.address.to_vec(),
+                    message,
+                    additional_padding,
+                ]
+                .concat();
                 assert_eq!(expected_payload, payload.get_content());
             }
             _ => panic!(),
@@ -105,7 +119,20 @@ mod converting_sphinx_packet_to_and_from_bytes {
         match next_sphinx_packet_2.process(node3_sk) {
             ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
+                let additional_padding = vec![
+                    0u8;
+                    PAYLOAD_SIZE
+                        - SECURITY_PARAMETER
+                        - message.len()
+                        - destination.address.len()
+                ];
+                let expected_payload = [
+                    zero_bytes,
+                    destination.address.to_vec(),
+                    message,
+                    additional_padding,
+                ]
+                .concat();
                 assert_eq!(expected_payload, payload.get_content());
             }
             _ => panic!(),

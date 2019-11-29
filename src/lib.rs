@@ -1,9 +1,9 @@
 use curve25519_dalek::scalar::Scalar;
 
-use crate::constants::PAYLOAD_KEY_SIZE;
+use crate::constants::{PAYLOAD_KEY_SIZE, PAYLOAD_SIZE};
 use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
-use crate::payload::{Payload, PAYLOAD_SIZE};
+use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes, SURBIdentifier};
 
 mod constants;

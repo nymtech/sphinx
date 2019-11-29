@@ -4,14 +4,10 @@ use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
+use crate::constants::{PAYLOAD_KEY_SIZE, PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
 use crate::ProcessingError;
-
-// TODO: at minimum it HAS TO be at least equal to length of the key block used in lioness
-// but this value needs to be adjusted
-pub const PAYLOAD_SIZE: usize = 32;
 
 // we might want to swap this one with a different implementation
 pub struct Payload {
@@ -56,12 +52,19 @@ impl Payload {
         // generate zero-padding
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
 
-        // concatenate zero padding with destination and message
+        let destination_address_length = destination_address.len();
+        let message_length = message.len();
+        let padding_length =
+            PAYLOAD_SIZE - SECURITY_PARAMETER - destination_address_length - message_length;
+
+        let padding = vec![0u8; padding_length];
+        // concatenate security zero padding with destination and message and additional length padding
         let mut final_payload: Vec<u8> = zero_bytes
             .iter()
             .cloned()
             .chain(destination_address.to_vec().iter().cloned())
             .chain(message.iter().cloned())
+            .chain(padding.iter().cloned())
             .collect();
 
         // encrypt the padded plaintext using the payload key
@@ -129,7 +132,7 @@ mod test_encrypting_final_payload {
     use super::*;
 
     #[test]
-    fn it_returns_the_same_length_encrypted_payload_as_plaintext_payload() {
+    fn it_returns_encrypted_payload_of_expected_payload_size() {
         let message = vec![1u8, 16];
         let message_len = message.len();
         let destination = destination_address_fixture();
@@ -137,10 +140,7 @@ mod test_encrypting_final_payload {
         let final_enc_payload =
             Payload::encrypt_final_layer(&message, &routing_keys.payload_key, destination);
 
-        assert_eq!(
-            SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + message_len,
-            final_enc_payload.content.len()
-        );
+        assert_eq!(PAYLOAD_SIZE, final_enc_payload.content.len());
     }
 }
 
@@ -152,7 +152,7 @@ mod test_encapsulating_payload {
     use super::*;
 
     #[test]
-    fn always_both_input_and_output_are_the_same_length() {
+    fn always_the_payload_is_of_the_same_expected_type() {
         let message = vec![1u8, 16];
         let message_len = message.len();
         let destination = destination_address_fixture();
@@ -163,10 +163,7 @@ mod test_encapsulating_payload {
 
         let final_enc_payload = Payload::encrypt_final_layer(&message, &payload_key_1, destination);
         let payload_encapsulation = Payload::encrypt_outer_layers(final_enc_payload, &payload_keys);
-        assert_eq!(
-            SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + message_len,
-            payload_encapsulation.content.len()
-        );
+        assert_eq!(PAYLOAD_SIZE, payload_encapsulation.content.len());
     }
 }
 
@@ -195,7 +192,15 @@ mod test_unwrapping_payload {
             });
 
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-        let expected_payload = [zero_bytes, destination.to_vec(), message].concat();
+        let additional_padding =
+            vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - destination.len()];
+        let expected_payload = [
+            zero_bytes,
+            destination.to_vec(),
+            message,
+            additional_padding,
+        ]
+        .concat();
         assert_eq!(expected_payload, unwrapped_payload.get_content());
     }
 }
