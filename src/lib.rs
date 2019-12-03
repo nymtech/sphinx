@@ -13,7 +13,9 @@ mod payload;
 pub mod route;
 mod utils;
 
-#[derive(Debug)]
+pub const PACKET_SIZE: usize = HEADER_SIZE + PAYLOAD_SIZE;
+
+#[derive(Debug, PartialEq)]
 pub enum ProcessingError {
     InvalidRoutingInformationLengthError,
     InvalidHeaderLengthError,
@@ -85,7 +87,7 @@ impl SphinxPacket {
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
         // TODO: currently it's defined as minimum size. It should be always constant length in the future
         // once we decide on payload size
-        if bytes.len() < HEADER_SIZE + PAYLOAD_SIZE {
+        if bytes.len() != PACKET_SIZE {
             return Err(ProcessingError::InvalidPacketLengthError);
         }
 
@@ -95,5 +97,30 @@ impl SphinxPacket {
         let payload = Payload::from_bytes(payload_bytes)?;
 
         Ok(SphinxPacket { header, payload })
+    }
+}
+
+#[cfg(test)]
+mod test_building_packet_from_bytes {
+    use super::*;
+
+    #[test]
+    fn from_bytes_returns_error_if_bytes_are_too_short() {
+        let bytes = [0u8; 1].to_vec();
+        let expected = ProcessingError::InvalidPacketLengthError;
+        match SphinxPacket::from_bytes(bytes) {
+            Err(err) => assert_eq!(expected, err),
+            _ => panic!("Should have returned an error when packet bytes too short"),
+        };
+    }
+
+    #[test]
+    fn from_bytes_panics_if_bytes_are_too_long() {
+        let bytes = [0u8; 6666].to_vec();
+        let expected = ProcessingError::InvalidPacketLengthError;
+        match SphinxPacket::from_bytes(bytes) {
+            Err(err) => assert_eq!(expected, err),
+            _ => panic!("Should have returned an error when packet bytes too long"),
+        };
     }
 }
