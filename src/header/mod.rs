@@ -30,6 +30,7 @@ pub enum SphinxUnwrapError {
     IntegrityMacError,
     RoutingFlagNotRecognized,
     ProcessingHeaderError,
+    NotEnoughPayload,
 }
 
 pub enum ProcessedHeader {

@@ -20,3 +20,4 @@ pub const NODE_META_INFO_LENGTH: usize = NODE_ADDRESS_LENGTH + FLAG_LENGTH + DEL
 pub const FINAL_NODE_META_INFO_LENGTH: usize =
     DESTINATION_ADDRESS_LENGTH + IDENTIFIER_LENGTH + FLAG_LENGTH; // the meta info for the final hop might be of a different size
 pub const FLAG_LENGTH: usize = 1;
+pub const PAYLOAD_SIZE: usize = 1024; // at minimum it HAS TO be at least equal to length of the key block used in lioness

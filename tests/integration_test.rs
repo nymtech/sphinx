@@ -9,6 +9,7 @@ const NODE_ADDRESS_LENGTH: usize = 32;
 const DESTINATION_ADDRESS_LENGTH: usize = 32;
 const IDENTIFIER_LENGTH: usize = 16;
 const SECURITY_PARAMETER: usize = 16;
+const PAYLOAD_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
@@ -30,7 +31,11 @@ mod create_and_process_sphinx_packet {
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
+        let sphinx_packet =
+            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
+                SphinxPacket { header, payload } => SphinxPacket { header, payload },
+                _ => panic!(),
+            };
 
         let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk) {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1, delay1) => {
@@ -51,7 +56,20 @@ mod create_and_process_sphinx_packet {
         match next_sphinx_packet_2.process(node3_sk) {
             ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
+                let additional_padding = vec![
+                    0u8;
+                    PAYLOAD_SIZE
+                        - SECURITY_PARAMETER
+                        - message.len()
+                        - destination.address.len()
+                ];
+                let expected_payload = [
+                    zero_bytes,
+                    destination.address.to_vec(),
+                    message,
+                    additional_padding,
+                ]
+                .concat();
                 assert_eq!(expected_payload, payload.get_content());
             }
             _ => panic!(),
@@ -79,7 +97,11 @@ mod converting_sphinx_packet_to_and_from_bytes {
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
+        let sphinx_packet =
+            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
+                SphinxPacket { header, payload } => SphinxPacket { header, payload },
+                _ => panic!(),
+            };
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
@@ -105,7 +127,20 @@ mod converting_sphinx_packet_to_and_from_bytes {
         match next_sphinx_packet_2.process(node3_sk) {
             ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let expected_payload = [zero_bytes, destination.address.to_vec(), message].concat();
+                let additional_padding = vec![
+                    0u8;
+                    PAYLOAD_SIZE
+                        - SECURITY_PARAMETER
+                        - message.len()
+                        - destination.address.len()
+                ];
+                let expected_payload = [
+                    zero_bytes,
+                    destination.address.to_vec(),
+                    message,
+                    additional_padding,
+                ]
+                .concat();
                 assert_eq!(expected_payload, payload.get_content());
             }
             _ => panic!(),
@@ -128,7 +163,11 @@ mod converting_sphinx_packet_to_and_from_bytes {
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message.clone(), &route, &destination, &delays);
+        let sphinx_packet =
+            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
+                SphinxPacket { header, payload } => SphinxPacket { header, payload },
+                _ => panic!(),
+            };
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes()[..300].to_vec();
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
