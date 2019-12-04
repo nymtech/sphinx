@@ -137,9 +137,9 @@ impl Payload {
         let mut destination_address: DestinationAddressBytes = [0u8; DESTINATION_ADDRESS_LENGTH];
         destination_address.copy_from_slice(&padded_destination[SECURITY_PARAMETER..]);
 
-        //
+        // we are looking for first occurrence of 1 in the tail and we get its index
         if let Some(i) = padded_plaintext.iter().rposition(|b| *b == 1) {
-            // we managed to found a non-zero trailing byte
+            // and now we only take bytes until that point (but not including it)
             let plaintext = padded_plaintext.iter().cloned().take(i).collect();
             return Some((destination_address, plaintext));
         }
