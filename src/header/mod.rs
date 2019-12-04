@@ -9,7 +9,7 @@ use crate::header::keys::{PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
-use crate::{crypto, ProcessingError};
+use crate::{crypto, payload, ProcessingError};
 
 pub mod delays;
 pub mod filler;
@@ -31,6 +31,13 @@ pub enum SphinxUnwrapError {
     RoutingFlagNotRecognized,
     ProcessingHeaderError,
     NotEnoughPayload,
+    InvalidPayloadLengthError,
+}
+
+impl From<payload::PayloadEncapsulationError> for SphinxUnwrapError {
+    fn from(_: payload::PayloadEncapsulationError) -> Self {
+        SphinxUnwrapError::InvalidPayloadLengthError
+    }
 }
 
 pub enum ProcessedHeader {

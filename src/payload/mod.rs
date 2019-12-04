@@ -4,7 +4,7 @@ use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-use crate::constants::{PAYLOAD_SIZE, SECURITY_PARAMETER};
+use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
 use crate::ProcessingError;
@@ -17,20 +17,28 @@ pub struct Payload {
     content: Vec<u8>,
 }
 
+#[derive(Debug)]
+pub enum PayloadEncapsulationError {
+    TooLongPlaintextError,
+}
+
 impl Payload {
     pub fn encapsulate_message(
         plaintext_message: &[u8],
         payload_keys: &[PayloadKey],
         destination_address: DestinationAddressBytes,
-    ) -> Self {
+    ) -> Result<Self, PayloadEncapsulationError> {
         let final_payload_key = payload_keys
             .last()
             .expect("The keys should be already initialized");
         // encapsulate_most_inner_payload
         let final_payload_layer =
-            Self::encrypt_final_layer(plaintext_message, final_payload_key, destination_address);
+            Self::encrypt_final_layer(plaintext_message, final_payload_key, destination_address)?;
 
-        Self::encrypt_outer_layers(final_payload_layer, payload_keys)
+        Ok(Self::encrypt_outer_layers(
+            final_payload_layer,
+            payload_keys,
+        ))
     }
 
     // this is expected to get called after unwrapping all layers so it should be fine to get ownership of the content
@@ -48,23 +56,19 @@ impl Payload {
         message: &[u8],
         final_payload_key: &PayloadKey,
         destination_address: DestinationAddressBytes,
-    ) -> Self {
-        // generate zero-padding
-        let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-
-        let destination_address_length = destination_address.len();
-        let message_length = message.len();
-        let padding_length =
-            PAYLOAD_SIZE - SECURITY_PARAMETER - destination_address_length - message_length;
-
-        let padding = vec![0u8; padding_length];
+    ) -> Result<Self, PayloadEncapsulationError> {
+        if message.len() > PAYLOAD_SIZE - SECURITY_PARAMETER - DESTINATION_ADDRESS_LENGTH - 1 {
+            // we need the single byte to detect padding length
+            return Err(PayloadEncapsulationError::TooLongPlaintextError);
+        }
         // concatenate security zero padding with destination and message and additional length padding
-        let mut final_payload: Vec<u8> = zero_bytes
-            .iter()
-            .cloned()
+        let mut final_payload: Vec<u8> = std::iter::repeat(0u8)
+            .take(SECURITY_PARAMETER) // start with zero-padding
             .chain(destination_address.to_vec().iter().cloned())
             .chain(message.iter().cloned())
-            .chain(padding.iter().cloned())
+            .chain(std::iter::repeat(1u8).take(1)) // add single 1 byte to indicate start of padding
+            .chain(std::iter::repeat(0u8)) // and fill everything else with zeroes
+            .take(PAYLOAD_SIZE) // take however much we need (remember, iterators are lazy)
             .collect();
 
         // encrypt the padded plaintext using the payload key
@@ -72,9 +76,9 @@ impl Payload {
             Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(final_payload_key, 0, RAW_KEY_SIZE));
         lioness_cipher.encrypt(&mut final_payload).unwrap();
 
-        Payload {
+        Ok(Payload {
             content: final_payload,
-        }
+        })
     }
 
     fn encrypt_outer_layers(final_payload_layer: Self, route_payload_keys: &[PayloadKey]) -> Self {
@@ -110,6 +114,10 @@ impl Payload {
         Payload {
             content: payload_content,
         }
+    }
+
+    pub fn try_recover_plaintext(self) -> Vec<u8> {
+        vec![]
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
@@ -161,7 +169,7 @@ mod test_encrypting_final_payload {
         let destination = destination_address_fixture();
         let routing_keys = routing_keys_fixture();
         let final_enc_payload =
-            Payload::encrypt_final_layer(&message, &routing_keys.payload_key, destination);
+            Payload::encrypt_final_layer(&message, &routing_keys.payload_key, destination).unwrap();
 
         assert_eq!(PAYLOAD_SIZE, final_enc_payload.content.len());
     }
@@ -183,7 +191,8 @@ mod test_encapsulating_payload {
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = vec![payload_key_1, payload_key_2, payload_key_3];
 
-        let final_enc_payload = Payload::encrypt_final_layer(&message, &payload_key_1, destination);
+        let final_enc_payload =
+            Payload::encrypt_final_layer(&message, &payload_key_1, destination).unwrap();
         let payload_encapsulation = Payload::encrypt_outer_layers(final_enc_payload, &payload_keys);
         assert_eq!(PAYLOAD_SIZE, payload_encapsulation.content.len());
     }
@@ -198,14 +207,15 @@ mod test_unwrapping_payload {
 
     #[test]
     fn unwrapping_results_in_original_payload_plaintext() {
-        let message = vec![1u8, 16];
+        let message = vec![42u8; 16];
         let destination = destination_address_fixture();
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
-        let encrypted_payload = Payload::encapsulate_message(&message, &payload_keys, destination);
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
@@ -215,11 +225,12 @@ mod test_unwrapping_payload {
 
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
         let additional_padding =
-            vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - destination.len()];
+            vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - destination.len() - 1];
         let expected_payload = [
             zero_bytes,
             destination.to_vec(),
             message,
+            vec![1],
             additional_padding,
         ]
         .concat();

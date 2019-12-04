@@ -3,8 +3,9 @@ use curve25519_dalek::scalar::Scalar;
 use crate::constants::{PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
-use crate::payload::Payload;
+use crate::payload::{Payload, PayloadEncapsulationError};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
+use std::convert::From;
 
 mod constants;
 pub mod crypto;
@@ -47,7 +48,7 @@ impl SphinxPacket {
         if message.len() + destination.address.len() > PAYLOAD_SIZE - SECURITY_PARAMETER {
             return Err(SphinxUnwrapError::NotEnoughPayload);
         }
-        let payload = Payload::encapsulate_message(&message, &payload_keys, destination.address);
+        let payload = Payload::encapsulate_message(&message, &payload_keys, destination.address)?;
         Ok(SphinxPacket { header, payload })
     }
 

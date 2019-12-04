@@ -61,11 +61,13 @@ mod create_and_process_sphinx_packet {
                         - SECURITY_PARAMETER
                         - message.len()
                         - destination.address.len()
+                        - 1
                 ];
                 let expected_payload = [
                     zero_bytes,
                     destination.address.to_vec(),
                     message,
+                    vec![1],
                     additional_padding,
                 ]
                 .concat();
@@ -131,11 +133,13 @@ mod converting_sphinx_packet_to_and_from_bytes {
                         - SECURITY_PARAMETER
                         - message.len()
                         - destination.address.len()
+                        - 1
                 ];
                 let expected_payload = [
                     zero_bytes,
                     destination.address.to_vec(),
                     message,
+                    vec![1],
                     additional_padding,
                 ]
                 .concat();
