@@ -1,12 +1,12 @@
 use crate::constants::{
-    IDENTIFIER_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    FINAL_NODE_META_INFO_LENGTH, MAX_PATH_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
-use crate::header::filler::Filler;
+use crate::header::filler::{Filler, FILLER_STEP_SIZE_INCREASE};
 use crate::header::keys::StreamCipherKey;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
-use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+use crate::header::routing::{RoutingFlag, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
 
@@ -19,6 +19,7 @@ use crate::utils;
 // TODO: perhaps add route_len to all final_routing_info related structs to simplify everything?
 // because it seems weird that say 'encrypt' requires route_len argument
 pub(super) struct FinalRoutingInformation {
+    flag: RoutingFlag,
     destination: DestinationAddressBytes,
     // in paper delta
     identifier: SURBIdentifier, // in paper I
@@ -30,6 +31,7 @@ impl FinalRoutingInformation {
         assert!(dest.address.len() <= Self::max_destination_length(route_len));
 
         Self {
+            flag: FINAL_HOP,
             destination: dest.address,
             identifier: dest.identifier,
         }
@@ -41,21 +43,24 @@ impl FinalRoutingInformation {
 
     fn max_padded_destination_identifier_length(route_len: usize) -> usize {
         // this should evaluate to (3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER
-        Self::max_destination_length(route_len) + IDENTIFIER_LENGTH
+        ENCRYPTED_ROUTING_INFO_SIZE - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
     }
 
     pub(super) fn add_padding(self, route_len: usize) -> PaddedFinalRoutingInformation {
         // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
         // attack on sphinx described by Kuhn et al.
-        let padding =
-            utils::bytes::random(Self::max_destination_length(route_len) - self.destination.len());
+        let padding = utils::bytes::random(
+            ENCRYPTED_ROUTING_INFO_SIZE
+                - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
+                - FINAL_NODE_META_INFO_LENGTH,
+        );
 
         // return D || I || PAD
         PaddedFinalRoutingInformation {
-            value: self
-                .destination
+            value: vec![self.flag]
                 .iter()
                 .cloned()
+                .chain(self.destination.iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
                 .collect(),
@@ -109,7 +114,10 @@ impl EncryptedPaddedFinalRoutingInformation {
         route_len: usize,
     ) -> EncryptedRoutingInformation {
         let filler_value = filler.get_value();
-        assert_eq!(filler_value.len(), 3 * SECURITY_PARAMETER * (route_len - 1));
+        assert_eq!(
+            filler_value.len(),
+            FILLER_STEP_SIZE_INCREASE * (route_len - 1)
+        );
 
         let final_routing_info_vec: Vec<u8> =
             self.value.iter().cloned().chain(filler_value).collect();
@@ -142,7 +150,7 @@ mod test_encapsulating_final_routing_information_and_mac {
         ];
         let filler = filler_fixture(route.len() - 1);
         let destination = destination_fixture();
-        let final_routing_info = EncapsulatedRoutingInformation::for_destination(
+        let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
             &destination,
             &routing_keys.last().unwrap(),
             filler,
@@ -169,7 +177,7 @@ mod test_encapsulating_final_routing_information {
     use super::*;
 
     #[test]
-    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_5(
+    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_and_flag_for_route_of_length_5(
     ) {
         let final_keys = routing_keys_fixture();
         let route_len = 5;
@@ -181,7 +189,7 @@ mod test_encapsulating_final_routing_information {
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
-        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+        let expected_final_header_len = ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
@@ -190,7 +198,7 @@ mod test_encapsulating_final_routing_information {
     }
 
     #[test]
-    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_3(
+    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_and_flag_for_route_of_length_3(
     ) {
         let final_keys = routing_keys_fixture();
         let route_len = 3;
@@ -202,7 +210,7 @@ mod test_encapsulating_final_routing_information {
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
-        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+        let expected_final_header_len = ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
@@ -211,7 +219,7 @@ mod test_encapsulating_final_routing_information {
     }
 
     #[test]
-    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_for_route_of_length_1(
+    fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_and_flag_for_route_of_length_1(
     ) {
         let final_keys = routing_keys_fixture();
         let route_len = 1;
@@ -223,7 +231,7 @@ mod test_encapsulating_final_routing_information {
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
-        let expected_final_header_len = 3 * MAX_PATH_LENGTH * SECURITY_PARAMETER;
+        let expected_final_header_len = ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
@@ -247,7 +255,7 @@ mod test_encapsulating_final_routing_information {
 
     #[test]
     #[should_panic]
-    fn it_panics_if_it_receives_filler_different_than_3i_security_parameter() {
+    fn it_panics_if_it_receives_filler_different_than_filler_step_multiplied_with_i() {
         let final_keys = routing_keys_fixture();
         let route_len = 3;
         let filler = filler_fixture(route_len);

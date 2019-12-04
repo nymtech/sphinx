@@ -1,9 +1,9 @@
-use crate::constants::{MAX_PATH_LENGTH, SECURITY_PARAMETER};
+use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_SIZE};
 use crate::crypto;
 use crate::header::keys::RoutingKeys;
 use crate::{constants, utils};
 
-const FILLER_STEP_SIZE_INCREASE: usize = 3 * SECURITY_PARAMETER;
+pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
 #[derive(Debug, PartialEq)]
 pub struct Filler {
@@ -90,10 +90,7 @@ mod test_creating_pseudorandom_bytes {
             .collect();
         let filler_string = Filler::new(&routing_keys);
 
-        assert_eq!(
-            1 * 3 * constants::SECURITY_PARAMETER,
-            filler_string.value.len()
-        );
+        assert_eq!(1 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
     }
 
     #[test]
@@ -108,10 +105,7 @@ mod test_creating_pseudorandom_bytes {
             .map(|&key| keys::RoutingKeys::derive(key))
             .collect();
         let filler_string = Filler::new(&routing_keys);
-        assert_eq!(
-            3 * 3 * constants::SECURITY_PARAMETER,
-            filler_string.value.len()
-        );
+        assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
     }
 
     #[test]
@@ -130,6 +124,40 @@ mod test_creating_pseudorandom_bytes {
 }
 
 #[cfg(test)]
+mod test_new_filler_bytes {
+    use crate::header::keys::routing_keys_fixture;
+
+    use super::*;
+
+    #[test]
+    fn it_retusn_filler_bytes_of_correct_length_for_3_routing_keys() {
+        let routing_key_1 = routing_keys_fixture();
+        let routing_key_2 = routing_keys_fixture();
+        let routing_key_3 = routing_keys_fixture();
+        let routing_keys = [routing_key_1, routing_key_2, routing_key_3];
+        let filler = Filler::new(&routing_keys);
+        assert_eq!(
+            FILLER_STEP_SIZE_INCREASE * (routing_keys.len()),
+            filler.get_value().len()
+        )
+    }
+
+    #[test]
+    fn it_retusn_filler_bytes_of_correct_length_for_4_routing_keys() {
+        let routing_key_1 = routing_keys_fixture();
+        let routing_key_2 = routing_keys_fixture();
+        let routing_key_3 = routing_keys_fixture();
+        let routing_key_4 = routing_keys_fixture();
+        let routing_keys = [routing_key_1, routing_key_2, routing_key_3, routing_key_4];
+        let filler = Filler::new(&routing_keys);
+        assert_eq!(
+            FILLER_STEP_SIZE_INCREASE * (routing_keys.len()),
+            filler.get_value().len()
+        )
+    }
+}
+
+#[cfg(test)]
 mod test_generating_filler_bytes {
     use super::*;
 
@@ -142,7 +170,7 @@ mod test_generating_filler_bytes {
             let filler_string_accumulator = vec![];
             let filler_string =
                 Filler::filler_step(filler_string_accumulator, 1, pseudorandom_bytes);
-            assert_eq!(48, filler_string.len());
+            assert_eq!(FILLER_STEP_SIZE_INCREASE * 1, filler_string.len());
             for x in filler_string {
                 assert_eq!(0, x); // XOR of 0 + 0 == 0
             }
@@ -151,10 +179,10 @@ mod test_generating_filler_bytes {
         #[test]
         fn it_returns_the_xored_byte_vector_of_a_correct_length_for_i_3() {
             let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
-            let filler_string_accumulator = vec![0u8; 6 * SECURITY_PARAMETER];
+            let filler_string_accumulator = vec![0u8; 2 * FILLER_STEP_SIZE_INCREASE];
             let filler_string =
                 Filler::filler_step(filler_string_accumulator, 3, pseudorandom_bytes);
-            assert_eq!(144, filler_string.len());
+            assert_eq!(FILLER_STEP_SIZE_INCREASE * 3, filler_string.len());
             for x in filler_string {
                 assert_eq!(0, x); // XOR of 0 + 0 == 0
             }
@@ -195,6 +223,6 @@ mod test_generating_filler_bytes {
 #[allow(dead_code)]
 pub fn filler_fixture(i: usize) -> Filler {
     Filler {
-        value: vec![9u8; 3 * SECURITY_PARAMETER * i],
+        value: vec![9u8; FILLER_STEP_SIZE_INCREASE * i],
     }
 }
