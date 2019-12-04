@@ -4,7 +4,7 @@ use crate::constants::{PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
 use crate::payload::Payload;
-use crate::route::{Destination, Node, NodeAddressBytes, SURBIdentifier};
+use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 
 mod constants;
 pub mod crypto;
@@ -25,7 +25,7 @@ pub enum ProcessingError {
 
 pub enum ProcessedPacket {
     ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes, Delay),
-    ProcessedPacketFinalHop(SURBIdentifier, Payload),
+    ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
 
 pub struct SphinxPacket {
@@ -70,7 +70,7 @@ impl SphinxPacket {
             }
             ProcessedHeader::ProcessedHeaderFinalHop(destination, identifier, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key);
-                ProcessedPacket::ProcessedPacketFinalHop(identifier, new_payload)
+                ProcessedPacket::ProcessedPacketFinalHop(destination, identifier, new_payload)
             }
         }
     }

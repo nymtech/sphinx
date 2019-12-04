@@ -54,7 +54,7 @@ mod create_and_process_sphinx_packet {
         };
 
         match next_sphinx_packet_2.process(node3_sk) {
-            ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
+            ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding = vec![
                     0u8;
@@ -125,7 +125,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
         };
 
         match next_sphinx_packet_2.process(node3_sk) {
-            ProcessedPacket::ProcessedPacketFinalHop(identifier, payload) => {
+            ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding = vec![
                     0u8;
