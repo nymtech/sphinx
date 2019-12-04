@@ -1,7 +1,4 @@
-use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, FLAG_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH,
-    MAX_PATH_LENGTH, NODE_META_INFO_SIZE, SECURITY_PARAMETER,
-};
+use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_SIZE};
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::RoutingKeys;

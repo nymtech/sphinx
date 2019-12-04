@@ -124,7 +124,6 @@ impl SphinxHeader {
                 identifier,
                 routing_keys.payload_key,
             )),
-            _ => Err(SphinxUnwrapError::ProcessingHeaderError),
         }
     }
 
@@ -223,7 +222,7 @@ mod create_and_process_sphinx_packet_header {
             _ => panic!(),
         };
         match new_header2.process(node3_sk).unwrap() {
-            ProcessedHeader::ProcessedHeaderFinalHop(final_destination, identifier, _) => {
+            ProcessedHeader::ProcessedHeaderFinalHop(final_destination, _, _) => {
                 assert_eq!(destination.address, final_destination);
             }
             _ => panic!(),
@@ -278,7 +277,7 @@ mod unwrap_routing_information {
             {
                 ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                     next_hop_address,
-                    delay,
+                    _delay,
                     next_hop_encapsulated_routing_info,
                 ) => {
                     assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address);

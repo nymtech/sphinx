@@ -4,7 +4,7 @@ use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-use crate::constants::{PAYLOAD_KEY_SIZE, PAYLOAD_SIZE, SECURITY_PARAMETER};
+use crate::constants::{PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
 use crate::ProcessingError;
@@ -94,7 +94,7 @@ impl Payload {
         let lioness_cipher =
             Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_enc_key, 0, RAW_KEY_SIZE));
 
-        let mut payload_content = current_layer.content.clone();
+        let mut payload_content = current_layer.content;
         lioness_cipher.encrypt(&mut payload_content).unwrap();
 
         Payload {
@@ -103,7 +103,7 @@ impl Payload {
     }
 
     pub fn unwrap(self, payload_key: &PayloadKey) -> Self {
-        let mut payload_content = self.content.clone();
+        let mut payload_content = self.content;
         let lioness_cipher =
             Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_key, 0, RAW_KEY_SIZE));
         lioness_cipher.decrypt(&mut payload_content).unwrap();
@@ -150,7 +150,6 @@ mod building_payload_from_bytes {
 
 #[cfg(test)]
 mod test_encrypting_final_payload {
-    use crate::constants::DESTINATION_ADDRESS_LENGTH;
     use crate::header::keys::routing_keys_fixture;
     use crate::route::destination_address_fixture;
 
@@ -159,7 +158,6 @@ mod test_encrypting_final_payload {
     #[test]
     fn it_returns_encrypted_payload_of_expected_payload_size() {
         let message = vec![1u8, 16];
-        let message_len = message.len();
         let destination = destination_address_fixture();
         let routing_keys = routing_keys_fixture();
         let final_enc_payload =
@@ -171,7 +169,7 @@ mod test_encrypting_final_payload {
 
 #[cfg(test)]
 mod test_encapsulating_payload {
-    use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
+    use crate::constants::PAYLOAD_KEY_SIZE;
     use crate::route::destination_address_fixture;
 
     use super::*;
@@ -179,7 +177,6 @@ mod test_encapsulating_payload {
     #[test]
     fn always_the_payload_is_of_the_same_expected_type() {
         let message = vec![1u8, 16];
-        let message_len = message.len();
         let destination = destination_address_fixture();
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];

@@ -1,6 +1,6 @@
 use crate::constants::{
     DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
-    SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
@@ -219,7 +219,6 @@ impl RawRoutingInformation {
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
         identifier.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
-        i += HEADER_INTEGRITY_MAC_SIZE;
 
         ParsedRawRoutingInformation::FinalHopRoutingInformation(destination, identifier)
     }
@@ -325,7 +324,7 @@ mod encrypting_routing_information {
         let routing_information = RoutingInformation {
             flag: FORWARD_HOP,
             node_address: address,
-            delay: delay,
+            delay,
             header_integrity_mac: mac,
             next_routing_information: next_routing,
         };
@@ -360,10 +359,11 @@ mod truncating_routing_information {
 
 #[cfg(test)]
 mod parse_decrypted_routing_information {
-    use super::*;
     use crate::header::mac::header_integrity_mac_fixture;
     use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
     use crate::route::node_address_fixture;
+
+    use super::*;
 
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
@@ -387,7 +387,7 @@ mod parse_decrypted_routing_information {
         match raw_routing_info.parse().unwrap() {
             ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                 next_address,
-                delay,
+                _delay,
                 encapsulated_routing_info,
             ) => {
                 assert_eq!(address_fixture, next_address);
@@ -403,9 +403,7 @@ mod parse_decrypted_routing_information {
                         .to_vec()
                 );
             }
-            ParsedRawRoutingInformation::FinalHopRoutingInformation(destination, identifier) => {
-                panic!()
-            }
+            ParsedRawRoutingInformation::FinalHopRoutingInformation(_, _) => panic!(),
         }
     }
 }
