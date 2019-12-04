@@ -116,8 +116,45 @@ impl Payload {
         }
     }
 
-    pub fn try_recover_plaintext(self) -> Vec<u8> {
-        vec![]
+    pub fn try_recover_destination_and_plaintext(
+        self,
+    ) -> Option<(DestinationAddressBytes, Vec<u8>)> {
+        // assuming our payload is fully decrypted it has the structure of:
+        // 00000.... (SECURITY_PARAMETER length)
+        // ADDRESS (DESTINATION_ADDRESS_LENGTH length)
+        // plaintext (variable)
+        // 1 (single 1 byte)
+        // 0000 ... to pad to PAYLOAD_SIZE
+
+        // so we need to ignore first SECURITY_PARAMETER
+        // then parse next DESTINATION_ADDRESS_LENGTH bytes as destination address
+        // from the remaining remove all tailing zeroes until first 1
+        // and finally remove the first 1
+        let (padded_destination, padded_plaintext) = self
+            .content
+            .split_at(SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH);
+
+        let mut destination_address: DestinationAddressBytes = [0u8; DESTINATION_ADDRESS_LENGTH];
+        destination_address.copy_from_slice(&padded_destination[SECURITY_PARAMETER..]);
+
+        //
+        if let Some(i) = padded_plaintext.iter().rposition(|b| *b == 1) {
+            // we managed to found a non-zero trailing byte
+            let plaintext = padded_plaintext.iter().cloned().take(i).collect();
+            return Some((destination_address, plaintext));
+        }
+
+        // our plaintext is invalid
+        None
+
+        //        let mut plaintext: Vec<_> = padded_plaintext
+        //            .to_vec()
+        //            .into_iter()
+        //            .rev() // we need to remove elements from the tail
+        //            .skip_while(|b| *b == 0) // skip all zeroes
+        //            .skip(1) // skip 1 more element that is the single 1
+        //            .collect();
+        //        plaintext.reverse(); // and finally we want to have the plaintext in correct order
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
@@ -233,5 +270,129 @@ mod test_unwrapping_payload {
         ]
         .concat();
         assert_eq!(expected_payload, unwrapped_payload.get_content());
+    }
+}
+
+#[cfg(test)]
+mod plaintext_recovery {
+    use crate::constants::PAYLOAD_KEY_SIZE;
+
+    use super::*;
+
+    #[test]
+    fn it_is_possible_to_recover_plaintext_from_valid_payload() {
+        let message = vec![42u8; 160];
+        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+        let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
+        let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
+        let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
+
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+
+        let unwrapped_payload = payload_keys
+            .iter()
+            .fold(encrypted_payload, |current_layer, payload_key| {
+                current_layer.unwrap(payload_key)
+            });
+
+        let (recovered_address, recovered_plaintext) = unwrapped_payload
+            .try_recover_destination_and_plaintext()
+            .unwrap();
+
+        assert_eq!(destination, recovered_address);
+        assert_eq!(message, recovered_plaintext);
+    }
+
+    #[test]
+    fn it_is_possible_to_recover_plaintext_even_if_is_just_ones() {
+        let message = vec![1u8; 160];
+        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+        let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
+        let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
+        let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
+
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+
+        let unwrapped_payload = payload_keys
+            .iter()
+            .fold(encrypted_payload, |current_layer, payload_key| {
+                current_layer.unwrap(payload_key)
+            });
+
+        let (recovered_address, recovered_plaintext) = unwrapped_payload
+            .try_recover_destination_and_plaintext()
+            .unwrap();
+
+        assert_eq!(destination, recovered_address);
+        assert_eq!(message, recovered_plaintext);
+    }
+
+    #[test]
+    fn it_is_possible_to_recover_plaintext_even_if_is_just_zeroes() {
+        let message = vec![0u8; 160];
+        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+        let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
+        let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
+        let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
+
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+
+        let unwrapped_payload = payload_keys
+            .iter()
+            .fold(encrypted_payload, |current_layer, payload_key| {
+                current_layer.unwrap(payload_key)
+            });
+
+        let (recovered_address, recovered_plaintext) = unwrapped_payload
+            .try_recover_destination_and_plaintext()
+            .unwrap();
+
+        assert_eq!(destination, recovered_address);
+        assert_eq!(message, recovered_plaintext);
+    }
+
+    #[test]
+    fn it_fails_to_recover_plaintext_from_invalid_payload() {
+        let message = vec![42u8; 160];
+        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+        let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
+        let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
+        let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
+
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+
+        let unwrapped_payload = payload_keys
+            .iter()
+            .skip(1) // 'forget' about one key to obtain invalid decryption
+            .fold(encrypted_payload, |current_layer, payload_key| {
+                current_layer.unwrap(payload_key)
+            });
+
+        let (recovered_address, recovered_plaintext) = unwrapped_payload
+            .try_recover_destination_and_plaintext()
+            .unwrap();
+
+        assert_ne!(destination, recovered_address);
+        assert_ne!(message, recovered_plaintext);
+    }
+
+    #[test]
+    fn it_fails_to_recover_plaintext_from_incorrectly_constructed_payload() {
+        let zero_payload = Payload {
+            content: vec![0u8; PAYLOAD_SIZE],
+        };
+        assert_eq!(None, zero_payload.try_recover_destination_and_plaintext());
     }
 }

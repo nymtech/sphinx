@@ -3,9 +3,8 @@ use curve25519_dalek::scalar::Scalar;
 use crate::constants::{PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
-use crate::payload::{Payload, PayloadEncapsulationError};
+use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
-use std::convert::From;
 
 mod constants;
 pub mod crypto;
