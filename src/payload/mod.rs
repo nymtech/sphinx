@@ -121,9 +121,7 @@ impl Payload {
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
-        // TODO: currently it's defined as minimum size. It should be always constant length in the future
-        // once we decide on payload size
-        if bytes.len() < PAYLOAD_SIZE {
+        if bytes.len() != PAYLOAD_SIZE {
             return Err(ProcessingError::InvalidPayloadLengthError);
         }
 
