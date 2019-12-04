@@ -143,15 +143,15 @@ mod building_payload_from_bytes {
         };
     }
 
-    // #[test]
-    // fn from_bytes_panics_if_bytes_are_too_long() {
-    //     let bytes = [0u8; 6666].to_vec();
-    //     let expected = ProcessingError::InvalidPacketLengthError;
-    //     match SphinxPacket::from_bytes(bytes) {
-    //         Err(err) => assert_eq!(expected, err),
-    //         _ => panic!("Should have returned an error when packet bytes too long"),
-    //     };
-    // }
+    #[test]
+    fn from_bytes_panics_if_bytes_are_too_long() {
+        let bytes = [0u8; 6666].to_vec();
+        let expected = ProcessingError::InvalidPayloadLengthError;
+        match Payload::from_bytes(bytes) {
+            Err(err) => assert_eq!(expected, err),
+            _ => panic!("Should have returned an error when packet bytes too long"),
+        };
+    }
 }
 
 #[cfg(test)]
