@@ -146,15 +146,6 @@ impl Payload {
 
         // our plaintext is invalid
         None
-
-        //        let mut plaintext: Vec<_> = padded_plaintext
-        //            .to_vec()
-        //            .into_iter()
-        //            .rev() // we need to remove elements from the tail
-        //            .skip_while(|b| *b == 0) // skip all zeroes
-        //            .skip(1) // skip 1 more element that is the single 1
-        //            .collect();
-        //        plaintext.reverse(); // and finally we want to have the plaintext in correct order
     }
 
     pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
