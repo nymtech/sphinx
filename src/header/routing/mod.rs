@@ -96,7 +96,7 @@ impl EncapsulatedRoutingInformation {
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 routing_keys.iter().take(routing_keys.len() - 1), // we don't want last element - it was already used to encrypt the destination
             )
-            .zip(delays.iter().take(delays.len() - 1)) // no need for the delay for the final node
+            .zip(delays.into_iter().take(delays.len() - 1)) // no need for the delay for the final node
             .rev() // we are working from the 'inside'
             // we should be getting here
             // [(Mix_v, Keys_{v-1}, Delay_{v-1}), (Mix_{v-1}, Keys_{v-2}, Delay_{v-2}), ..., (Mix2, Keys1, Delay1), (Mix1, Keys0, Delay0)]
@@ -108,7 +108,7 @@ impl EncapsulatedRoutingInformation {
                  ((current_node_address, previous_node_routing_keys), delay)| {
                     RoutingInformation::new(
                         current_node_address,
-                        *delay,
+                        delay.to_owned(),
                         next_hop_encapsulated_routing_information,
                     )
                     .encrypt(previous_node_routing_keys.stream_cipher_key)
@@ -234,7 +234,7 @@ mod encapsulating_forward_routing_information {
         let delay0 = Delay::new(10);
         let delay1 = Delay::new(20);
         let delay2 = Delay::new(30);
-        let delays = [delay0, delay1, delay2].to_vec();
+        let delays = [delay0.clone(), delay1.clone(), delay2.clone()].to_vec();
         let routing_keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),

@@ -4,7 +4,7 @@ use crate::constants;
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct Delay {
     value: u64,
 }
