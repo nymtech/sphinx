@@ -1,9 +1,9 @@
-use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_LENGTH};
+use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_SIZE};
 use crate::crypto;
 use crate::header::keys::RoutingKeys;
 use crate::{constants, utils};
 
-pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
+pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
 #[derive(Debug, PartialEq)]
 pub struct Filler {

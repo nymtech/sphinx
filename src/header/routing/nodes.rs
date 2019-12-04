@@ -1,5 +1,5 @@
 use crate::constants::{
-    DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_LENGTH,
+    DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
     SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto;
@@ -16,7 +16,7 @@ use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
-    ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
+    ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
 // in paper beta
 pub(super) struct RoutingInformation {
@@ -116,7 +116,7 @@ impl EncryptedRoutingInformation {
     }
 
     pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
-        let zero_bytes = vec![0u8; NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE];
+        let zero_bytes = vec![0u8; NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE];
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().cloned().chain(zero_bytes).collect();
 
@@ -161,7 +161,7 @@ pub enum ParsedRawRoutingInformation {
 impl RawRoutingInformation {
     pub fn parse(self) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
         assert_eq!(
-            NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE,
+            NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE,
             self.value.len()
         );
 

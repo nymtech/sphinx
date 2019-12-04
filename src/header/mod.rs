@@ -234,7 +234,7 @@ mod create_and_process_sphinx_packet_header {
 #[cfg(test)]
 mod unwrap_routing_information {
     use crate::constants::{
-        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_LENGTH,
+        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
         STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
@@ -266,9 +266,9 @@ mod unwrap_routing_information {
         println!("{:?}", routing_info.len());
         println!("{:?}", pseudorandom_bytes.len());
         let expected_next_hop_encrypted_routing_information = [
-            routing_info[NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
+            routing_info[NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
             pseudorandom_bytes
-                [NODE_META_INFO_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
+                [NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
                 .to_vec(),
         ]
         .concat();
