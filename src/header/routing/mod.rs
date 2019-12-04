@@ -21,8 +21,10 @@ pub const ENCRYPTED_ROUTING_INFO_SIZE: usize =
 pub mod destination;
 pub mod nodes;
 
-pub const ROUTING_FLAG: u8 = 1;
-pub const FINAL_FLAG: u8 = 2;
+pub const FORWARD_HOP: RoutingFlag = 1;
+pub const FINAL_HOP: RoutingFlag = 2;
+
+pub type RoutingFlag = u8;
 
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]

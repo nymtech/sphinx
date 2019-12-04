@@ -238,7 +238,7 @@ mod unwrap_routing_information {
         STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
-    use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, ROUTING_FLAG};
+    use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, FORWARD_HOP};
     use crate::utils;
 
     use super::*;
@@ -246,7 +246,7 @@ mod unwrap_routing_information {
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
         let mut routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
-        routing_info[0] = ROUTING_FLAG;
+        routing_info[0] = FORWARD_HOP;
         let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &stream_cipher_key,

@@ -7,7 +7,7 @@ use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::filler::{Filler, FILLER_STEP_SIZE_INCREASE};
 use crate::header::keys::StreamCipherKey;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
-use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, FINAL_FLAG};
+use crate::header::routing::{RoutingFlag, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
 
@@ -20,7 +20,7 @@ use crate::utils;
 // TODO: perhaps add route_len to all final_routing_info related structs to simplify everything?
 // because it seems weird that say 'encrypt' requires route_len argument
 pub(super) struct FinalRoutingInformation {
-    flag: u8,
+    flag: RoutingFlag,
     destination: DestinationAddressBytes,
     // in paper delta
     identifier: SURBIdentifier, // in paper I
@@ -32,7 +32,7 @@ impl FinalRoutingInformation {
         assert!(dest.address.len() <= Self::max_destination_length(route_len));
 
         Self {
-            flag: FINAL_FLAG,
+            flag: FINAL_HOP,
             destination: dest.address,
             identifier: dest.identifier,
         }

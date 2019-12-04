@@ -8,8 +8,8 @@ use crate::header::delays::Delay;
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
-    EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_FLAG, ROUTING_FLAG,
-    TRUNCATED_ROUTING_INFO_SIZE,
+    EncapsulatedRoutingInformation, RoutingFlag, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
+    FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
 use crate::header::SphinxUnwrapError;
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
@@ -20,7 +20,7 @@ pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
 
 // in paper beta
 pub(super) struct RoutingInformation {
-    flag: u8,
+    flag: RoutingFlag,
     // in paper nu
     node_address: NodeAddressBytes,
     delay: Delay,
@@ -37,7 +37,7 @@ impl RoutingInformation {
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
     ) -> Self {
         RoutingInformation {
-            flag: ROUTING_FLAG,
+            flag: FORWARD_HOP,
             node_address,
             delay,
             header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
@@ -167,8 +167,8 @@ impl RawRoutingInformation {
 
         let flag = self.value[0];
         match flag {
-            ROUTING_FLAG => Ok(self.parse_as_forward_hop()),
-            FINAL_FLAG => Ok(self.parse_as_final_hop()),
+            FORWARD_HOP => Ok(self.parse_as_forward_hop()),
+            FINAL_HOP => Ok(self.parse_as_final_hop()),
             _ => Err(SphinxUnwrapError::RoutingFlagNotRecognized),
         }
     }
@@ -247,7 +247,7 @@ mod preparing_header_layer {
 
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
-            vec![ROUTING_FLAG],
+            vec![FORWARD_HOP],
             node_address.to_vec(),
             delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
@@ -307,7 +307,7 @@ mod encrypting_routing_information {
     #[test]
     fn it_is_possible_to_decrypt_it_to_recover_original_data() {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
-        let flag = ROUTING_FLAG;
+        let flag = FORWARD_HOP;
         let address = node_address_fixture();
         let delay = Delay::new(15);
         let mac = header_integrity_mac_fixture();
@@ -323,7 +323,7 @@ mod encrypting_routing_information {
         .concat();
 
         let routing_information = RoutingInformation {
-            flag: ROUTING_FLAG,
+            flag: FORWARD_HOP,
             node_address: address,
             delay: delay,
             header_integrity_mac: mac,
@@ -367,7 +367,7 @@ mod parse_decrypted_routing_information {
 
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
-        let flag = ROUTING_FLAG;
+        let flag = FORWARD_HOP;
         let address_fixture = node_address_fixture();
         let delay = Delay::new(10);
         let integrity_mac = header_integrity_mac_fixture().get_value();
