@@ -47,7 +47,7 @@ impl SphinxPacket {
         if message.len() + destination.address.len() > PAYLOAD_SIZE - SECURITY_PARAMETER {
             return Err(SphinxUnwrapError::NotEnoughPayload);
         }
-        let payload = Payload::encapsulate_message(&message, &payload_keys, destination.address);
+        let payload = Payload::encapsulate_message(&message, &payload_keys, destination.address)?;
         Ok(SphinxPacket { header, payload })
     }
 
