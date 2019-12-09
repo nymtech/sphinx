@@ -1,23 +1,29 @@
 use crate::constants::{
-    HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, SECURITY_PARAMETER, STREAM_CIPHER_OUTPUT_LENGTH,
+    DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
+    STREAM_CIPHER_OUTPUT_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
+use crate::header::delays::Delay;
 use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
-    EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE, TRUNCATED_ROUTING_INFO_SIZE,
+    EncapsulatedRoutingInformation, RoutingFlag, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
+    FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
-use crate::route::NodeAddressBytes;
+use crate::header::SphinxUnwrapError;
+use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
-    ENCRYPTED_ROUTING_INFO_SIZE + NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE;
+    ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
 // in paper beta
 pub(super) struct RoutingInformation {
+    flag: RoutingFlag,
     // in paper nu
     node_address: NodeAddressBytes,
+    delay: Delay,
     // in paper gamma
     header_integrity_mac: HeaderIntegrityMac,
     // in paper also beta (!)
@@ -27,10 +33,13 @@ pub(super) struct RoutingInformation {
 impl RoutingInformation {
     pub(super) fn new(
         node_address: NodeAddressBytes,
+        delay: Delay,
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
     ) -> Self {
         RoutingInformation {
+            flag: FORWARD_HOP,
             node_address,
+            delay,
             header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
             next_routing_information: next_encapsulated_routing_information
                 .enc_routing_information
@@ -39,9 +48,11 @@ impl RoutingInformation {
     }
 
     fn concatenate_components(self) -> Vec<u8> {
-        self.node_address
+        vec![self.flag]
             .iter()
             .cloned()
+            .chain(self.node_address.iter().cloned())
+            .chain(self.delay.to_bytes().iter().cloned())
             .chain(self.header_integrity_mac.get_value().iter().cloned())
             .chain(self.next_routing_information.iter().cloned())
             .collect()
@@ -105,7 +116,7 @@ impl EncryptedRoutingInformation {
     }
 
     pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
-        let zero_bytes = vec![0u8; 3 * SECURITY_PARAMETER];
+        let zero_bytes = vec![0u8; NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE];
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().cloned().chain(zero_bytes).collect();
 
@@ -131,6 +142,7 @@ impl PaddedEncryptedRoutingInformation {
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
 
+        assert_eq!(self.value.len(), pseudorandom_bytes.len());
         RawRoutingInformation {
             value: utils::bytes::xor(&self.value, &pseudorandom_bytes),
         }
@@ -141,25 +153,37 @@ pub struct RawRoutingInformation {
     value: Vec<u8>,
 }
 
+pub enum ParsedRawRoutingInformation {
+    ForwardHopRoutingInformation(NodeAddressBytes, Delay, EncapsulatedRoutingInformation),
+    FinalHopRoutingInformation(DestinationAddressBytes, SURBIdentifier),
+}
+
 impl RawRoutingInformation {
-    pub fn parse(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+    pub fn parse(self) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
         assert_eq!(
-            3 * SECURITY_PARAMETER + ENCRYPTED_ROUTING_INFO_SIZE,
+            NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE,
             self.value.len()
         );
 
-        // TODO: first byte (or equivalent) to say 'final hop' to read destination information
-        // or 'forward hop' to treat it as next mix data
-        self.parse_as_forward_hop()
+        let flag = self.value[0];
+        match flag {
+            FORWARD_HOP => Ok(self.parse_as_forward_hop()),
+            FINAL_HOP => Ok(self.parse_as_final_hop()),
+            _ => Err(SphinxUnwrapError::RoutingFlagNotRecognized),
+        }
     }
 
-    fn parse_as_forward_hop(self) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
-        let mut i = 0;
+    fn parse_as_forward_hop(self) -> ParsedRawRoutingInformation {
+        let mut i = 1;
 
         // first NODE_ADDRESS_LENGTH bytes represents the next hop address
         let mut next_hop_address: [u8; NODE_ADDRESS_LENGTH] = Default::default();
         next_hop_address.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
         i += NODE_ADDRESS_LENGTH;
+
+        let mut delay_bytes: [u8; DELAY_LENGTH] = Default::default();
+        delay_bytes.copy_from_slice(&self.value[i..i + DELAY_LENGTH]);
+        i += DELAY_LENGTH;
 
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut next_hop_integrity_mac: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
@@ -176,11 +200,28 @@ impl RawRoutingInformation {
             HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
         );
 
-        (next_hop_address, next_hop_encapsulated_routing_info)
+        ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+            next_hop_address,
+            Delay::from_bytes(delay_bytes),
+            next_hop_encapsulated_routing_info,
+        )
     }
 
-    // TODO:
-    fn parse_as_final_hop(self) {}
+    // TODO: this needs to be updated as a correct parse as final hop function!
+    fn parse_as_final_hop(self) -> ParsedRawRoutingInformation {
+        let mut i = 1;
+
+        // first NODE_ADDRESS_LENGTH bytes represents the next hop address
+        let mut destination: [u8; NODE_ADDRESS_LENGTH] = Default::default();
+        destination.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
+        i += NODE_ADDRESS_LENGTH;
+
+        // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
+        let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
+        identifier.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
+
+        ParsedRawRoutingInformation::FinalHopRoutingInformation(destination, identifier)
+    }
 }
 
 // result of truncating encrypted beta before passing it to next 'layer'
@@ -196,14 +237,18 @@ mod preparing_header_layer {
     use super::*;
 
     #[test]
-    fn it_returns_encrypted_truncated_address_concatenated_with_inner_layer_and_mac_on_it() {
+    fn it_returns_encrypted_truncated_address_and_flag_concatenated_with_inner_layer_and_mac_on_it()
+    {
         let node_address = node_address_fixture();
+        let delay = Delay::new(10);
         let previous_node_routing_keys = routing_keys_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
+            vec![FORWARD_HOP],
             node_address.to_vec(),
+            delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
                 .enc_routing_information
@@ -235,7 +280,7 @@ mod preparing_header_layer {
         );
         expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
 
-        let next_layer_routing = RoutingInformation::new(node_address, inner_layer_routing)
+        let next_layer_routing = RoutingInformation::new(node_address, delay, inner_layer_routing)
             .encrypt(previous_node_routing_keys.stream_cipher_key)
             .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key);
 
@@ -261,19 +306,25 @@ mod encrypting_routing_information {
     #[test]
     fn it_is_possible_to_decrypt_it_to_recover_original_data() {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
+        let flag = FORWARD_HOP;
         let address = node_address_fixture();
+        let delay = Delay::new(15);
         let mac = header_integrity_mac_fixture();
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
 
         let encryption_data = [
+            vec![flag],
             address.to_vec(),
+            delay.to_bytes().to_vec(),
             mac.get_value_ref().to_vec(),
             next_routing.to_vec(),
         ]
         .concat();
 
         let routing_information = RoutingInformation {
+            flag: FORWARD_HOP,
             node_address: address,
+            delay,
             header_integrity_mac: mac,
             next_routing_information: next_routing,
         };
@@ -308,19 +359,24 @@ mod truncating_routing_information {
 
 #[cfg(test)]
 mod parse_decrypted_routing_information {
-    use super::*;
     use crate::header::mac::header_integrity_mac_fixture;
     use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
     use crate::route::node_address_fixture;
 
+    use super::*;
+
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
+        let flag = FORWARD_HOP;
         let address_fixture = node_address_fixture();
+        let delay = Delay::new(10);
         let integrity_mac = header_integrity_mac_fixture().get_value();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
 
         let data = [
+            vec![flag],
             address_fixture.to_vec(),
+            delay.to_bytes().to_vec(),
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),
         ]
@@ -328,19 +384,27 @@ mod parse_decrypted_routing_information {
 
         let raw_routing_info = RawRoutingInformation { value: data };
 
-        let (address, encapsulated_routing_info) = raw_routing_info.parse();
-        assert_eq!(address_fixture, address);
-        assert_eq!(
-            integrity_mac,
-            encapsulated_routing_info.integrity_mac.get_value()
-        );
-        assert_eq!(
-            next_routing_information.to_vec(),
-            encapsulated_routing_info
-                .enc_routing_information
-                .get_value_ref()
-                .to_vec()
-        );
+        match raw_routing_info.parse().unwrap() {
+            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                next_address,
+                _delay,
+                encapsulated_routing_info,
+            ) => {
+                assert_eq!(address_fixture, next_address);
+                assert_eq!(
+                    integrity_mac,
+                    encapsulated_routing_info.integrity_mac.get_value()
+                );
+                assert_eq!(
+                    next_routing_information.to_vec(),
+                    encapsulated_routing_info
+                        .enc_routing_information
+                        .get_value_ref()
+                        .to_vec()
+                );
+            }
+            ParsedRawRoutingInformation::FinalHopRoutingInformation(_, _) => panic!(),
+        }
     }
 }
 

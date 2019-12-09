@@ -1,13 +1,41 @@
 use rand_distr::{Distribution, Exp};
 
 use crate::constants;
+use crate::constants::DELAY_LENGTH;
+use byteorder::{BigEndian, ByteOrder};
 
-pub(crate) fn generate(number: usize) -> Vec<f64> {
+#[derive(Debug, Clone)]
+pub struct Delay {
+    value: u64,
+}
+
+impl Delay {
+    pub fn new(value: u64) -> Self {
+        Self { value }
+    }
+    pub fn to_bytes(&self) -> [u8; DELAY_LENGTH] {
+        let mut delay_bytes = [0; DELAY_LENGTH];
+        BigEndian::write_u64(&mut delay_bytes, self.value);
+        delay_bytes
+    }
+
+    pub fn from_bytes(delay_bytes: [u8; DELAY_LENGTH]) -> Self {
+        Self {
+            value: BigEndian::read_u64(&delay_bytes),
+        }
+    }
+
+    pub fn get_value(&self) -> u64 {
+        self.value
+    }
+}
+
+pub fn generate(number: usize) -> Vec<Delay> {
     let exp = Exp::new(1.0 / constants::AVERAGE_DELAY).unwrap();
 
     std::iter::repeat(())
         .take(number)
-        .map(|_| exp.sample(&mut rand::thread_rng()))
+        .map(|_| Delay::new((exp.sample(&mut rand::thread_rng()) * 1_000_000_000.0).round() as u64)) // for now I just assume we will express it in nano-seconds to have an integer
         .collect()
 }
 

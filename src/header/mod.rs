@@ -3,12 +3,13 @@ use curve25519_dalek::scalar::Scalar;
 
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
+use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::{BlindingFactor, PayloadKey, StreamCipherKey};
-use crate::header::routing::nodes::EncryptedRoutingInformation;
+use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
-use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::{crypto, ProcessingError};
+use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
+use crate::{crypto, payload, ProcessingError};
 
 pub mod delays;
 pub mod filler;
@@ -27,6 +28,21 @@ pub struct SphinxHeader {
 #[derive(Debug)]
 pub enum SphinxUnwrapError {
     IntegrityMacError,
+    RoutingFlagNotRecognized,
+    ProcessingHeaderError,
+    NotEnoughPayload,
+    InvalidPayloadLengthError,
+}
+
+impl From<payload::PayloadEncapsulationError> for SphinxUnwrapError {
+    fn from(_: payload::PayloadEncapsulationError) -> Self {
+        SphinxUnwrapError::InvalidPayloadLengthError
+    }
+}
+
+pub enum ProcessedHeader {
+    ProcessedHeaderForwardHop(SphinxHeader, NodeAddressBytes, Delay, PayloadKey),
+    ProcessedHeaderFinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
 }
 
 impl SphinxHeader {
@@ -35,14 +51,15 @@ impl SphinxHeader {
     pub fn new(
         initial_secret: Scalar,
         route: &[Node],
+        delays: &[Delay],
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
-        let _ = delays::generate(route.len());
         let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
         let routing_info = routing::EncapsulatedRoutingInformation::new(
             route,
             destination,
+            &delays,
             &key_material.routing_keys,
             filler_string,
         );
@@ -64,7 +81,7 @@ impl SphinxHeader {
     fn unwrap_routing_information(
         enc_routing_information: EncryptedRoutingInformation,
         stream_cipher_key: StreamCipherKey,
-    ) -> (NodeAddressBytes, EncapsulatedRoutingInformation) {
+    ) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
         // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
         enc_routing_information
             .add_zero_padding()
@@ -72,10 +89,7 @@ impl SphinxHeader {
             .parse()
     }
 
-    pub fn process(
-        self,
-        node_secret_key: Scalar,
-    ) -> Result<(SphinxHeader, NodeAddressBytes, PayloadKey), SphinxUnwrapError> {
+    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader, SphinxUnwrapError> {
         let shared_secret = self.shared_secret;
         let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
         let routing_keys = keys::RoutingKeys::derive(shared_key);
@@ -91,17 +105,34 @@ impl SphinxHeader {
         let new_shared_secret =
             self.blind_the_shared_secret(shared_secret, routing_keys.blinding_factor);
 
-        let (next_hop_address, encapsulated_next_hop) = Self::unwrap_routing_information(
+        let unwrapped_routing_information = Self::unwrap_routing_information(
             self.routing_info.enc_routing_information,
             routing_keys.stream_cipher_key,
-        );
-
-        let new_header = SphinxHeader {
-            shared_secret: new_shared_secret,
-            routing_info: encapsulated_next_hop,
-        };
-
-        Ok((new_header, next_hop_address, routing_keys.payload_key))
+        )
+        .unwrap();
+        match unwrapped_routing_information {
+            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                next_hop_address,
+                delay,
+                new_encapsulated_routing_info,
+            ) => Ok(ProcessedHeader::ProcessedHeaderForwardHop(
+                SphinxHeader {
+                    shared_secret: new_shared_secret,
+                    routing_info: new_encapsulated_routing_info,
+                },
+                next_hop_address,
+                delay,
+                routing_keys.payload_key,
+            )),
+            ParsedRawRoutingInformation::FinalHopRoutingInformation(
+                destination_address,
+                identifier,
+            ) => Ok(ProcessedHeader::ProcessedHeaderFinalHop(
+                destination_address,
+                identifier,
+                routing_keys.payload_key,
+            )),
+        }
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
@@ -171,33 +202,52 @@ mod create_and_process_sphinx_packet_header {
         let route = [node1, node2, node3];
         let destination = destination_fixture();
         let initial_secret = crypto::generate_secret();
-        let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &destination);
+        let delays = delays::generate(route.len());
+        let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &delays, &destination);
 
-        let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
-        assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+        //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
+        let new_header = match sphinx_header.process(node1_sk).unwrap() {
+            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
+                assert_eq!([4u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                assert_eq!(delays[0].get_value(), delay.get_value());
+                new_header
+            }
+            _ => panic!(),
+        };
 
-        let (new_header2, next_hop_address2, _) = new_header.process(node2_sk).unwrap();
-        assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address2);
-
-        let (_, next_hop_address3, _) = new_header2.process(node3_sk).unwrap();
-        assert_eq!(destination.address, next_hop_address3);
+        let new_header2 = match new_header.process(node2_sk).unwrap() {
+            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
+                assert_eq!([2u8; NODE_ADDRESS_LENGTH], next_hop_address);
+                assert_eq!(delays[1].get_value(), delay.get_value());
+                new_header
+            }
+            _ => panic!(),
+        };
+        match new_header2.process(node3_sk).unwrap() {
+            ProcessedHeader::ProcessedHeaderFinalHop(final_destination, _, _) => {
+                assert_eq!(destination.address, final_destination);
+            }
+            _ => panic!(),
+        };
     }
 }
 
 #[cfg(test)]
 mod unwrap_routing_information {
     use crate::constants::{
-        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, STREAM_CIPHER_OUTPUT_LENGTH,
+        HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
+        STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
-    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
+    use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, FORWARD_HOP};
     use crate::utils;
 
     use super::*;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
-        let routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        let mut routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        routing_info[0] = FORWARD_HOP;
         let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &stream_cipher_key,
@@ -213,21 +263,38 @@ mod unwrap_routing_information {
 
         let enc_routing_info =
             EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
+
+        println!("{:?}", routing_info.len());
+        println!("{:?}", pseudorandom_bytes.len());
         let expected_next_hop_encrypted_routing_information = [
-            routing_info[NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
+            routing_info[NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
             pseudorandom_bytes
-                [NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
+                [NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE..]
                 .to_vec(),
         ]
         .concat();
-        let (next_hop_address, next_hop_encapsulated_routing_info) =
-            SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key);
-
-        assert_eq!(routing_info[..NODE_ADDRESS_LENGTH], next_hop_address);
-        assert_eq!(
-            routing_info[NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
-            next_hop_encapsulated_routing_info.integrity_mac.get_value()
-        );
+        let next_hop_encapsulated_routing_info =
+            match SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key)
+                .unwrap()
+            {
+                ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                    next_hop_address,
+                    _delay,
+                    next_hop_encapsulated_routing_info,
+                ) => {
+                    assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address);
+                    assert_eq!(
+                        routing_info
+                            [NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
+                        next_hop_encapsulated_routing_info
+                            .integrity_mac
+                            .clone()
+                            .get_value()
+                    );
+                    next_hop_encapsulated_routing_info
+                }
+                _ => panic!(),
+            };
 
         let next_hop_encrypted_routing_information = next_hop_encapsulated_routing_info
             .enc_routing_information
