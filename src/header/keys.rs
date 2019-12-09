@@ -31,23 +31,21 @@ impl RoutingKeys {
     pub fn derive(shared_key: crypto::SharedKey) -> Self {
         let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
 
+        let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
         hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
 
         let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
-        stream_cipher_key.copy_from_slice(&output[..crypto::STREAM_CIPHER_KEY_SIZE]);
+        stream_cipher_key.copy_from_slice(&output[i..i + crypto::STREAM_CIPHER_KEY_SIZE]);
+        i += crypto::STREAM_CIPHER_KEY_SIZE;
 
         let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
-        header_integrity_hmac_key.copy_from_slice(
-            &output[crypto::STREAM_CIPHER_KEY_SIZE
-                ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
-        );
+        header_integrity_hmac_key.copy_from_slice(&output[i..i + INTEGRITY_MAC_KEY_SIZE]);
+        i += INTEGRITY_MAC_KEY_SIZE;
 
         let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
-        payload_key.copy_from_slice(
-            &output[crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE
-                ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],
-        );
+        payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
+        i += PAYLOAD_KEY_SIZE;
 
         Self {
             stream_cipher_key,
