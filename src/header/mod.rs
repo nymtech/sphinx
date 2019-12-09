@@ -4,7 +4,7 @@ use curve25519_dalek::scalar::Scalar;
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
 use crate::header::filler::Filler;
-use crate::header::keys::{PayloadKey, StreamCipherKey};
+use crate::header::keys::{BlindingFactor, PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, Node, NodeAddressBytes};
@@ -88,7 +88,8 @@ impl SphinxHeader {
         }
 
         // blind the shared_secret in the header
-        let new_shared_secret = self.blind_the_shared_secret(shared_secret, shared_key);
+        let new_shared_secret =
+            self.blind_the_shared_secret(shared_secret, routing_keys.blinding_factor);
 
         let (next_hop_address, encapsulated_next_hop) = Self::unwrap_routing_information(
             self.routing_info.enc_routing_information,
@@ -136,15 +137,9 @@ impl SphinxHeader {
     fn blind_the_shared_secret(
         &self,
         shared_secret: PublicKey,
-        shared_key: SharedKey,
+        blinding_factor: BlindingFactor,
     ) -> PublicKey {
-        let hmac_full = compute_keyed_hmac(
-            shared_secret.to_bytes().to_vec(),
-            &shared_key.to_bytes().to_vec(),
-        );
-        let mut hmac = [0u8; 32];
-        hmac.copy_from_slice(&hmac_full[..32]);
-        let blinding_factor = Scalar::from_bytes_mod_order(hmac);
+        let blinding_factor = Scalar::from_bytes_mod_order(blinding_factor);
         shared_secret * blinding_factor
     }
 }
