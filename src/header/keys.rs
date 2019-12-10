@@ -52,7 +52,6 @@ impl RoutingKeys {
 
         let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
         blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
-        i += BLINDING_FACTOR_SIZE;
 
         Self {
             stream_cipher_key,
