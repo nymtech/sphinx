@@ -5,7 +5,8 @@ use hkdf::Hkdf;
 use sha2::Sha256;
 
 use crate::constants::{
-    HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE, ROUTING_KEYS_LENGTH,
+    BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
+    ROUTING_KEYS_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
@@ -16,12 +17,14 @@ pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 // TODO: perhaps change PayloadKey to a Vec considering it's almost 200 bytes long?
 // we will lose length assertions but won't need to copy all that data every single function call
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
+pub type BlindingFactor = [u8; BLINDING_FACTOR_SIZE];
 
 #[derive(Clone)]
 pub struct RoutingKeys {
     pub stream_cipher_key: StreamCipherKey,
     pub header_integrity_hmac_key: HeaderIntegrityMacKey,
     pub payload_key: PayloadKey,
+    pub blinding_factor: BlindingFactor,
 }
 
 impl RoutingKeys {
@@ -31,28 +34,30 @@ impl RoutingKeys {
     pub fn derive(shared_key: crypto::SharedKey) -> Self {
         let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
 
+        let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
         hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
 
         let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
-        stream_cipher_key.copy_from_slice(&output[..crypto::STREAM_CIPHER_KEY_SIZE]);
+        stream_cipher_key.copy_from_slice(&output[i..i + crypto::STREAM_CIPHER_KEY_SIZE]);
+        i += crypto::STREAM_CIPHER_KEY_SIZE;
 
         let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
-        header_integrity_hmac_key.copy_from_slice(
-            &output[crypto::STREAM_CIPHER_KEY_SIZE
-                ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE],
-        );
+        header_integrity_hmac_key.copy_from_slice(&output[i..i + INTEGRITY_MAC_KEY_SIZE]);
+        i += INTEGRITY_MAC_KEY_SIZE;
 
         let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
-        payload_key.copy_from_slice(
-            &output[crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE
-                ..crypto::STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE + PAYLOAD_KEY_SIZE],
-        );
+        payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
+        i += PAYLOAD_KEY_SIZE;
+
+        let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
+        blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
 
         Self {
             stream_cipher_key,
             header_integrity_hmac_key,
             payload_key,
+            blinding_factor,
         }
     }
 }
@@ -92,13 +97,12 @@ impl KeyMaterial {
             .iter()
             .scan(initial_secret, |accumulator, node| {
                 let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
+                let routing_keys = RoutingKeys::derive(shared_key);
 
                 // TODO: if we're on last iteration, do NOT compute_blinding_factor (no need for it)
-                *accumulator *= Self::compute_blinding_factor(shared_key, &accumulator);
-
-                Some(shared_key)
+                *accumulator *= Scalar::from_bytes_mod_order(routing_keys.blinding_factor);
+                Some(routing_keys)
             })
-            .map(RoutingKeys::derive)
             .collect();
 
         Self {
@@ -225,11 +229,9 @@ mod deriving_key_material {
             for i in 0..3 {
                 let expected_shared_key =
                     KeyMaterial::compute_shared_key(route[i].pub_key, &expected_accumulator);
-                let expected_blinder = KeyMaterial::compute_blinding_factor(
-                    expected_shared_key,
-                    &expected_accumulator,
-                );
-                expected_accumulator *= &expected_blinder;
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
+                expected_accumulator *=
+                    Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
@@ -266,5 +268,6 @@ pub fn routing_keys_fixture() -> RoutingKeys {
         stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
         header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
         payload_key: [3u8; PAYLOAD_KEY_SIZE],
+        blinding_factor: [4u8; BLINDING_FACTOR_SIZE],
     }
 }
