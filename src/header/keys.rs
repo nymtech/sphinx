@@ -33,7 +33,8 @@ impl RoutingKeys {
     // that this one could potentially move most of its functionality there quite profitably.
     pub fn derive(shared_key: crypto::SharedKey) -> Self {
         let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
-
+        // yoda says: HMAC does 2 hash functions. Since we're using it for keys rather than signatures, we don't need an HMAC in fact, we can just do it with a hash (one operation).
+        // yoda says: on a 64-bit arch, we may find that SHA512 is faster than SHA256.
         let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
         hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
@@ -83,7 +84,7 @@ impl PartialEq for RoutingKeys {
 }
 
 pub struct KeyMaterial {
-    pub initial_shared_secret: crypto::SharedSecret,
+    pub initial_public_key: crypto::SharedSecret,
     // why this is here?
     pub routing_keys: Vec<RoutingKeys>,
 }
@@ -91,7 +92,7 @@ pub struct KeyMaterial {
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
     pub fn derive(route: &[Node], initial_secret: Scalar) -> Self {
-        let initial_shared_secret = CURVE_GENERATOR * initial_secret;
+        let initial_public_key = CURVE_GENERATOR * initial_secret;
 
         let routing_keys = route
             .iter()
@@ -107,7 +108,7 @@ impl KeyMaterial {
 
         Self {
             routing_keys,
-            initial_shared_secret,
+            initial_public_key,
         }
     }
 
@@ -184,7 +185,7 @@ mod deriving_key_material {
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
                 CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
+                key_material.initial_public_key
             )
         }
     }
@@ -213,7 +214,7 @@ mod deriving_key_material {
             let (_, initial_secret, key_material) = setup();
             assert_eq!(
                 CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
+                key_material.initial_public_key
             );
         }
 

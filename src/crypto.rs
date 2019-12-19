@@ -42,15 +42,16 @@ pub fn generate_pseudorandom_bytes(
 
     // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
     let mut cipher = Aes128Ctr::new(cipher_key, cipher_nonce);
-    let mut data = vec![0u8; length];
+    let mut data = vec![0u8; length]; // yoda asks: can we not make this a fixed-length in order to remove an allocation?
     cipher.apply_keystream(&mut data);
     data
 }
 
 pub fn compute_keyed_hmac(key: Vec<u8>, data: &[u8]) -> Vec<u8> {
+    // yoda asks: can key be a byte slice?
     let mut mac = HmacSha256::new_varkey(&key).expect("HMAC can take key of any size");
     mac.input(&data);
-    mac.result().code().to_vec()
+    mac.result().code().to_vec() // yoda: can this be a byte slice?
 }
 
 #[cfg(test)]

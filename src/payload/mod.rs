@@ -74,6 +74,7 @@ impl Payload {
         // encrypt the padded plaintext using the payload key
         let lioness_cipher =
             Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(final_payload_key, 0, RAW_KEY_SIZE));
+        // yoda asks: why use different cyphers here? We're already using HMAC SHA256 and AES CTR in other places?
         lioness_cipher.encrypt(&mut final_payload).unwrap();
 
         Ok(Payload {

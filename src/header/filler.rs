@@ -26,7 +26,7 @@ impl Filler {
             .enumerate() // we need to know index of each element to take correct slice of the PRNG output
             .map(|(i, pseudorandom_bytes)| (i + 1, pseudorandom_bytes)) // the zeroth step is the empty filler and we add on top of it
             .fold(
-                Vec::new(),
+                Vec::new(), // yoda says: is this allocation needed? Or, is it possible to make a nice big vec here and keep on re-using it during the filler_step (without extending)?
                 |filler_string_accumulator, (i, pseudorandom_bytes)| {
                     Self::filler_step(filler_string_accumulator, i, pseudorandom_bytes)
                 },

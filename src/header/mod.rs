@@ -67,7 +67,7 @@ impl SphinxHeader {
         // encapsulate header.routing information, compute MACs
         (
             SphinxHeader {
-                shared_secret: key_material.initial_shared_secret,
+                shared_secret: key_material.initial_public_key,
                 routing_info,
             },
             key_material
