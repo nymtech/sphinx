@@ -26,7 +26,8 @@ mod create_and_process_sphinx_packet {
         let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
 
         let route = [node1, node2, node3];
-        let delays = delays::generate(route.len());
+        let average_delay = 1.0;
+        let delays = delays::generate(route.len(), average_delay);
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
@@ -93,7 +94,8 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
 
         let route = [node1, node2, node3];
-        let delays = delays::generate(route.len());
+        let average_delay = 1.0;
+        let delays = delays::generate(route.len(), average_delay);
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
@@ -160,7 +162,8 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let node3 = Node::new([2u8; NODE_ADDRESS_LENGTH], node3_pk);
 
         let route = [node1, node2, node3];
-        let delays = delays::generate(route.len());
+        let average_delay = 1.0;
+        let delays = delays::generate(route.len(), average_delay);
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 

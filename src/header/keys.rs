@@ -111,6 +111,7 @@ impl KeyMaterial {
         }
     }
 
+    #[allow(dead_code)]
     fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
         let shared_secret = CURVE_GENERATOR * exponent;
         let hmac_full = compute_keyed_hmac(
