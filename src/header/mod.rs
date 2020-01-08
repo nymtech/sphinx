@@ -2,7 +2,7 @@ use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
-use crate::crypto::{compute_keyed_hmac, PublicKey, SharedKey};
+use crate::crypto::PublicKey;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::{BlindingFactor, PayloadKey, StreamCipherKey};
@@ -202,7 +202,8 @@ mod create_and_process_sphinx_packet_header {
         let route = [node1, node2, node3];
         let destination = destination_fixture();
         let initial_secret = crypto::generate_secret();
-        let delays = delays::generate(route.len());
+        let average_delay = 1.0;
+        let delays = delays::generate(route.len(), average_delay);
         let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &delays, &destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();

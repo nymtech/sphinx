@@ -6,7 +6,7 @@ use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZ
 use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 
-mod constants;
+pub mod constants;
 pub mod crypto;
 pub mod header;
 mod payload;

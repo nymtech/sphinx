@@ -1,8 +1,6 @@
-use rand_distr::{Distribution, Exp};
-
-use crate::constants;
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
+use rand_distr::{Distribution, Exp};
 
 #[derive(Debug, Clone)]
 pub struct Delay {
@@ -30,8 +28,8 @@ impl Delay {
     }
 }
 
-pub fn generate(number: usize) -> Vec<Delay> {
-    let exp = Exp::new(1.0 / constants::AVERAGE_DELAY).unwrap();
+pub fn generate(number: usize, average_delay: f64) -> Vec<Delay> {
+    let exp = Exp::new(1.0 / average_delay).unwrap();
 
     std::iter::repeat(())
         .take(number)
@@ -45,19 +43,19 @@ mod test_delay_generation {
 
     #[test]
     fn with_0_delays_returns_an_empty_vector() {
-        let delays = generate(0);
+        let delays = generate(0, 1.0);
         assert_eq!(0, delays.len());
     }
 
     #[test]
     fn with_1_delay_it_returns_1_delay() {
-        let delays = generate(1);
+        let delays = generate(1, 1.0);
         assert_eq!(1, delays.len());
     }
 
     #[test]
     fn with_3_delays_it_returns_3_delays() {
-        let delays = generate(3);
+        let delays = generate(3, 1.0);
         assert_eq!(3, delays.len());
     }
 }
