@@ -1,6 +1,6 @@
 ## Sphinx
 
-A Sphinx implementation in Rust.
+A [Sphinx](https://cypherpunks.ca/~iang/pubs/Sphinx_Oakland09.pdf) packet implementation in Rust.
 
 [![Build Status](https://travis-ci.com/nymtech/sphinx.svg?branch=develop)](https://travis-ci.com/nymtech/sphinx)
 
