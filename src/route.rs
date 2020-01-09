@@ -78,3 +78,16 @@ pub fn destination_fixture() -> Destination {
         identifier: [4u8; IDENTIFIER_LENGTH],
     }
 }
+
+#[cfg(test)]
+mod address_encoding {
+    use super::*;
+
+    #[test]
+    fn it_is_possible_to_encode_and_decode_address() {
+        let dummy_address = NodeAddressBytes([42u8; 32]);
+        let dummy_address_str = dummy_address.to_b64_string();
+        let recovered = NodeAddressBytes::from_b64_string(dummy_address_str);
+        assert_eq!(dummy_address, recovered)
+    }
+}
