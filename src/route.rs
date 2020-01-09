@@ -4,7 +4,24 @@ use crate::crypto;
 // in paper delta
 pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
 // in paper nu
-pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH];
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeAddressBytes(pub [u8; NODE_ADDRESS_LENGTH]);
+
+impl NodeAddressBytes {
+    pub fn to_b64_string(&self) -> String {
+        base64::encode_config(&self.0, base64::URL_SAFE)
+    }
+
+    pub fn from_b64_string(value: String) -> Self {
+        let decoded_address = base64::decode_config(&value, base64::URL_SAFE).unwrap();
+        assert_eq!(decoded_address.len(), 32);
+        let mut address_bytes = [0; 32];
+        address_bytes.copy_from_slice(&decoded_address[..]);
+
+        NodeAddressBytes(address_bytes)
+    }
+}
+
 // in paper I
 pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
@@ -42,7 +59,7 @@ pub fn destination_address_fixture() -> DestinationAddressBytes {
 }
 
 pub fn node_address_fixture() -> NodeAddressBytes {
-    [0u8; NODE_ADDRESS_LENGTH]
+    NodeAddressBytes([0u8; NODE_ADDRESS_LENGTH])
 }
 
 pub fn surb_identifier_fixture() -> SURBIdentifier {
@@ -51,7 +68,7 @@ pub fn surb_identifier_fixture() -> SURBIdentifier {
 
 pub fn random_node() -> Node {
     Node {
-        address: [2u8; NODE_ADDRESS_LENGTH],
+        address: NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
         pub_key: crypto::generate_random_curve_point(),
     }
 }
@@ -60,5 +77,18 @@ pub fn destination_fixture() -> Destination {
     Destination {
         address: [3u8; DESTINATION_ADDRESS_LENGTH],
         identifier: [4u8; IDENTIFIER_LENGTH],
+    }
+}
+
+#[cfg(test)]
+mod address_encoding {
+    use super::*;
+
+    #[test]
+    fn it_is_possible_to_encode_and_decode_address() {
+        let dummy_address = NodeAddressBytes([42u8; 32]);
+        let dummy_address_str = dummy_address.to_b64_string();
+        let recovered = NodeAddressBytes::from_b64_string(dummy_address_str);
+        assert_eq!(dummy_address, recovered)
     }
 }
