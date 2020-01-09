@@ -4,7 +4,8 @@ use crate::crypto;
 // in paper delta
 pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
 // in paper nu
-pub type NodeAddressBytes = [u8; NODE_ADDRESS_LENGTH];
+#[derive(Clone, Debug, PartialEq)]
+pub struct NodeAddressBytes(pub [u8; NODE_ADDRESS_LENGTH]);
 // in paper I
 pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
@@ -42,7 +43,7 @@ pub fn destination_address_fixture() -> DestinationAddressBytes {
 }
 
 pub fn node_address_fixture() -> NodeAddressBytes {
-    [0u8; NODE_ADDRESS_LENGTH]
+    NodeAddressBytes([0u8; NODE_ADDRESS_LENGTH])
 }
 
 pub fn surb_identifier_fixture() -> SURBIdentifier {
@@ -51,7 +52,7 @@ pub fn surb_identifier_fixture() -> SURBIdentifier {
 
 pub fn random_node() -> Node {
     Node {
-        address: [2u8; NODE_ADDRESS_LENGTH],
+        address: NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
         pub_key: crypto::generate_random_curve_point(),
     }
 }

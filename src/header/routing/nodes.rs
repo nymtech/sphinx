@@ -48,10 +48,8 @@ impl RoutingInformation {
     }
 
     fn concatenate_components(self) -> Vec<u8> {
-        vec![self.flag]
-            .iter()
-            .cloned()
-            .chain(self.node_address.iter().cloned())
+        std::iter::once(self.flag)
+            .chain(self.node_address.0.iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
             .chain(self.header_integrity_mac.get_value().iter().cloned())
             .chain(self.next_routing_information.iter().cloned())
@@ -201,7 +199,7 @@ impl RawRoutingInformation {
         );
 
         ParsedRawRoutingInformation::ForwardHopRoutingInformation(
-            next_hop_address,
+            NodeAddressBytes(next_hop_address),
             Delay::from_bytes(delay_bytes),
             next_hop_encapsulated_routing_info,
         )
@@ -247,7 +245,7 @@ mod preparing_header_layer {
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
             vec![FORWARD_HOP],
-            node_address.to_vec(),
+            node_address.0.to_vec(),
             delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
@@ -314,7 +312,7 @@ mod encrypting_routing_information {
 
         let encryption_data = [
             vec![flag],
-            address.to_vec(),
+            address.0.to_vec(),
             delay.to_bytes().to_vec(),
             mac.get_value_ref().to_vec(),
             next_routing.to_vec(),
@@ -375,7 +373,7 @@ mod parse_decrypted_routing_information {
 
         let data = [
             vec![flag],
-            address_fixture.to_vec(),
+            address_fixture.0.to_vec(),
             delay.to_bytes().to_vec(),
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),

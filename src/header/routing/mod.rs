@@ -7,7 +7,7 @@ use crate::header::routing::destination::FinalRoutingInformation;
 use crate::header::routing::nodes::{
     encrypted_routing_information_fixture, EncryptedRoutingInformation, RoutingInformation,
 };
-use crate::route::{Destination, Node};
+use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{header, ProcessingError};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
@@ -90,7 +90,7 @@ impl EncapsulatedRoutingInformation {
         route
             .iter()
             .skip(1) // we don't want the first element as person creating the packet knows the address of the first hop
-            .map(|node| node.address) // we only care about the address field
+            .map(|node| node.address.0) // we only care about the address field
             .zip(
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 routing_keys.iter().take(routing_keys.len() - 1), // we don't want last element - it was already used to encrypt the destination
@@ -106,7 +106,7 @@ impl EncapsulatedRoutingInformation {
                 |next_hop_encapsulated_routing_information,
                  ((current_node_address, previous_node_routing_keys), delay)| {
                     RoutingInformation::new(
-                        current_node_address,
+                        NodeAddressBytes(current_node_address),
                         delay.to_owned(),
                         next_hop_encapsulated_routing_information,
                     )
@@ -275,15 +275,19 @@ mod encapsulating_forward_routing_information {
             &routing_keys,
         );
 
-        let layer_1_routing =
-            RoutingInformation::new(route[2].address, delay1, destination_routing_info_copy)
-                .encrypt(routing_keys[1].stream_cipher_key)
-                .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
+        let layer_1_routing = RoutingInformation::new(
+            route[2].address.clone(),
+            delay1,
+            destination_routing_info_copy,
+        )
+        .encrypt(routing_keys[1].stream_cipher_key)
+        .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
 
         // this is what first mix should receive
-        let layer_0_routing = RoutingInformation::new(route[1].address, delay0, layer_1_routing)
-            .encrypt(routing_keys[0].stream_cipher_key)
-            .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
+        let layer_0_routing =
+            RoutingInformation::new(route[1].address.clone(), delay0, layer_1_routing)
+                .encrypt(routing_keys[0].stream_cipher_key)
+                .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 
         assert_eq!(
             routing_info
