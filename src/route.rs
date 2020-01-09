@@ -6,6 +6,21 @@ pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
 // in paper nu
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeAddressBytes(pub [u8; NODE_ADDRESS_LENGTH]);
+
+impl NodeAddressBytes {
+    pub fn to_b64_string(&self) -> String {
+        base64::encode_config(&self.0, base64::URL_SAFE)
+    }
+
+    pub fn from_b64_string(value: String) -> Self {
+        let decoded_address = base64::decode_config(&value, base64::URL_SAFE).unwrap();
+        let mut address_bytes = [0; 32];
+        address_bytes.copy_from_slice(&decoded_address[..]);
+
+        NodeAddressBytes(address_bytes)
+    }
+}
+
 // in paper I
 pub type SURBIdentifier = [u8; IDENTIFIER_LENGTH];
 
