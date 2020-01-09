@@ -14,6 +14,7 @@ impl NodeAddressBytes {
 
     pub fn from_b64_string(value: String) -> Self {
         let decoded_address = base64::decode_config(&value, base64::URL_SAFE).unwrap();
+        assert_eq!(decoded_address.len(), 32);
         let mut address_bytes = [0; 32];
         address_bytes.copy_from_slice(&decoded_address[..]);
 
