@@ -2,7 +2,9 @@
 
 A Sphinx implementation in Rust.
 
-### Prerequisites 
+[![Build Status](https://travis-ci.com/nymtech/sphinx.svg?branch=develop)](https://travis-ci.com/nymtech/sphinx)
+
+### Prerequisites
 
 * rust (stable) : https://www.rust-lang.org/
 * docker (for code coverage reports): https://www.docker.com/
