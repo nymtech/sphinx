@@ -390,10 +390,13 @@ mod parse_decrypted_routing_information {
         let delay = Delay::new(10);
         let integrity_mac = header_integrity_mac_fixture().get_value();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
+        let version = Version {
+            value: env!("CARGO_PKG_VERSION").to_string(),
+        };
 
         let data = [
             vec![flag],
-            [1u8; 5].to_vec(),
+            version.value.as_bytes().to_vec(),
             address_fixture.0.to_vec(),
             delay.to_bytes().to_vec(),
             integrity_mac.to_vec(),
