@@ -22,6 +22,9 @@ pub const FORWARD_HOP: RoutingFlag = 1;
 pub const FINAL_HOP: RoutingFlag = 2;
 
 pub type RoutingFlag = u8;
+pub struct Version {
+    value: String,
+}
 
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]
