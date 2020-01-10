@@ -4,6 +4,7 @@ use crate::crypto;
 // in paper delta
 pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
 // in paper nu
+// TODO: deprecate the usage of public 0 field in favour of proper constructor
 #[derive(Clone, Debug, PartialEq)]
 pub struct NodeAddressBytes(pub [u8; NODE_ADDRESS_LENGTH]);
 
@@ -19,6 +20,20 @@ impl NodeAddressBytes {
         address_bytes.copy_from_slice(&decoded_address[..]);
 
         NodeAddressBytes(address_bytes)
+    }
+
+    pub fn from_bytes(b: [u8; NODE_ADDRESS_LENGTH]) -> Self {
+        NodeAddressBytes(b)
+    }
+
+    /// View this `NodeAddressBytes` as an array of bytes.
+    pub fn as_bytes(&self) -> &[u8; NODE_ADDRESS_LENGTH] {
+        &self.0
+    }
+
+    /// Convert this `NodeAddressBytes` to an array of bytes.
+    pub fn to_bytes(&self) -> [u8; NODE_ADDRESS_LENGTH] {
+        self.0
     }
 }
 
