@@ -23,4 +23,4 @@ pub const FINAL_NODE_META_INFO_LENGTH: usize =
     DESTINATION_ADDRESS_LENGTH + IDENTIFIER_LENGTH + FLAG_LENGTH + VERSION_LENGTH; // the meta info for the final hop might be of a different size
 pub const FLAG_LENGTH: usize = 1;
 pub const PAYLOAD_SIZE: usize = 1024;
-pub const VERSION_LENGTH: usize = 5; // since version is represented as x.x.x
+pub const VERSION_LENGTH: usize = 3; // since version is represented as 3 u8 values: major, minor and patch

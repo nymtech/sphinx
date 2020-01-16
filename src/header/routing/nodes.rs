@@ -40,7 +40,9 @@ impl RoutingInformation {
         RoutingInformation {
             flag: FORWARD_HOP,
             version: Version {
-                value: env!("CARGO_PKG_VERSION").to_string(),
+                major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
+                minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
+                patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
             },
             node_address,
             delay,
@@ -53,7 +55,7 @@ impl RoutingInformation {
 
     fn concatenate_components(self) -> Vec<u8> {
         std::iter::once(self.flag)
-            .chain(self.version.value.as_bytes().iter().cloned())
+            .chain(self.version.to_bytes().iter().cloned())
             .chain(self.node_address.0.iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
             .chain(self.header_integrity_mac.get_value().iter().cloned())
@@ -254,12 +256,14 @@ mod preparing_header_layer {
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
         let version = Version {
-            value: env!("CARGO_PKG_VERSION").to_string(),
+            major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
+            minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
+            patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
         };
         // calculate everything without using any object methods
         let concatenated_materials: Vec<u8> = [
             vec![FORWARD_HOP],
-            version.value.as_bytes().to_vec(),
+            version.to_bytes().to_vec(),
             node_address.0.to_vec(),
             delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
@@ -326,11 +330,13 @@ mod encrypting_routing_information {
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
 
         let version = Version {
-            value: env!("CARGO_PKG_VERSION").to_string(),
+            major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
+            minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
+            patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
         };
         let encryption_data = [
             vec![flag],
-            version.value.as_bytes().to_vec(),
+            version.to_bytes().to_vec(),
             address.0.to_vec(),
             delay.to_bytes().to_vec(),
             mac.get_value_ref().to_vec(),
@@ -391,12 +397,14 @@ mod parse_decrypted_routing_information {
         let integrity_mac = header_integrity_mac_fixture().get_value();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let version = Version {
-            value: env!("CARGO_PKG_VERSION").to_string(),
+            major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
+            minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
+            patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
         };
 
         let data = [
             vec![flag],
-            version.value.as_bytes().to_vec(),
+            version.to_bytes().to_vec(),
             address_fixture.0.to_vec(),
             delay.to_bytes().to_vec(),
             integrity_mac.to_vec(),

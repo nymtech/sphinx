@@ -23,9 +23,16 @@ pub const FINAL_HOP: RoutingFlag = 2;
 
 pub type RoutingFlag = u8;
 pub struct Version {
-    value: String,
+    major: u8,
+    minor: u8,
+    patch: u8,
 }
 
+impl Version {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        vec![self.major, self.minor, self.patch]
+    }
+}
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]
 pub struct EncapsulatedRoutingInformation {

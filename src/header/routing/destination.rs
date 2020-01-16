@@ -35,7 +35,9 @@ impl FinalRoutingInformation {
         Self {
             flag: FINAL_HOP,
             version: Version {
-                value: env!("CARGO_PKG_VERSION").to_string(),
+                major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
+                minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
+                patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
             },
             destination: dest.address,
             identifier: dest.identifier,
@@ -65,7 +67,7 @@ impl FinalRoutingInformation {
             value: vec![self.flag]
                 .iter()
                 .cloned()
-                .chain(self.version.value.as_bytes().iter().cloned())
+                .chain(self.version.to_bytes().iter().cloned())
                 .chain(self.destination.iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
