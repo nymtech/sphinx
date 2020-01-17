@@ -34,11 +34,7 @@ impl FinalRoutingInformation {
 
         Self {
             flag: FINAL_HOP,
-            version: Version {
-                major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
-                minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
-                patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
-            },
+            version: Version::new(),
             destination: dest.address,
             identifier: dest.identifier,
         }
