@@ -6,9 +6,10 @@ use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::filler::{Filler, FILLER_STEP_SIZE_INCREASE};
 use crate::header::keys::StreamCipherKey;
 use crate::header::routing::nodes::EncryptedRoutingInformation;
-use crate::header::routing::{RoutingFlag, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
+use crate::header::routing::{RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
+use std::convert::TryInto;
 
 // this is going through the following transformations:
 /*
@@ -20,6 +21,7 @@ use crate::utils;
 // because it seems weird that say 'encrypt' requires route_len argument
 pub(super) struct FinalRoutingInformation {
     flag: RoutingFlag,
+    version: Version,
     destination: DestinationAddressBytes,
     // in paper delta
     identifier: SURBIdentifier, // in paper I
@@ -32,6 +34,7 @@ impl FinalRoutingInformation {
 
         Self {
             flag: FINAL_HOP,
+            version: Version::new(),
             destination: dest.address,
             identifier: dest.identifier,
         }
@@ -60,6 +63,7 @@ impl FinalRoutingInformation {
             value: vec![self.flag]
                 .iter()
                 .cloned()
+                .chain(self.version.to_bytes().iter().cloned())
                 .chain(self.destination.iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
