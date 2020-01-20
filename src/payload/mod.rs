@@ -4,7 +4,9 @@ use blake2::VarBlake2b;
 use chacha::ChaCha;
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER};
+use crate::constants::{
+    DESTINATION_ADDRESS_LENGTH, MAXIMUM_PLAINTEXT_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER,
+};
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
 use crate::ProcessingError;
@@ -57,8 +59,7 @@ impl Payload {
         final_payload_key: &PayloadKey,
         destination_address: DestinationAddressBytes,
     ) -> Result<Self, PayloadEncapsulationError> {
-        if message.len() > PAYLOAD_SIZE - SECURITY_PARAMETER - DESTINATION_ADDRESS_LENGTH - 1 {
-            // we need the single byte to detect padding length
+        if message.len() > MAXIMUM_PLAINTEXT_LENGTH {
             return Err(PayloadEncapsulationError::TooLongPlaintextError);
         }
         // concatenate security zero padding with destination and message and additional length padding
