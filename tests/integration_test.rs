@@ -38,7 +38,7 @@ mod create_and_process_sphinx_packet {
                 SphinxPacket { header, payload } => SphinxPacket { header, payload },
             };
 
-        let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk) {
+        let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk).unwrap() {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1, _delay1) => {
                 assert_eq!(NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]), next_hop_addr1);
                 next_packet
@@ -46,7 +46,7 @@ mod create_and_process_sphinx_packet {
             _ => panic!(),
         };
 
-        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk) {
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk).unwrap() {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr2, _delay2) => {
                 assert_eq!(NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]), next_hop_addr2);
                 next_packet
@@ -54,7 +54,7 @@ mod create_and_process_sphinx_packet {
             _ => panic!(),
         };
 
-        match next_sphinx_packet_2.process(node3_sk) {
+        match next_sphinx_packet_2.process(node3_sk).unwrap() {
             ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding = vec![
@@ -110,7 +110,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
 
-        let next_sphinx_packet_1 = match recovered_packet.process(node1_sk) {
+        let next_sphinx_packet_1 = match recovered_packet.process(node1_sk).unwrap() {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address, delay) => {
                 assert_eq!(
                     NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]),
@@ -122,7 +122,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
             _ => panic!(),
         };
 
-        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk) {
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk).unwrap() {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address, delay) => {
                 assert_eq!(
                     NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
@@ -134,7 +134,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
             _ => panic!(),
         };
 
-        match next_sphinx_packet_2.process(node3_sk) {
+        match next_sphinx_packet_2.process(node3_sk).unwrap() {
             ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding = vec![
