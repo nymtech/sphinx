@@ -271,8 +271,8 @@ mod unwrap_routing_information {
         let enc_routing_info =
             EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
 
-        println!("{:?}", routing_info.len());
-        println!("{:?}", pseudorandom_bytes.len());
+        log::trace!("{:?}", routing_info.len());
+        log::trace!("{:?}", pseudorandom_bytes.len());
         let expected_next_hop_encrypted_routing_information = [
             routing_info[NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
             pseudorandom_bytes
