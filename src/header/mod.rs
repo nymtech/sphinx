@@ -1,6 +1,3 @@
-use curve25519_dalek::montgomery::MontgomeryPoint;
-use curve25519_dalek::scalar::Scalar;
-
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto::PublicKey;
 use crate::header::delays::Delay;
@@ -10,6 +7,8 @@ use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutin
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{crypto, payload, ProcessingError};
+use curve25519_dalek::montgomery::MontgomeryPoint;
+use curve25519_dalek::scalar::Scalar;
 
 pub mod delays;
 pub mod filler;
