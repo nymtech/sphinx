@@ -9,7 +9,6 @@ use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::{RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
-use std::convert::TryInto;
 
 // this is going through the following transformations:
 /*
