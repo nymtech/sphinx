@@ -53,8 +53,8 @@ impl SphinxPacket {
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
-    pub fn process(self, node_secret_key: Scalar) -> ProcessedPacket {
-        let unwrapped_header = self.header.process(node_secret_key).unwrap();
+    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedPacket, SphinxUnwrapError> {
+        let unwrapped_header = self.header.process(node_secret_key)?;
         match unwrapped_header {
             ProcessedHeader::ProcessedHeaderForwardHop(
                 new_header,
@@ -67,11 +67,19 @@ impl SphinxPacket {
                     header: new_header,
                     payload: new_payload,
                 };
-                ProcessedPacket::ProcessedPacketForwardHop(new_packet, next_hop_address, delay)
+                Ok(ProcessedPacket::ProcessedPacketForwardHop(
+                    new_packet,
+                    next_hop_address,
+                    delay,
+                ))
             }
             ProcessedHeader::ProcessedHeaderFinalHop(destination, identifier, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key);
-                ProcessedPacket::ProcessedPacketFinalHop(destination, identifier, new_payload)
+                Ok(ProcessedPacket::ProcessedPacketFinalHop(
+                    destination,
+                    identifier,
+                    new_payload,
+                ))
             }
         }
     }
