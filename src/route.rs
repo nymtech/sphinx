@@ -9,12 +9,12 @@ pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
 pub struct NodeAddressBytes(pub [u8; NODE_ADDRESS_LENGTH]);
 
 impl NodeAddressBytes {
-    pub fn to_b64_string(&self) -> String {
-        base64::encode_config(&self.0, base64::URL_SAFE)
+    pub fn to_base58_string(&self) -> String {
+        bs58::encode(&self.0).into_string()
     }
 
-    pub fn from_b64_string(value: String) -> Self {
-        let decoded_address = base64::decode_config(&value, base64::URL_SAFE).unwrap();
+    pub fn from_base58_string(value: String) -> Self {
+        let decoded_address = bs58::decode(&value).into_vec().unwrap();
         assert_eq!(decoded_address.len(), NODE_ADDRESS_LENGTH);
         let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
         address_bytes.copy_from_slice(&decoded_address[..]);
@@ -102,8 +102,8 @@ mod address_encoding {
     #[test]
     fn it_is_possible_to_encode_and_decode_address() {
         let dummy_address = NodeAddressBytes([42u8; 32]);
-        let dummy_address_str = dummy_address.to_b64_string();
-        let recovered = NodeAddressBytes::from_b64_string(dummy_address_str);
+        let dummy_address_str = dummy_address.to_base58_string();
+        let recovered = NodeAddressBytes::from_base58_string(dummy_address_str);
         assert_eq!(dummy_address, recovered)
     }
 }
