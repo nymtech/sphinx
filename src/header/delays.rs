@@ -29,6 +29,7 @@ impl Delay {
     }
 }
 
+#[deprecated(note = "Please use the generate_from_average_duration function instead")]
 pub fn generate(number: usize, average_delay: f64) -> Vec<Delay> {
     let exp = Exp::new(1.0 / average_delay).unwrap();
 
