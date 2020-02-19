@@ -19,6 +19,7 @@ pub mod routing;
 // 32 represents size of a MontgomeryPoint on Curve25519
 pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE;
 
+#[derive(Clone)]
 pub struct SphinxHeader {
     pub shared_secret: crypto::SharedSecret,
     pub routing_info: EncapsulatedRoutingInformation,

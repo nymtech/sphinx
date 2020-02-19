@@ -29,6 +29,7 @@ pub enum ProcessedPacket {
     ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
 
+#[derive(Clone)]
 pub struct SphinxPacket {
     pub header: header::SphinxHeader,
     pub payload: Payload,
