@@ -65,6 +65,3 @@ mod tests {
         })
     }
 }
-
-//test tests::bench_new     ... bench:     526,621 ns/iter (+/- 10,093)
-// test tests::bench_process ... bench:     211,989 ns/iter (+/- 11,138)
