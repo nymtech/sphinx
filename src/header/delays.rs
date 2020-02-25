@@ -1,7 +1,7 @@
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
 use rand_distr::{Distribution, Exp};
-use std::time;
+use std::time::Duration;
 
 #[derive(Debug, Clone)]
 pub struct Delay {
@@ -39,7 +39,7 @@ pub fn generate(number: usize, average_delay: f64) -> Vec<Delay> {
         .collect()
 }
 
-pub fn generate_from_average_duration(number: usize, average_delay: time::Duration) -> Vec<Delay> {
+pub fn generate_from_average_duration(number: usize, average_delay: Duration) -> Vec<Delay> {
     let exp = Exp::new(1.0 / average_delay.as_nanos() as f64).unwrap();
 
     std::iter::repeat(())
@@ -54,28 +54,26 @@ mod test_delay_generation {
 
     #[test]
     fn with_0_delays_returns_an_empty_vector() {
-        let delays = generate(0, 1.0);
+        let delays = generate_from_average_duration(0, Duration::from_millis(10));
         assert_eq!(0, delays.len());
     }
 
     #[test]
     fn with_1_delay_it_returns_1_delay() {
-        let delays = generate(1, 1.0);
+        let delays = generate_from_average_duration(1, Duration::from_secs(1));
         assert_eq!(1, delays.len());
     }
 
     #[test]
     fn with_3_delays_it_returns_3_delays() {
-        let delays = generate(3, 1.0);
+        let delays = generate_from_average_duration(3, Duration::from_nanos(1));
         assert_eq!(3, delays.len());
     }
 
     #[test]
-    fn it_does_not_panic_when_generating_delays_using_time_duration() {
-        let delays = generate_from_average_duration(3, time::Duration::from_secs_f64(42.0));
+    fn it_does_not_panic_when_generating_delays_using_deprecated_floats() {
+        #[allow(deprecated)]
+        let delays = generate(3, 0.5);
         assert_eq!(3, delays.len());
-
-        let delays = generate_from_average_duration(8, time::Duration::from_nanos(42_000_000_000));
-        assert_eq!(8, delays.len());
     }
 }

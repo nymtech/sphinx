@@ -179,6 +179,7 @@ impl SphinxHeader {
 mod create_and_process_sphinx_packet_header {
     use crate::constants::NODE_ADDRESS_LENGTH;
     use crate::route::destination_fixture;
+    use std::time::Duration;
 
     use super::*;
 
@@ -202,8 +203,9 @@ mod create_and_process_sphinx_packet_header {
         let route = [node1, node2, node3];
         let destination = destination_fixture();
         let initial_secret = crypto::generate_secret();
-        let average_delay = 1.0;
-        let delays = delays::generate(route.len(), average_delay);
+        let average_delay = 1;
+        let delays =
+            delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
         let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &delays, &destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
