@@ -44,7 +44,7 @@ mod tests {
     }
 
     #[bench]
-    fn bench_process(b: &mut Bencher) {
+    fn bench_unwrap(b: &mut Bencher) {
         let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node::new(NodeAddressBytes([5u8; NODE_ADDRESS_LENGTH]), node1_pk);
         let (node2_sk, node2_pk) = crypto::keygen();
