@@ -7,7 +7,6 @@ use sphinx::crypto;
 use sphinx::header::delays;
 use sphinx::route::NodeAddressBytes;
 use sphinx::route::{Destination, Node};
-use sphinx::ProcessedPacket;
 use sphinx::SphinxPacket;
 
 const NODE_ADDRESS_LENGTH: usize = 32;
