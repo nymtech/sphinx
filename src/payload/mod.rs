@@ -150,12 +150,14 @@ impl Payload {
         None
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProcessingError> {
         if bytes.len() != PAYLOAD_SIZE {
             return Err(ProcessingError::InvalidPayloadLengthError);
         }
 
-        Ok(Payload { content: bytes })
+        Ok(Payload {
+            content: bytes.to_vec(),
+        })
     }
 }
 
@@ -167,7 +169,7 @@ mod building_payload_from_bytes {
     fn from_bytes_returns_error_if_bytes_are_too_short() {
         let bytes = [0u8; 1].to_vec();
         let expected = ProcessingError::InvalidPayloadLengthError;
-        match Payload::from_bytes(bytes) {
+        match Payload::from_bytes(&bytes) {
             Err(err) => assert_eq!(expected, err),
             _ => panic!("Should have returned an error when packet bytes too short"),
         };
@@ -177,7 +179,7 @@ mod building_payload_from_bytes {
     fn from_bytes_panics_if_bytes_are_too_long() {
         let bytes = [0u8; 6666].to_vec();
         let expected = ProcessingError::InvalidPayloadLengthError;
-        match Payload::from_bytes(bytes) {
+        match Payload::from_bytes(&bytes) {
             Err(err) => assert_eq!(expected, err),
             _ => panic!("Should have returned an error when packet bytes too long"),
         };

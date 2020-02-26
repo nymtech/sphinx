@@ -145,7 +145,7 @@ impl EncapsulatedRoutingInformation {
             .collect()
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProcessingError> {
         if bytes.len() != HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE {
             return Err(ProcessingError::InvalidRoutingInformationLengthError);
         }
@@ -356,7 +356,7 @@ mod converting_encapsulated_routing_info_to_bytes {
         let encapsulated_routing_info_bytes = encapsulated_routing_info.to_bytes();
 
         let recovered_routing_info =
-            EncapsulatedRoutingInformation::from_bytes(encapsulated_routing_info_bytes).unwrap();
+            EncapsulatedRoutingInformation::from_bytes(&encapsulated_routing_info_bytes).unwrap();
         assert_eq!(
             encapsulated_routing_info
                 .enc_routing_information

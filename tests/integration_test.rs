@@ -108,7 +108,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
             };
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
-        let recovered_packet = SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
+        let recovered_packet = SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
 
         let next_sphinx_packet_1 = match recovered_packet.process(node1_sk).unwrap() {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_address, delay) => {
@@ -181,7 +181,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
             SphinxPacket { header, payload } => SphinxPacket { header, payload },
         };
 
-        let sphinx_packet_bytes = sphinx_packet.to_bytes()[..300].to_vec();
-        SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
+        let sphinx_packet_bytes = &sphinx_packet.to_bytes()[..300];
+        SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
     }
 }
