@@ -128,7 +128,7 @@ impl Payload {
         // 1 (single 1 byte)
         // 0000 ... to pad to PAYLOAD_SIZE
 
-        // so we need to ignore first SECURITY_PARAMETER
+        // so we need to ignore first SECURITY_PARAMETER bytes
         // then parse next DESTINATION_ADDRESS_LENGTH bytes as destination address
         // from the remaining remove all tailing zeroes until first 1
         // and finally remove the first 1
