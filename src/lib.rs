@@ -25,6 +25,8 @@ pub enum ProcessingError {
 }
 
 pub enum ProcessedPacket {
+    // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
+    // should follow clippy recommendation and box it
     ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes, Delay),
     ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
