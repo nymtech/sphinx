@@ -144,7 +144,7 @@ impl SphinxHeader {
             .collect()
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProcessingError> {
         if bytes.len() != HEADER_SIZE {
             return Err(ProcessingError::InvalidHeaderLengthError);
         }
@@ -157,7 +157,7 @@ impl SphinxHeader {
         let encapsulated_routing_info_bytes = bytes[32..HEADER_SIZE].to_vec();
 
         let routing_info =
-            EncapsulatedRoutingInformation::from_bytes(encapsulated_routing_info_bytes)?;
+            EncapsulatedRoutingInformation::from_bytes(&encapsulated_routing_info_bytes)?;
 
         Ok(SphinxHeader {
             shared_secret: MontgomeryPoint(shared_secret_bytes),
@@ -334,7 +334,7 @@ mod converting_header_to_bytes {
         };
 
         let header_bytes = header.to_bytes();
-        let recovered_header = SphinxHeader::from_bytes(header_bytes).unwrap();
+        let recovered_header = SphinxHeader::from_bytes(&header_bytes).unwrap();
 
         assert_eq!(header.shared_secret, recovered_header.shared_secret);
         assert_eq!(

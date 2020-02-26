@@ -25,6 +25,8 @@ pub enum ProcessingError {
 }
 
 pub enum ProcessedPacket {
+    // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
+    // should follow clippy recommendation and box it
     ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes, Delay),
     ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
@@ -94,15 +96,13 @@ impl SphinxPacket {
             .collect()
     }
 
-    pub fn from_bytes(bytes: Vec<u8>) -> Result<Self, ProcessingError> {
-        // TODO: currently it's defined as minimum size. It should be always constant length in the future
-        // once we decide on payload size
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProcessingError> {
         if bytes.len() != PACKET_SIZE {
             return Err(ProcessingError::InvalidPacketLengthError);
         }
 
-        let header_bytes = bytes[..HEADER_SIZE].to_vec();
-        let payload_bytes = bytes[HEADER_SIZE..].to_vec();
+        let header_bytes = &bytes[..HEADER_SIZE];
+        let payload_bytes = &bytes[HEADER_SIZE..];
         let header = SphinxHeader::from_bytes(header_bytes)?;
         let payload = Payload::from_bytes(payload_bytes)?;
 
@@ -116,9 +116,9 @@ mod test_building_packet_from_bytes {
 
     #[test]
     fn from_bytes_returns_error_if_bytes_are_too_short() {
-        let bytes = [0u8; 1].to_vec();
+        let bytes = [0u8; 1];
         let expected = ProcessingError::InvalidPacketLengthError;
-        match SphinxPacket::from_bytes(bytes) {
+        match SphinxPacket::from_bytes(&bytes) {
             Err(err) => assert_eq!(expected, err),
             _ => panic!("Should have returned an error when packet bytes too short"),
         };
@@ -126,9 +126,9 @@ mod test_building_packet_from_bytes {
 
     #[test]
     fn from_bytes_panics_if_bytes_are_too_long() {
-        let bytes = [0u8; 6666].to_vec();
+        let bytes = [0u8; 6666];
         let expected = ProcessingError::InvalidPacketLengthError;
-        match SphinxPacket::from_bytes(bytes) {
+        match SphinxPacket::from_bytes(&bytes) {
             Err(err) => assert_eq!(expected, err),
             _ => panic!("Should have returned an error when packet bytes too long"),
         };
