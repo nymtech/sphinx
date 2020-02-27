@@ -3,7 +3,7 @@ use byteorder::{BigEndian, ByteOrder};
 use rand_distr::{Distribution, Exp};
 use std::time::Duration;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Delay(u64);
 
 impl Delay {
@@ -75,4 +75,26 @@ mod test_delay_generation {
     }
 
     #[test]
+    fn it_is_possible_to_convert_it_to_and_from_bytes_without_data_loss() {
+        let expected_delay_nanos = 1_234_567_890; // 1.234... s
+        let delay = Delay::new_from_nanos(expected_delay_nanos);
+        let delay_bytes = delay.to_bytes();
+        let recovered_delay = Delay::from_bytes(delay_bytes);
+        assert_eq!(delay, recovered_delay);
+    }
+
+    #[test]
+    fn it_is_possible_to_convert_it_to_and_from_nanos_without_data_loss() {
+        let expected_delay_nanos = 1_234_567_890; // 1.234... s
+        let delay = Delay::new_from_nanos(expected_delay_nanos);
+        assert_eq!(expected_delay_nanos, delay.to_nanos());
+    }
+
+    #[test]
+    fn it_is_possible_to_convert_it_to_and_from_duration_without_data_loss() {
+        let expected_delay_nanos = 1_234_567_890; // 1.234... s
+        let delay = Delay::new_from_nanos(expected_delay_nanos);
+        let delay_duration = delay.to_duration();
+        assert_eq!(Duration::from_nanos(expected_delay_nanos), delay_duration);
+    }
 }
