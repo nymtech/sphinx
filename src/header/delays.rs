@@ -22,16 +22,11 @@ impl Delay {
 
     pub fn to_bytes(&self) -> [u8; DELAY_LENGTH] {
         let mut delay_bytes = [0; DELAY_LENGTH];
-        BigEndian::write_u64(&mut delay_bytes, self.value);
+        BigEndian::write_u64(&mut delay_bytes, self.0);
         delay_bytes
     }
 
     pub fn from_bytes(delay_bytes: [u8; DELAY_LENGTH]) -> Self {
-        Self {
-            value: BigEndian::read_u64(&delay_bytes),
-        }
-    }
-
         Delay(BigEndian::read_u64(&delay_bytes))
     }
 }
@@ -42,7 +37,11 @@ pub fn generate(number: usize, average_delay: f64) -> Vec<Delay> {
 
     std::iter::repeat(())
         .take(number)
-        .map(|_| Delay::new((exp.sample(&mut rand::thread_rng()) * 1_000_000_000.0).round() as u64)) // for now I just assume we will express it in nano-seconds to have an integer
+        .map(|_| {
+            Delay::new_from_nanos(
+                (exp.sample(&mut rand::thread_rng()) * 1_000_000_000.0).round() as u64,
+            )
+        }) // for now I just assume we will express it in nano-seconds to have an integer
         .collect()
 }
 
@@ -51,7 +50,7 @@ pub fn generate_from_average_duration(number: usize, average_delay: Duration) ->
 
     std::iter::repeat(())
         .take(number)
-        .map(|_| Delay::new(exp.sample(&mut rand::thread_rng()).round() as u64))
+        .map(|_| Delay::new_from_nanos(exp.sample(&mut rand::thread_rng()).round() as u64))
         .collect()
 }
 
