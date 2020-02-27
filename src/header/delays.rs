@@ -16,6 +16,10 @@ impl Delay {
         self.0
     }
 
+    pub fn to_duration(&self) -> Duration {
+        Duration::from_nanos(self.0)
+    }
+
     pub fn to_bytes(&self) -> [u8; DELAY_LENGTH] {
         let mut delay_bytes = [0; DELAY_LENGTH];
         BigEndian::write_u64(&mut delay_bytes, self.value);
