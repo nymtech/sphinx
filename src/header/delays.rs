@@ -31,17 +31,15 @@ impl Delay {
     }
 }
 
-#[deprecated(note = "Please use the generate_from_average_duration function instead")]
-pub fn generate(number: usize, average_delay: f64) -> Vec<Delay> {
-    let exp = Exp::new(1.0 / average_delay).unwrap();
+// TODO: in both of those methods we are converting u64 to f64 to perform the division
+// surely this is a lossy conversion - how much does it affect us?
+
+pub fn generate_from_nanos(number: usize, average_delay: u64) -> Vec<Delay> {
+    let exp = Exp::new(1.0 / average_delay as f64).unwrap();
 
     std::iter::repeat(())
         .take(number)
-        .map(|_| {
-            Delay::new_from_nanos(
-                (exp.sample(&mut rand::thread_rng()) * 1_000_000_000.0).round() as u64,
-            )
-        }) // for now I just assume we will express it in nano-seconds to have an integer
+        .map(|_| Delay::new_from_nanos((exp.sample(&mut rand::thread_rng())).round() as u64)) // for now I just assume we will express it in nano-seconds to have an integer
         .collect()
 }
 
