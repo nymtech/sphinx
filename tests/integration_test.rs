@@ -116,7 +116,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
                     NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
-                assert_eq!(delays[0].get_value(), delay.get_value());
+                assert_eq!(delays[0].to_nanos(), delay.to_nanos());
                 next_packet
             }
             _ => panic!(),
@@ -128,7 +128,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
                     NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
-                assert_eq!(delays[1].get_value(), delay.get_value());
+                assert_eq!(delays[1].to_nanos(), delay.to_nanos());
                 next_packet
             }
             _ => panic!(),

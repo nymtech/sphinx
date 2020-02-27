@@ -215,7 +215,7 @@ mod create_and_process_sphinx_packet_header {
                     NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
-                assert_eq!(delays[0].get_value(), delay.get_value());
+                assert_eq!(delays[0].to_nanos(), delay.to_nanos());
                 new_header
             }
             _ => panic!(),
@@ -227,7 +227,7 @@ mod create_and_process_sphinx_packet_header {
                     NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
-                assert_eq!(delays[1].get_value(), delay.get_value());
+                assert_eq!(delays[1].to_nanos(), delay.to_nanos());
                 new_header
             }
             _ => panic!(),

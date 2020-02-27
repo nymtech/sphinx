@@ -9,9 +9,15 @@ pub struct Delay {
 }
 
 impl Delay {
-    pub fn new(value: u64) -> Self {
-        Self { value }
+    // Be more explicit about what kind of value we are expecting
+    pub fn new_from_nanos(value: u64) -> Self {
+        Delay(value)
     }
+
+    pub fn to_nanos(&self) -> u64 {
+        self.0
+    }
+
     pub fn to_bytes(&self) -> [u8; DELAY_LENGTH] {
         let mut delay_bytes = [0; DELAY_LENGTH];
         BigEndian::write_u64(&mut delay_bytes, self.value);
@@ -24,8 +30,7 @@ impl Delay {
         }
     }
 
-    pub fn get_value(&self) -> u64 {
-        self.value
+        Delay(BigEndian::read_u64(&delay_bytes))
     }
 }
 
