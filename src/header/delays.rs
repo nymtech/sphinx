@@ -4,9 +4,7 @@ use rand_distr::{Distribution, Exp};
 use std::time::Duration;
 
 #[derive(Debug, Clone)]
-pub struct Delay {
-    value: u64,
-}
+pub struct Delay(u64);
 
 impl Delay {
     // Be more explicit about what kind of value we are expecting
