@@ -16,6 +16,7 @@ mod create_and_process_sphinx_packet {
     use super::*;
     use sphinx::route::NodeAddressBytes;
     use sphinx::ProcessedPacket;
+    use std::time::Duration;
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
@@ -27,8 +28,8 @@ mod create_and_process_sphinx_packet {
         let node3 = Node::new(NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]), node3_pk);
 
         let route = [node1, node2, node3];
-        let average_delay = 1.0;
-        let delays = delays::generate(route.len(), average_delay);
+        let average_delay = Duration::from_secs_f64(1.0);
+        let delays = delays::generate_from_average_duration(route.len(), average_delay);
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
@@ -85,6 +86,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
     use sphinx::route::NodeAddressBytes;
     use sphinx::ProcessedPacket;
+    use std::time::Duration;
 
     #[test]
     fn it_is_possible_to_do_the_conversion_without_data_loss() {
@@ -96,8 +98,8 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let node3 = Node::new(NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]), node3_pk);
 
         let route = [node1, node2, node3];
-        let average_delay = 1.0;
-        let delays = delays::generate(route.len(), average_delay);
+        let average_delay = Duration::from_secs_f64(1.0);
+        let delays = delays::generate_from_average_duration(route.len(), average_delay);
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 
@@ -116,7 +118,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
                     NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
-                assert_eq!(delays[0].get_value(), delay.get_value());
+                assert_eq!(delays[0].to_nanos(), delay.to_nanos());
                 next_packet
             }
             _ => panic!(),
@@ -128,7 +130,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
                     NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
-                assert_eq!(delays[1].get_value(), delay.get_value());
+                assert_eq!(delays[1].to_nanos(), delay.to_nanos());
                 next_packet
             }
             _ => panic!(),
@@ -170,8 +172,8 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let node3 = Node::new(NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]), node3_pk);
 
         let route = [node1, node2, node3];
-        let average_delay = 1.0;
-        let delays = delays::generate(route.len(), average_delay);
+        let average_delay = Duration::from_secs_f64(1.0);
+        let delays = delays::generate_from_average_duration(route.len(), average_delay);
         let destination =
             Destination::new([3u8; DESTINATION_ADDRESS_LENGTH], [4u8; IDENTIFIER_LENGTH]);
 

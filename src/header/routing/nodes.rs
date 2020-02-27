@@ -247,7 +247,7 @@ mod preparing_header_layer {
     fn it_returns_encrypted_truncated_address_and_flag_concatenated_with_inner_layer_and_mac_on_it()
     {
         let node_address = node_address_fixture();
-        let delay = Delay::new(10);
+        let delay = Delay::new_from_nanos(10);
         let previous_node_routing_keys = routing_keys_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
@@ -317,7 +317,7 @@ mod encrypting_routing_information {
         let key = [2u8; STREAM_CIPHER_KEY_SIZE];
         let flag = FORWARD_HOP;
         let address = node_address_fixture();
-        let delay = Delay::new(15);
+        let delay = Delay::new_from_nanos(15);
         let mac = header_integrity_mac_fixture();
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
 
@@ -381,7 +381,7 @@ mod parse_decrypted_routing_information {
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
         let flag = FORWARD_HOP;
         let address_fixture = node_address_fixture();
-        let delay = Delay::new(10);
+        let delay = Delay::new_from_nanos(10);
         let integrity_mac = header_integrity_mac_fixture().get_value();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let version = Version::new();

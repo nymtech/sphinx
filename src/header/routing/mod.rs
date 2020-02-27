@@ -185,7 +185,11 @@ mod encapsulating_all_routing_information {
     fn it_panics_if_route_is_longer_than_keys() {
         let route = [random_node(), random_node(), random_node()];
         let destination = destination_fixture();
-        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
+        let delays = [
+            Delay::new_from_nanos(10),
+            Delay::new_from_nanos(20),
+            Delay::new_from_nanos(30),
+        ];
         let keys = [routing_keys_fixture(), routing_keys_fixture()];
         let filler = filler_fixture(route.len() - 1);
 
@@ -197,7 +201,11 @@ mod encapsulating_all_routing_information {
     fn it_panics_if_keys_are_longer_than_route() {
         let route = [random_node(), random_node()];
         let destination = destination_fixture();
-        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
+        let delays = [
+            Delay::new_from_nanos(10),
+            Delay::new_from_nanos(20),
+            Delay::new_from_nanos(30),
+        ];
         let keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
@@ -213,7 +221,11 @@ mod encapsulating_all_routing_information {
     fn it_panics_if_empty_route_is_provided() {
         let route = vec![];
         let destination = destination_fixture();
-        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
+        let delays = [
+            Delay::new_from_nanos(10),
+            Delay::new_from_nanos(20),
+            Delay::new_from_nanos(30),
+        ];
         let keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
@@ -229,7 +241,11 @@ mod encapsulating_all_routing_information {
     fn it_panic_if_empty_keys_are_provided() {
         let route = [random_node(), random_node()];
         let destination = destination_fixture();
-        let delays = [Delay::new(10), Delay::new(20), Delay::new(30)];
+        let delays = [
+            Delay::new_from_nanos(10),
+            Delay::new_from_nanos(20),
+            Delay::new_from_nanos(30),
+        ];
         let keys = vec![];
         let filler = filler_fixture(route.len() - 1);
 
@@ -250,9 +266,9 @@ mod encapsulating_forward_routing_information {
         // this is basically loop unwrapping, but considering the complex logic behind it, it's warranted
         let route = [random_node(), random_node(), random_node()];
         let destination = destination_fixture();
-        let delay0 = Delay::new(10);
-        let delay1 = Delay::new(20);
-        let delay2 = Delay::new(30);
+        let delay0 = Delay::new_from_nanos(10);
+        let delay1 = Delay::new_from_nanos(20);
+        let delay2 = Delay::new_from_nanos(30);
         let delays = [delay0.clone(), delay1.clone(), delay2.clone()].to_vec();
         let routing_keys = [
             routing_keys_fixture(),
