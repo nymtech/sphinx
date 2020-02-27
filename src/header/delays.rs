@@ -75,9 +75,4 @@ mod test_delay_generation {
     }
 
     #[test]
-    fn it_does_not_panic_when_generating_delays_using_deprecated_floats() {
-        #[allow(deprecated)]
-        let delays = generate(3, 0.5);
-        assert_eq!(3, delays.len());
-    }
 }
