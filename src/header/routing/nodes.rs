@@ -1,6 +1,6 @@
 use crate::constants::{
-    DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
-    STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
+    DELAY_LENGTH, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH,
+    NODE_META_INFO_SIZE, STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
@@ -52,7 +52,7 @@ impl RoutingInformation {
     fn concatenate_components(self) -> Vec<u8> {
         std::iter::once(self.flag)
             .chain(self.version.to_bytes().iter().cloned())
-            .chain(self.node_address.0.iter().cloned())
+            .chain(self.node_address.as_bytes().iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
             .chain(self.header_integrity_mac.get_value().iter().cloned())
             .chain(self.next_routing_information.iter().cloned())
@@ -205,7 +205,7 @@ impl RawRoutingInformation {
         );
 
         ParsedRawRoutingInformation::ForwardHopRoutingInformation(
-            NodeAddressBytes(next_hop_address),
+            NodeAddressBytes::from_bytes(next_hop_address),
             Delay::from_bytes(delay_bytes),
             next_hop_encapsulated_routing_info,
         )
@@ -219,9 +219,10 @@ impl RawRoutingInformation {
         version.copy_from_slice(&self.value[i..i + VERSION_LENGTH]);
         i += VERSION_LENGTH;
 
-        let mut destination: [u8; NODE_ADDRESS_LENGTH] = Default::default();
-        destination.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
-        i += NODE_ADDRESS_LENGTH;
+        let mut destination_bytes: [u8; DESTINATION_ADDRESS_LENGTH] = Default::default();
+        destination_bytes.copy_from_slice(&self.value[i..i + DESTINATION_ADDRESS_LENGTH]);
+        i += DESTINATION_ADDRESS_LENGTH;
+        let destination = DestinationAddressBytes::from_bytes(destination_bytes);
 
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
@@ -256,7 +257,7 @@ mod preparing_header_layer {
         let concatenated_materials: Vec<u8> = [
             vec![FORWARD_HOP],
             version.to_bytes().to_vec(),
-            node_address.0.to_vec(),
+            node_address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
             inner_layer_routing
@@ -325,7 +326,7 @@ mod encrypting_routing_information {
         let encryption_data = [
             vec![flag],
             version.to_bytes().to_vec(),
-            address.0.to_vec(),
+            address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             mac.get_value_ref().to_vec(),
             next_routing.to_vec(),
@@ -389,7 +390,7 @@ mod parse_decrypted_routing_information {
         let data = [
             vec![flag],
             version.to_bytes().to_vec(),
-            address_fixture.0.to_vec(),
+            address_fixture.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             integrity_mac.to_vec(),
             next_routing_information.to_vec(),
