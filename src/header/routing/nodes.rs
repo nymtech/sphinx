@@ -1,6 +1,6 @@
 use crate::constants::{
-    DELAY_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
-    STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
+    DELAY_LENGTH, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH,
+    NODE_META_INFO_SIZE, STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
@@ -222,6 +222,7 @@ impl RawRoutingInformation {
         let mut destination_bytes: [u8; DESTINATION_ADDRESS_LENGTH] = Default::default();
         destination_bytes.copy_from_slice(&self.value[i..i + DESTINATION_ADDRESS_LENGTH]);
         i += DESTINATION_ADDRESS_LENGTH;
+        let destination = DestinationAddressBytes::from_bytes(destination_bytes);
 
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();

@@ -66,7 +66,7 @@ impl Payload {
         // concatenate security zero padding with destination and message and additional length padding
         let mut final_payload: Vec<u8> = std::iter::repeat(0u8)
             .take(SECURITY_PARAMETER) // start with zero-padding
-            .chain(destination_address.to_vec().iter().cloned())
+            .chain(destination_address.to_bytes().iter().cloned())
             .chain(message.iter().cloned())
             .chain(std::iter::repeat(1u8).take(1)) // add single 1 byte to indicate start of padding
             .chain(std::iter::repeat(0u8)) // and fill everything else with zeroes
@@ -136,8 +136,9 @@ impl Payload {
             .content
             .split_at(SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH);
 
-        let mut destination_address: DestinationAddressBytes = [0u8; DESTINATION_ADDRESS_LENGTH];
+        let mut destination_address = [0u8; DESTINATION_ADDRESS_LENGTH];
         destination_address.copy_from_slice(&padded_destination[SECURITY_PARAMETER..]);
+        let destination_address = DestinationAddressBytes::from_bytes(destination_address);
 
         // we are looking for first occurrence of 1 in the tail and we get its index
         if let Some(i) = padded_plaintext.iter().rposition(|b| *b == 1) {
@@ -245,7 +246,7 @@ mod test_unwrapping_payload {
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
         let encrypted_payload =
-            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+            Payload::encapsulate_message(&message, &payload_keys, destination.clone()).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
@@ -255,10 +256,13 @@ mod test_unwrapping_payload {
 
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
         let additional_padding =
-            vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - destination.len() - 1];
+            vec![
+                0u8;
+                PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - DESTINATION_ADDRESS_LENGTH - 1
+            ];
         let expected_payload = [
             zero_bytes,
-            destination.to_vec(),
+            destination.to_bytes().to_vec(),
             message,
             vec![1],
             additional_padding,
@@ -277,7 +281,7 @@ mod plaintext_recovery {
     #[test]
     fn it_is_possible_to_recover_plaintext_from_valid_payload() {
         let message = vec![42u8; 160];
-        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
@@ -285,7 +289,7 @@ mod plaintext_recovery {
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
         let encrypted_payload =
-            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+            Payload::encapsulate_message(&message, &payload_keys, destination.clone()).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
@@ -304,7 +308,7 @@ mod plaintext_recovery {
     #[test]
     fn it_is_possible_to_recover_plaintext_even_if_is_just_ones() {
         let message = vec![1u8; 160];
-        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
@@ -312,7 +316,7 @@ mod plaintext_recovery {
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
         let encrypted_payload =
-            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+            Payload::encapsulate_message(&message, &payload_keys, destination.clone()).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
@@ -331,7 +335,7 @@ mod plaintext_recovery {
     #[test]
     fn it_is_possible_to_recover_plaintext_even_if_is_just_zeroes() {
         let message = vec![0u8; 160];
-        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
@@ -339,7 +343,7 @@ mod plaintext_recovery {
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
         let encrypted_payload =
-            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+            Payload::encapsulate_message(&message, &payload_keys, destination.clone()).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
@@ -358,7 +362,7 @@ mod plaintext_recovery {
     #[test]
     fn it_fails_to_recover_plaintext_from_invalid_payload() {
         let message = vec![42u8; 160];
-        let destination = [11u8; DESTINATION_ADDRESS_LENGTH];
+        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
@@ -366,7 +370,7 @@ mod plaintext_recovery {
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
         let encrypted_payload =
-            Payload::encapsulate_message(&message, &payload_keys, destination).unwrap();
+            Payload::encapsulate_message(&message, &payload_keys, destination.clone()).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()

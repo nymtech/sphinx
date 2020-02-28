@@ -29,12 +29,12 @@ pub(super) struct FinalRoutingInformation {
 impl FinalRoutingInformation {
     // TODO: this should really return a Result in case the assertion failed
     pub fn new(dest: &Destination, route_len: usize) -> Self {
-        assert!(dest.address.len() <= Self::max_destination_length(route_len));
+        assert!(dest.address.as_bytes().len() <= Self::max_destination_length(route_len));
 
         Self {
             flag: FINAL_HOP,
             version: Version::new(),
-            destination: dest.address,
+            destination: dest.address.clone(),
             identifier: dest.identifier,
         }
     }
@@ -59,11 +59,9 @@ impl FinalRoutingInformation {
 
         // return D || I || PAD
         PaddedFinalRoutingInformation {
-            value: vec![self.flag]
-                .iter()
-                .cloned()
+            value: std::iter::once(self.flag)
                 .chain(self.version.to_bytes().iter().cloned())
-                .chain(self.destination.iter().cloned())
+                .chain(self.destination.to_bytes().iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
                 .collect(),

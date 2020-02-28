@@ -2,7 +2,38 @@ use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRE
 use crate::crypto;
 
 // in paper delta
-pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+pub struct DestinationAddressBytes([u8; DESTINATION_ADDRESS_LENGTH]);
+
+impl DestinationAddressBytes {
+    pub fn to_base58_string(&self) -> String {
+        bs58::encode(&self.0).into_string()
+    }
+
+    pub fn from_base58_string(value: String) -> Self {
+        let decoded_address = bs58::decode(&value).into_vec().unwrap();
+        assert_eq!(decoded_address.len(), DESTINATION_ADDRESS_LENGTH);
+        let mut address_bytes = [0; DESTINATION_ADDRESS_LENGTH];
+        address_bytes.copy_from_slice(&decoded_address[..]);
+
+        DestinationAddressBytes(address_bytes)
+    }
+
+    pub fn from_bytes(b: [u8; DESTINATION_ADDRESS_LENGTH]) -> Self {
+        DestinationAddressBytes(b)
+    }
+
+    /// View this `DestinationAddressBytes` as an array of bytes.
+    pub fn as_bytes(&self) -> &[u8; DESTINATION_ADDRESS_LENGTH] {
+        &self.0
+    }
+
+    /// Convert this `DestinationAddressBytes` to an array of bytes.
+    pub fn to_bytes(&self) -> [u8; DESTINATION_ADDRESS_LENGTH] {
+        self.0
+    }
+}
+
 // in paper nu
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
 pub struct NodeAddressBytes([u8; NODE_ADDRESS_LENGTH]);
@@ -69,7 +100,7 @@ impl Node {
 }
 
 pub fn destination_address_fixture() -> DestinationAddressBytes {
-    [0u8; DESTINATION_ADDRESS_LENGTH]
+    DestinationAddressBytes([0u8; DESTINATION_ADDRESS_LENGTH])
 }
 
 pub fn node_address_fixture() -> NodeAddressBytes {
@@ -89,7 +120,7 @@ pub fn random_node() -> Node {
 
 pub fn destination_fixture() -> Destination {
     Destination {
-        address: [3u8; DESTINATION_ADDRESS_LENGTH],
+        address: DestinationAddressBytes([3u8; DESTINATION_ADDRESS_LENGTH]),
         identifier: [4u8; IDENTIFIER_LENGTH],
     }
 }

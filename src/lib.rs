@@ -1,6 +1,6 @@
 use curve25519_dalek::scalar::Scalar;
 
-use crate::constants::{PAYLOAD_SIZE, SECURITY_PARAMETER};
+use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
 use crate::payload::Payload;
@@ -48,10 +48,11 @@ impl SphinxPacket {
         let (header, payload_keys) =
             header::SphinxHeader::new(initial_secret, route, delays, destination);
 
-        if message.len() + destination.address.len() > PAYLOAD_SIZE - SECURITY_PARAMETER {
+        if message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER {
             return Err(SphinxUnwrapError::NotEnoughPayload);
         }
-        let payload = Payload::encapsulate_message(&message, &payload_keys, destination.address)?;
+        let payload =
+            Payload::encapsulate_message(&message, &payload_keys, destination.address.clone())?;
         Ok(SphinxPacket { header, payload })
     }
 
