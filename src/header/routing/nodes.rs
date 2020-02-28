@@ -219,9 +219,9 @@ impl RawRoutingInformation {
         version.copy_from_slice(&self.value[i..i + VERSION_LENGTH]);
         i += VERSION_LENGTH;
 
-        let mut destination: [u8; NODE_ADDRESS_LENGTH] = Default::default();
-        destination.copy_from_slice(&self.value[i..i + NODE_ADDRESS_LENGTH]);
-        i += NODE_ADDRESS_LENGTH;
+        let mut destination_bytes: [u8; DESTINATION_ADDRESS_LENGTH] = Default::default();
+        destination_bytes.copy_from_slice(&self.value[i..i + DESTINATION_ADDRESS_LENGTH]);
+        i += DESTINATION_ADDRESS_LENGTH;
 
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
