@@ -187,17 +187,17 @@ mod create_and_process_sphinx_packet_header {
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
         let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node {
-            address: NodeAddressBytes([5u8; NODE_ADDRESS_LENGTH]),
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
         let (node2_sk, node2_pk) = crypto::keygen();
         let node2 = Node {
-            address: NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]),
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
         let (node3_sk, node3_pk) = crypto::keygen();
         let node3 = Node {
-            address: NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
         };
         let route = [node1, node2, node3];
@@ -212,7 +212,7 @@ mod create_and_process_sphinx_packet_header {
         let new_header = match sphinx_header.process(node1_sk).unwrap() {
             ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!(
-                    NodeAddressBytes([4u8; NODE_ADDRESS_LENGTH]),
+                    NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[0].to_nanos(), delay.to_nanos());
@@ -224,7 +224,7 @@ mod create_and_process_sphinx_packet_header {
         let new_header2 = match new_header.process(node2_sk).unwrap() {
             ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!(
-                    NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
+                    NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[1].to_nanos(), delay.to_nanos());
@@ -291,7 +291,10 @@ mod unwrap_routing_information {
                     _delay,
                     next_hop_encapsulated_routing_info,
                 ) => {
-                    assert_eq!(routing_info[1..1 + NODE_ADDRESS_LENGTH], next_hop_address.0);
+                    assert_eq!(
+                        routing_info[1..1 + NODE_ADDRESS_LENGTH],
+                        next_hop_address.to_bytes()
+                    );
                     assert_eq!(
                         routing_info
                             [NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],

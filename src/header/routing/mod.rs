@@ -110,12 +110,12 @@ impl EncapsulatedRoutingInformation {
         route
             .iter()
             .skip(1) // we don't want the first element as person creating the packet knows the address of the first hop
-            .map(|node| node.address.0) // we only care about the address field
+            .map(|node| node.address.to_bytes()) // we only care about the address field
             .zip(
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 routing_keys.iter().take(routing_keys.len() - 1), // we don't want last element - it was already used to encrypt the destination
             )
-            .zip(delays.into_iter().take(delays.len() - 1)) // no need for the delay for the final node
+            .zip(delays.iter().take(delays.len() - 1)) // no need for the delay for the final node
             .rev() // we are working from the 'inside'
             // we should be getting here
             // [(Mix_v, Keys_{v-1}, Delay_{v-1}), (Mix_{v-1}, Keys_{v-2}, Delay_{v-2}), ..., (Mix2, Keys1, Delay1), (Mix1, Keys0, Delay0)]
@@ -126,7 +126,7 @@ impl EncapsulatedRoutingInformation {
                 |next_hop_encapsulated_routing_information,
                  ((current_node_address, previous_node_routing_keys), delay)| {
                     RoutingInformation::new(
-                        NodeAddressBytes(current_node_address),
+                        NodeAddressBytes::from_bytes(current_node_address),
                         delay.to_owned(),
                         next_hop_encapsulated_routing_information,
                     )

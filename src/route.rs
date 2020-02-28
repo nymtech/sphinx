@@ -4,9 +4,8 @@ use crate::crypto;
 // in paper delta
 pub type DestinationAddressBytes = [u8; DESTINATION_ADDRESS_LENGTH];
 // in paper nu
-// TODO: deprecate the usage of public 0 field in favour of proper constructor
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
-pub struct NodeAddressBytes(pub [u8; NODE_ADDRESS_LENGTH]);
+pub struct NodeAddressBytes([u8; NODE_ADDRESS_LENGTH]);
 
 impl NodeAddressBytes {
     pub fn to_base58_string(&self) -> String {
