@@ -2,7 +2,7 @@ use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRE
 use crate::crypto;
 
 // in paper delta
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub struct DestinationAddressBytes([u8; DESTINATION_ADDRESS_LENGTH]);
 
 impl DestinationAddressBytes {
@@ -35,7 +35,7 @@ impl DestinationAddressBytes {
 }
 
 // in paper nu
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub struct NodeAddressBytes([u8; NODE_ADDRESS_LENGTH]);
 
 impl NodeAddressBytes {
