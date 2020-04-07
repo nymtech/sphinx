@@ -2,7 +2,7 @@ use curve25519_dalek::scalar::Scalar;
 
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::delays::Delay;
-use crate::header::{ProcessedHeader, SphinxHeader, SphinxUnwrapError, HEADER_SIZE};
+use crate::header::{ProcessedHeader, SphinxError, SphinxHeader, HEADER_SIZE};
 use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 
@@ -44,13 +44,13 @@ impl SphinxPacket {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
-    ) -> Result<SphinxPacket, SphinxUnwrapError> {
+    ) -> Result<SphinxPacket, SphinxError> {
         let initial_secret = crypto::generate_secret();
         let (header, payload_keys) =
             header::SphinxHeader::new(initial_secret, route, delays, destination);
 
         if message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER {
-            return Err(SphinxUnwrapError::NotEnoughPayload);
+            return Err(SphinxError::NotEnoughPayload);
         }
         let payload =
             Payload::encapsulate_message(&message, &payload_keys, destination.address.clone())?;
@@ -58,7 +58,7 @@ impl SphinxPacket {
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
-    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedPacket, SphinxUnwrapError> {
+    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedPacket, SphinxError> {
         let unwrapped_header = self.header.process(node_secret_key)?;
         match unwrapped_header {
             ProcessedHeader::ProcessedHeaderForwardHop(

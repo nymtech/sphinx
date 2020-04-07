@@ -26,7 +26,7 @@ pub struct SphinxHeader {
 }
 
 #[derive(Debug)]
-pub enum SphinxUnwrapError {
+pub enum SphinxError {
     IntegrityMacError,
     RoutingFlagNotRecognized,
     ProcessingHeaderError,
@@ -34,9 +34,9 @@ pub enum SphinxUnwrapError {
     InvalidPayloadLengthError,
 }
 
-impl From<payload::PayloadEncapsulationError> for SphinxUnwrapError {
+impl From<payload::PayloadEncapsulationError> for SphinxError {
     fn from(_: payload::PayloadEncapsulationError) -> Self {
-        SphinxUnwrapError::InvalidPayloadLengthError
+        SphinxError::InvalidPayloadLengthError
     }
 }
 
@@ -81,7 +81,7 @@ impl SphinxHeader {
     fn unwrap_routing_information(
         enc_routing_information: EncryptedRoutingInformation,
         stream_cipher_key: StreamCipherKey,
-    ) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
+    ) -> Result<ParsedRawRoutingInformation, SphinxError> {
         // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
         enc_routing_information
             .add_zero_padding()
@@ -89,7 +89,7 @@ impl SphinxHeader {
             .parse()
     }
 
-    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader, SphinxUnwrapError> {
+    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader, SphinxError> {
         let shared_secret = self.shared_secret;
         let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
         let routing_keys = keys::RoutingKeys::derive(shared_key);
@@ -98,7 +98,7 @@ impl SphinxHeader {
             routing_keys.header_integrity_hmac_key,
             self.routing_info.enc_routing_information.get_value_ref(),
         ) {
-            return Err(SphinxUnwrapError::IntegrityMacError);
+            return Err(SphinxError::IntegrityMacError);
         }
 
         // blind the shared_secret in the header

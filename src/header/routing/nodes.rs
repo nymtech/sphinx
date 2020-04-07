@@ -11,7 +11,7 @@ use crate::header::routing::{
     EncapsulatedRoutingInformation, RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
     FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
-use crate::header::SphinxUnwrapError;
+use crate::header::SphinxError;
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 
@@ -160,7 +160,7 @@ pub enum ParsedRawRoutingInformation {
 }
 
 impl RawRoutingInformation {
-    pub fn parse(self) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
+    pub fn parse(self) -> Result<ParsedRawRoutingInformation, SphinxError> {
         assert_eq!(
             NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE,
             self.value.len()
@@ -170,7 +170,7 @@ impl RawRoutingInformation {
         match flag {
             FORWARD_HOP => Ok(self.parse_as_forward_hop()),
             FINAL_HOP => Ok(self.parse_as_final_hop()),
-            _ => Err(SphinxUnwrapError::RoutingFlagNotRecognized),
+            _ => Err(SphinxError::RoutingFlagNotRecognized),
         }
     }
 
