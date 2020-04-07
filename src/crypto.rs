@@ -4,7 +4,7 @@ use aes_ctr::Aes128Ctr;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
-use rand_os;
+use rand_core::OsRng;
 use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -18,7 +18,7 @@ pub type SharedSecret = MontgomeryPoint;
 pub type SharedKey = MontgomeryPoint;
 
 pub fn generate_secret() -> Scalar {
-    let mut rng = rand_os::OsRng::new().unwrap();
+    let mut rng = OsRng;
     Scalar::random(&mut rng)
 }
 
