@@ -36,7 +36,7 @@ impl SURB {
         );
 
         let first_hop = surb_route
-            .last()
+            .first()
             .ok_or(SURBCreationError::IncorrectSURBRoute)?;
 
         Ok(SURB {
