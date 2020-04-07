@@ -12,6 +12,7 @@ pub mod header;
 pub mod key;
 pub mod payload;
 pub mod route;
+pub mod surb;
 mod utils;
 
 pub const PACKET_SIZE: usize = HEADER_SIZE + PAYLOAD_SIZE;
