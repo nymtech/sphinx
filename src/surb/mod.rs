@@ -51,7 +51,7 @@ impl SURB {
         self,
         plaintext_message: &[u8],
         surb_destination: &Destination,
-    ) -> Result<SphinxPacket, SphinxError> {
+    ) -> Result<(SphinxPacket, NodeAddressBytes), SphinxError> {
         let header = self.SURBHeader;
 
         if plaintext_message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER
@@ -65,6 +65,6 @@ impl SURB {
             surb_destination.address.clone(),
         )?;
 
-        Ok(SphinxPacket { header, payload })
+        Ok((SphinxPacket { header, payload }, self.first_hop_address))
     }
 }
