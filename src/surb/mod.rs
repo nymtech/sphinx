@@ -55,6 +55,9 @@ impl SURB {
         plaintext_message: &[u8],
         surb_destination: &Destination,
     ) -> Result<(SphinxPacket, NodeAddressBytes), SphinxError> {
+        /// Function takes the precomputed surb header, layer encrypts the plaintext payload content
+        /// using the precomputed payload key material and returns the full Sphinx packet
+        /// together with the address of first hop to which it should be forwarded.
         let header = self.SURBHeader;
 
         if plaintext_message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER
@@ -96,7 +99,48 @@ mod prepare_and_use_process_surb {
             &surb_destination,
         ) {
             Err(err) => assert_eq!(expected, err),
-            _ => panic!("Should have returned an error when packet bytes too long"),
+            _ => panic!("Should have returned an error when route empty"),
+        };
+    }
+
+    #[test]
+    fn returns_error_is_payload_too_large() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+
+        let surb_route = [node1, node2, node3];
+        let surb_destination = destination_fixture();
+        let surb_initial_secret = crypto::generate_secret();
+        let surb_delays =
+            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+
+        let pre_surb = SURB::new(
+            surb_initial_secret,
+            &surb_route,
+            &surb_delays,
+            &surb_destination,
+        )
+        .unwrap();
+
+        let plaintext_message = vec![42u8; 5000];
+        let expected = SphinxError::NotEnoughPayload;
+
+        match SURB::use_surb(pre_surb, &plaintext_message, &surb_destination) {
+            Err(err) => assert_eq!(expected, err),
+            _ => panic!("Should have returned an error when payload bytes too long"),
         };
     }
 }

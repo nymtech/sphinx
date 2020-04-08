@@ -25,7 +25,7 @@ pub struct SphinxHeader {
     pub routing_info: EncapsulatedRoutingInformation,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SphinxError {
     IntegrityMacError,
     RoutingFlagNotRecognized,
