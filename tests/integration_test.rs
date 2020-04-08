@@ -226,3 +226,102 @@ mod converting_sphinx_packet_to_and_from_bytes {
         SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
     }
 }
+
+#[cfg(test)]
+mod create_and_process_surb {
+    use super::*;
+    use sphinx::route::{destination_fixture, NodeAddressBytes};
+    use sphinx::surb::SURB;
+    use sphinx::ProcessedPacket;
+    use std::time::Duration;
+
+    #[test]
+    fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+
+        let surb_route = [node1, node2, node3];
+        let surb_destination = destination_fixture();
+        let surb_initial_secret = crypto::generate_secret();
+        let surb_delays =
+            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+
+        let pre_surb = SURB::new(
+            surb_initial_secret,
+            &surb_route,
+            &surb_delays,
+            &surb_destination,
+        )
+        .unwrap();
+
+        let plaintext_message = vec![42u8; 160];
+        let (surb_sphinx_packet, first_hop) =
+            SURB::use_surb(pre_surb, &plaintext_message, &surb_destination).unwrap();
+
+        assert_eq!(
+            first_hop,
+            NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH])
+        );
+
+        let next_sphinx_packet_1 = match surb_sphinx_packet.process(node1_sk).unwrap() {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1, _delay1) => {
+                assert_eq!(
+                    NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+                    next_hop_addr1
+                );
+                assert_eq!(_delay1, surb_delays[0]);
+                next_packet
+            }
+            _ => panic!(),
+        };
+
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk).unwrap() {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr2, _delay2) => {
+                assert_eq!(
+                    NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+                    next_hop_addr2
+                );
+                assert_eq!(_delay2, surb_delays[1]);
+                next_packet
+            }
+            _ => panic!(),
+        };
+
+        match next_sphinx_packet_2.process(node3_sk).unwrap() {
+            ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
+                let zero_bytes = vec![0u8; SECURITY_PARAMETER];
+                let additional_padding = vec![
+                    0u8;
+                    PAYLOAD_SIZE
+                        - SECURITY_PARAMETER
+                        - plaintext_message.len()
+                        - surb_destination.address.as_bytes().len()
+                        - 1
+                ];
+                let expected_payload = [
+                    zero_bytes,
+                    surb_destination.address.to_bytes().to_vec(),
+                    plaintext_message,
+                    vec![1],
+                    additional_padding,
+                ]
+                .concat();
+                assert_eq!(expected_payload, payload.get_content());
+            }
+            _ => panic!(),
+        };
+    }
+}

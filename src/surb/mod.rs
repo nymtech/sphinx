@@ -17,7 +17,7 @@ pub struct SURB {
     pub payload_keys: Vec<PayloadKey>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SURBError {
     IncorrectSURBRoute,
 }
@@ -29,7 +29,12 @@ impl SURB {
         surb_delays: &[Delay],
         surb_destination: &Destination,
     ) -> Result<Self, SURBError> {
+        /// Precomputes the header of the Sphinx packet which will be used as SURB
+        /// and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
+        /// which should be used to layer encrypt the payload.
         assert_eq!(surb_route.len(), surb_delays.len());
+
+        let first_hop = surb_route.first().ok_or(SURBError::IncorrectSURBRoute)?;
 
         let (header, payload_keys) = header::SphinxHeader::new(
             surb_initial_secret,
@@ -37,8 +42,6 @@ impl SURB {
             surb_delays,
             surb_destination,
         );
-
-        let first_hop = surb_route.first().ok_or(SURBError::IncorrectSURBRoute)?;
 
         Ok(SURB {
             SURBHeader: header,
@@ -66,5 +69,34 @@ impl SURB {
         )?;
 
         Ok((SphinxPacket { header, payload }, self.first_hop_address))
+    }
+}
+
+#[cfg(test)]
+mod prepare_and_use_process_surb {
+    use super::*;
+    use crate::constants::NODE_ADDRESS_LENGTH;
+    use crate::header::delays;
+    use crate::route::destination_fixture;
+    use std::time::Duration;
+
+    #[test]
+    fn returns_error_if_surb_route_empty() {
+        let surb_route = [];
+        let surb_destination = destination_fixture();
+        let surb_initial_secret = crypto::generate_secret();
+        let surb_delays =
+            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+        let expected = SURBError::IncorrectSURBRoute;
+
+        match SURB::new(
+            surb_initial_secret,
+            &surb_route,
+            &surb_delays,
+            &surb_destination,
+        ) {
+            Err(err) => assert_eq!(expected, err),
+            _ => panic!("Should have returned an error when packet bytes too long"),
+        };
     }
 }
