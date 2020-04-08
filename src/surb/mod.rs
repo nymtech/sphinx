@@ -73,13 +73,23 @@ impl SURB {
 
         Ok((SphinxPacket { header, payload }, self.first_hop_address))
     }
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.SURBHeader
+            .to_bytes()
+            .iter()
+            .cloned()
+            .chain(self.first_hop_address.to_bytes().iter().cloned())
+            .chain(self.payload_keys.iter().flat_map(|x| x.iter()).cloned())
+            .collect()
+    }
 }
 
 #[cfg(test)]
 mod prepare_and_use_process_surb {
     use super::*;
     use crate::constants::NODE_ADDRESS_LENGTH;
-    use crate::header::delays;
+    use crate::header::{delays, HEADER_SIZE};
     use crate::route::destination_fixture;
     use std::time::Duration;
 
@@ -101,6 +111,85 @@ mod prepare_and_use_process_surb {
             Err(err) => assert_eq!(expected, err),
             _ => panic!("Should have returned an error when route empty"),
         };
+    }
+
+    #[test]
+    fn surb_header_has_correct_length() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+
+        let surb_route = [node1, node2, node3];
+        let surb_destination = destination_fixture();
+        let surb_initial_secret = crypto::generate_secret();
+        let surb_delays =
+            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+
+        let pre_surb = SURB::new(
+            surb_initial_secret,
+            &surb_route,
+            &surb_delays,
+            &surb_destination,
+        )
+        .unwrap();
+
+        assert_eq!(pre_surb.SURBHeader.to_bytes().len(), HEADER_SIZE);
+    }
+
+    #[test]
+    fn to_bytes_returns_correct_value() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+
+        let surb_route = [node1, node2, node3];
+        let surb_destination = destination_fixture();
+        let surb_initial_secret = crypto::generate_secret();
+        let surb_delays =
+            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+
+        let pre_surb = SURB::new(
+            surb_initial_secret,
+            &surb_route,
+            &surb_delays,
+            &surb_destination,
+        )
+        .unwrap();
+
+        let pre_surb_bytes = pre_surb.to_bytes();
+        let expected = [
+            pre_surb.SURBHeader.to_bytes(),
+            [5u8; NODE_ADDRESS_LENGTH].to_vec(),
+            pre_surb.payload_keys[0].to_vec(),
+            pre_surb.payload_keys[1].to_vec(),
+            pre_surb.payload_keys[2].to_vec(),
+        ]
+        .concat();
+        assert_eq!(pre_surb_bytes, expected);
     }
 
     #[test]
