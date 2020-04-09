@@ -5,6 +5,7 @@ use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxError, SphinxHeader, HEADER_SIZE};
 use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
+use crate::surb::SURB;
 
 pub mod constants;
 pub mod crypto;
@@ -32,6 +33,12 @@ pub enum ProcessedPacket {
     ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
 
+pub struct SURBMaterial {
+    pub surb_route: Vec<Node>,
+    pub surb_delays: Vec<Delay>,
+    pub surb_destination: Destination,
+}
+
 #[derive(Clone)]
 pub struct SphinxPacket {
     pub header: header::SphinxHeader,
@@ -40,14 +47,27 @@ pub struct SphinxPacket {
 
 impl SphinxPacket {
     pub fn new(
-        message: Vec<u8>,
+        mut message: Vec<u8>,
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
+        surb_material: Option<SURBMaterial>,
     ) -> Result<SphinxPacket, SphinxError> {
         let initial_secret = crypto::generate_secret();
         let (header, payload_keys) =
             header::SphinxHeader::new(initial_secret, route, delays, destination);
+
+        if let Some(surb_material) = surb_material {
+            let surb_initial_secret = crypto::generate_secret();
+            let surb = SURB::new(
+                surb_initial_secret,
+                &surb_material.surb_route,
+                &surb_material.surb_delays,
+                &surb_material.surb_destination,
+            )
+            .unwrap();
+            message = [surb.to_bytes(), message].concat();
+        }
 
         if message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER {
             return Err(SphinxError::NotEnoughPayload);

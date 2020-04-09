@@ -14,12 +14,13 @@ const PAYLOAD_SIZE: usize = 1024;
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
+    use sphinx::header::HEADER_SIZE;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx::ProcessedPacket;
+    use sphinx::{ProcessedPacket, SURBMaterial};
     use std::time::Duration;
 
     #[test]
-    fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
+    fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes_without_surb() {
         let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
@@ -45,10 +46,17 @@ mod create_and_process_sphinx_packet {
         );
 
         let message = vec![13u8, 16];
-        let sphinx_packet =
-            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
-                SphinxPacket { header, payload } => SphinxPacket { header, payload },
-            };
+        let sphinx_packet = match SphinxPacket::new(
+            message.clone(),
+            &route,
+            &destination,
+            &delays,
+            None,
+        )
+        .unwrap()
+        {
+            SphinxPacket { header, payload } => SphinxPacket { header, payload },
+        };
 
         let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk).unwrap() {
             ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1, _delay1) => {
@@ -96,6 +104,110 @@ mod create_and_process_sphinx_packet {
             _ => panic!(),
         };
     }
+
+    #[test]
+    fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes_with_surb() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node::new(
+            NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            node1_pk,
+        );
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node::new(
+            NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            node2_pk,
+        );
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node::new(
+            NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            node3_pk,
+        );
+        let (node4_sk, node4_pk) = crypto::keygen();
+        let node4 = Node::new(
+            NodeAddressBytes::from_bytes([11u8; NODE_ADDRESS_LENGTH]),
+            node4_pk,
+        );
+        let (node5_sk, node5_pk) = crypto::keygen();
+        let node5 = Node::new(
+            NodeAddressBytes::from_bytes([12u8; NODE_ADDRESS_LENGTH]),
+            node5_pk,
+        );
+        let (node6_sk, node6_pk) = crypto::keygen();
+        let node6 = Node::new(
+            NodeAddressBytes::from_bytes([13u8; NODE_ADDRESS_LENGTH]),
+            node6_pk,
+        );
+
+        let route = [node1, node2, node3];
+        let average_delay = Duration::from_secs_f64(1.0);
+        let delays = delays::generate_from_average_duration(route.len(), average_delay);
+        let destination = Destination::new(
+            DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+            [4u8; IDENTIFIER_LENGTH],
+        );
+
+        let surb_route = vec![node4, node5, node6];
+        let surb_delays = delays::generate_from_average_duration(surb_route.len(), average_delay);
+        let surb_destination = Destination::new(
+            DestinationAddressBytes::from_bytes([9u8; DESTINATION_ADDRESS_LENGTH]),
+            [7u8; IDENTIFIER_LENGTH],
+        );
+
+        let surb_material = SURBMaterial {
+            surb_route,
+            surb_delays,
+            surb_destination,
+        };
+        let message = vec![13u8, 16];
+        let sphinx_packet = match SphinxPacket::new(
+            message.clone(),
+            &route,
+            &destination,
+            &delays,
+            Option::from(surb_material),
+        )
+        .unwrap()
+        {
+            SphinxPacket { header, payload } => SphinxPacket { header, payload },
+        };
+
+        let next_sphinx_packet_1 = match sphinx_packet.process(node1_sk).unwrap() {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr1, _delay1) => {
+                assert_eq!(
+                    NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+                    next_hop_addr1
+                );
+                next_packet
+            }
+            _ => panic!(),
+        };
+
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(node2_sk).unwrap() {
+            ProcessedPacket::ProcessedPacketForwardHop(next_packet, next_hop_addr2, _delay2) => {
+                assert_eq!(
+                    NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+                    next_hop_addr2
+                );
+                next_packet
+            }
+            _ => panic!(),
+        };
+
+        match next_sphinx_packet_2.process(node3_sk).unwrap() {
+            ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
+                let zero_bytes = vec![0u8; SECURITY_PARAMETER];
+                let additional_padding = vec![
+                    0u8;
+                    PAYLOAD_SIZE
+                        - SECURITY_PARAMETER
+                        - message.len()
+                        - destination.address.as_bytes().len()
+                        - 1
+                ];
+            }
+            _ => panic!(),
+        };
+    }
 }
 
 #[cfg(test)]
@@ -132,10 +244,17 @@ mod converting_sphinx_packet_to_and_from_bytes {
         );
 
         let message = vec![13u8, 16];
-        let sphinx_packet =
-            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
-                SphinxPacket { header, payload } => SphinxPacket { header, payload },
-            };
+        let sphinx_packet = match SphinxPacket::new(
+            message.clone(),
+            &route,
+            &destination,
+            &delays,
+            None,
+        )
+        .unwrap()
+        {
+            SphinxPacket { header, payload } => SphinxPacket { header, payload },
+        };
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
@@ -217,10 +336,10 @@ mod converting_sphinx_packet_to_and_from_bytes {
         );
 
         let message = vec![13u8, 16];
-        let sphinx_packet = match SphinxPacket::new(message, &route, &destination, &delays).unwrap()
-        {
-            SphinxPacket { header, payload } => SphinxPacket { header, payload },
-        };
+        let sphinx_packet =
+            match SphinxPacket::new(message, &route, &destination, &delays, None).unwrap() {
+                SphinxPacket { header, payload } => SphinxPacket { header, payload },
+            };
 
         let sphinx_packet_bytes = &sphinx_packet.to_bytes()[..300];
         SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
