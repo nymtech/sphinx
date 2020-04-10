@@ -6,7 +6,7 @@ use crate::header::keys::{BlindingFactor, PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
-use crate::{crypto, payload, ProcessingError};
+use crate::{crypto, payload, surb, ProcessingError};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 
@@ -32,11 +32,18 @@ pub enum SphinxError {
     ProcessingHeaderError,
     NotEnoughPayload,
     InvalidPayloadLengthError,
+    SURBError,
 }
 
 impl From<payload::PayloadEncapsulationError> for SphinxError {
     fn from(_: payload::PayloadEncapsulationError) -> Self {
         SphinxError::InvalidPayloadLengthError
+    }
+}
+
+impl From<surb::SURBError> for SphinxError {
+    fn from(_: surb::SURBError) -> Self {
+        SphinxError::SURBError
     }
 }
 

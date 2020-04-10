@@ -9,9 +9,9 @@ use curve25519_dalek::scalar::Scalar;
 
 #[derive(Clone)]
 pub struct SURB {
-    /// A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
-    /// the address of the first hop in the route of the SURB, and the key material
-    /// used to layer encrypt the payload.
+    /* A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
+    the address of the first hop in the route of the SURB, and the key material
+    used to layer encrypt the payload. */
     pub SURBHeader: header::SphinxHeader,
     pub first_hop_address: NodeAddressBytes,
     pub payload_keys: Vec<PayloadKey>,
@@ -20,6 +20,7 @@ pub struct SURB {
 #[derive(Debug, PartialEq)]
 pub enum SURBError {
     IncorrectSURBRoute,
+    LengthsNotMatching,
 }
 
 impl SURB {
@@ -29,11 +30,13 @@ impl SURB {
         surb_delays: &[Delay],
         surb_destination: &Destination,
     ) -> Result<Self, SURBError> {
-        /// Precomputes the header of the Sphinx packet which will be used as SURB
-        /// and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
-        /// which should be used to layer encrypt the payload.
-        assert_eq!(surb_route.len(), surb_delays.len());
+        /* Pre-computes the header of the Sphinx packet which will be used as SURB
+        and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
+        which should be used to layer encrypt the payload. */
 
+        if surb_route.len() != surb_delays.len() {
+            return Err(SURBError::LengthsNotMatching);
+        };
         let first_hop = surb_route.first().ok_or(SURBError::IncorrectSURBRoute)?;
 
         let (header, payload_keys) = header::SphinxHeader::new(
@@ -55,9 +58,10 @@ impl SURB {
         plaintext_message: &[u8],
         surb_destination: &Destination,
     ) -> Result<(SphinxPacket, NodeAddressBytes), SphinxError> {
-        /// Function takes the precomputed surb header, layer encrypts the plaintext payload content
-        /// using the precomputed payload key material and returns the full Sphinx packet
-        /// together with the address of first hop to which it should be forwarded.
+        /* Function takes the precomputed surb header, layer encrypts the plaintext payload content
+        using the precomputed payload key material and returns the full Sphinx packet
+        together with the address of first hop to which it should be forwarded. */
+
         let header = self.SURBHeader;
 
         if plaintext_message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER

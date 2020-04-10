@@ -47,7 +47,7 @@ pub struct SphinxPacket {
 
 impl SphinxPacket {
     pub fn new(
-        mut message: Vec<u8>,
+        message: Vec<u8>,
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
@@ -57,6 +57,8 @@ impl SphinxPacket {
         let (header, payload_keys) =
             header::SphinxHeader::new(initial_secret, route, delays, destination);
 
+        let mut plaintext = message.clone();
+
         if let Some(surb_material) = surb_material {
             let surb_initial_secret = crypto::generate_secret();
             let surb = SURB::new(
@@ -64,16 +66,21 @@ impl SphinxPacket {
                 &surb_material.surb_route,
                 &surb_material.surb_delays,
                 &surb_material.surb_destination,
-            )
-            .unwrap();
-            message = [surb.to_bytes(), message].concat();
+            )?;
+
+            plaintext = surb
+                .to_bytes()
+                .iter()
+                .cloned()
+                .chain(message.iter().cloned())
+                .collect();
         }
 
-        if message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER {
+        if plaintext.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER {
             return Err(SphinxError::NotEnoughPayload);
         }
         let payload =
-            Payload::encapsulate_message(&message, &payload_keys, destination.address.clone())?;
+            Payload::encapsulate_message(&plaintext, &payload_keys, destination.address.clone())?;
         Ok(SphinxPacket { header, payload })
     }
 
