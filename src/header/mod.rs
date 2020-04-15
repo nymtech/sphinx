@@ -20,7 +20,7 @@ use crate::header::keys::{BlindingFactor, PayloadKey, StreamCipherKey};
 use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
-use crate::{crypto, payload, ProcessingError};
+use crate::{crypto, payload, surb, ProcessingError};
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 
@@ -39,18 +39,25 @@ pub struct SphinxHeader {
     pub routing_info: EncapsulatedRoutingInformation,
 }
 
-#[derive(Debug)]
-pub enum SphinxUnwrapError {
+#[derive(Debug, PartialEq)]
+pub enum SphinxError {
     IntegrityMacError,
     RoutingFlagNotRecognized,
     ProcessingHeaderError,
     NotEnoughPayload,
     InvalidPayloadLengthError,
+    SURBError,
 }
 
-impl From<payload::PayloadEncapsulationError> for SphinxUnwrapError {
+impl From<payload::PayloadEncapsulationError> for SphinxError {
     fn from(_: payload::PayloadEncapsulationError) -> Self {
-        SphinxUnwrapError::InvalidPayloadLengthError
+        SphinxError::InvalidPayloadLengthError
+    }
+}
+
+impl From<surb::SURBError> for SphinxError {
+    fn from(_: surb::SURBError) -> Self {
+        SphinxError::SURBError
     }
 }
 
@@ -95,7 +102,7 @@ impl SphinxHeader {
     fn unwrap_routing_information(
         enc_routing_information: EncryptedRoutingInformation,
         stream_cipher_key: StreamCipherKey,
-    ) -> Result<ParsedRawRoutingInformation, SphinxUnwrapError> {
+    ) -> Result<ParsedRawRoutingInformation, SphinxError> {
         // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
         enc_routing_information
             .add_zero_padding()
@@ -103,7 +110,7 @@ impl SphinxHeader {
             .parse()
     }
 
-    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader, SphinxUnwrapError> {
+    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader, SphinxError> {
         let shared_secret = self.shared_secret;
         let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
         let routing_keys = keys::RoutingKeys::derive(shared_key);
@@ -112,7 +119,7 @@ impl SphinxHeader {
             routing_keys.header_integrity_hmac_key,
             self.routing_info.enc_routing_information.get_value_ref(),
         ) {
-            return Err(SphinxUnwrapError::IntegrityMacError);
+            return Err(SphinxError::IntegrityMacError);
         }
 
         // blind the shared_secret in the header
