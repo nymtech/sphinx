@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_SIZE};
+use crate::header;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::RoutingKeys;
@@ -22,7 +23,7 @@ use crate::header::routing::nodes::{
     encrypted_routing_information_fixture, EncryptedRoutingInformation, RoutingInformation,
 };
 use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::{header, ProcessingError};
+use crate::{Error, ErrorKind, Result};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE - (NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE);
@@ -57,6 +58,7 @@ impl Version {
         vec![self.major, self.minor, self.patch]
     }
 }
+
 // the derivation is only required for the tests. please remove it in production
 #[derive(Clone)]
 pub struct EncapsulatedRoutingInformation {
@@ -159,9 +161,16 @@ impl EncapsulatedRoutingInformation {
             .collect()
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProcessingError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() != HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE {
-            return Err(ProcessingError::InvalidRoutingInformationLengthError);
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "tried to recover routing information using {} bytes, expected {}",
+                    bytes.len(),
+                    HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE
+                ),
+            ));
         }
 
         let mut integrity_mac_bytes = [0u8; HEADER_INTEGRITY_MAC_SIZE];
@@ -354,7 +363,6 @@ mod encapsulating_forward_routing_information {
             layer_0_routing.integrity_mac.get_value()
         );
     }
-
     #[test]
     fn it_correctly_generates_sphinx_routing_information_for_route_of_max_length() {
         // this is basically loop unwrapping, but considering the complex iterator, it's warranted
