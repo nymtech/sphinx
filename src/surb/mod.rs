@@ -123,17 +123,17 @@ mod prepare_and_use_process_surb {
 
     #[test]
     fn surb_header_has_correct_length() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (_, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -158,17 +158,17 @@ mod prepare_and_use_process_surb {
 
     #[test]
     fn to_bytes_returns_correct_value() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (_, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -202,17 +202,17 @@ mod prepare_and_use_process_surb {
 
     #[test]
     fn returns_error_is_payload_too_large() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (_, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,

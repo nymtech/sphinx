@@ -28,7 +28,6 @@ const PAYLOAD_SIZE: usize = 1024;
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
-    use sphinx::header::HEADER_SIZE;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx::{ProcessedPacket, SURBMaterial};
     use std::time::Duration;
@@ -136,17 +135,17 @@ mod create_and_process_sphinx_packet {
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
         );
-        let (node4_sk, node4_pk) = crypto::keygen();
+        let (_, node4_pk) = crypto::keygen();
         let node4 = Node::new(
             NodeAddressBytes::from_bytes([11u8; NODE_ADDRESS_LENGTH]),
             node4_pk,
         );
-        let (node5_sk, node5_pk) = crypto::keygen();
+        let (_, node5_pk) = crypto::keygen();
         let node5 = Node::new(
             NodeAddressBytes::from_bytes([12u8; NODE_ADDRESS_LENGTH]),
             node5_pk,
         );
-        let (node6_sk, node6_pk) = crypto::keygen();
+        let (_, node6_pk) = crypto::keygen();
         let node6 = Node::new(
             NodeAddressBytes::from_bytes([13u8; NODE_ADDRESS_LENGTH]),
             node6_pk,
@@ -174,7 +173,7 @@ mod create_and_process_sphinx_packet {
         };
         let message = vec![13u8, 16];
         let sphinx_packet = match SphinxPacket::new(
-            message.clone(),
+            message,
             &route,
             &destination,
             &delays,
@@ -208,17 +207,7 @@ mod create_and_process_sphinx_packet {
         };
 
         match next_sphinx_packet_2.process(node3_sk).unwrap() {
-            ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
-                let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let additional_padding = vec![
-                    0u8;
-                    PAYLOAD_SIZE
-                        - SECURITY_PARAMETER
-                        - message.len()
-                        - destination.address.as_bytes().len()
-                        - 1
-                ];
-            }
+            ProcessedPacket::ProcessedPacketFinalHop(_, _, _) => (),
             _ => panic!(),
         };
     }
