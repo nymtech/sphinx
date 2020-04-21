@@ -12,18 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use arrayref::array_ref;
-use blake2::VarBlake2b;
-// we might want to swap this one with a different implementation
-use chacha::ChaCha;
-use lioness::{Lioness, RAW_KEY_SIZE};
-
 use crate::constants::{
     DESTINATION_ADDRESS_LENGTH, MAXIMUM_PLAINTEXT_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER,
 };
 use crate::header::keys::PayloadKey;
 use crate::route::DestinationAddressBytes;
-use crate::ProcessingError;
+use crate::{Error, ErrorKind, Result};
+use arrayref::array_ref;
+use blake2::VarBlake2b;
+use chacha::ChaCha; // we might want to swap this one with a different implementation
+use lioness::{Lioness, RAW_KEY_SIZE};
 
 // we might want to swap this one with a different implementation
 #[derive(Clone)]
@@ -34,17 +32,12 @@ pub struct Payload {
     content: Vec<u8>,
 }
 
-#[derive(Debug)]
-pub enum PayloadEncapsulationError {
-    TooLongPlaintextError,
-}
-
 impl Payload {
     pub fn encapsulate_message(
         plaintext_message: &[u8],
         payload_keys: &[PayloadKey],
         destination_address: DestinationAddressBytes,
-    ) -> Result<Self, PayloadEncapsulationError> {
+    ) -> Result<Self> {
         let final_payload_key = payload_keys
             .last()
             .expect("The keys should be already initialized");
@@ -73,9 +66,12 @@ impl Payload {
         message: &[u8],
         final_payload_key: &PayloadKey,
         destination_address: DestinationAddressBytes,
-    ) -> Result<Self, PayloadEncapsulationError> {
+    ) -> Result<Self> {
         if message.len() > MAXIMUM_PLAINTEXT_LENGTH {
-            return Err(PayloadEncapsulationError::TooLongPlaintextError);
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                "too long message provided",
+            ));
         }
         // concatenate security zero padding with destination and message and additional length padding
         let mut final_payload: Vec<u8> = std::iter::repeat(0u8)
@@ -165,9 +161,12 @@ impl Payload {
         None
     }
 
-    pub fn from_bytes(bytes: &[u8]) -> Result<Self, ProcessingError> {
+    pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         if bytes.len() != PAYLOAD_SIZE {
-            return Err(ProcessingError::InvalidPayloadLengthError);
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                "too long message provided",
+            ));
         }
 
         Ok(Payload {
@@ -183,9 +182,9 @@ mod building_payload_from_bytes {
     #[test]
     fn from_bytes_returns_error_if_bytes_are_too_short() {
         let bytes = [0u8; 1].to_vec();
-        let expected = ProcessingError::InvalidPayloadLengthError;
+        let expected = ErrorKind::InvalidPayload;
         match Payload::from_bytes(&bytes) {
-            Err(err) => assert_eq!(expected, err),
+            Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when packet bytes too short"),
         };
     }
@@ -193,9 +192,9 @@ mod building_payload_from_bytes {
     #[test]
     fn from_bytes_panics_if_bytes_are_too_long() {
         let bytes = [0u8; 6666].to_vec();
-        let expected = ProcessingError::InvalidPayloadLengthError;
+        let expected = ErrorKind::InvalidPayload;
         match Payload::from_bytes(&bytes) {
-            Err(err) => assert_eq!(expected, err),
+            Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when packet bytes too long"),
         };
     }

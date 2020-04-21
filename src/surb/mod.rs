@@ -1,10 +1,10 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
-use crate::header::SphinxError;
 use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::{crypto, header, SphinxPacket};
+use crate::{header, SphinxPacket};
+use crate::{Error, ErrorKind, Result};
 use curve25519_dalek::scalar::Scalar;
 
 #[derive(Clone)]
@@ -17,27 +17,27 @@ pub struct SURB {
     pub payload_keys: Vec<PayloadKey>,
 }
 
-#[derive(Debug, PartialEq)]
-pub enum SURBError {
-    IncorrectSURBRoute,
-    LengthsNotMatching,
-}
-
 impl SURB {
     pub fn new(
         surb_initial_secret: Scalar,
         surb_route: &[Node],
         surb_delays: &[Delay],
         surb_destination: &Destination,
-    ) -> Result<Self, SURBError> {
+    ) -> Result<Self> {
         /* Pre-computes the header of the Sphinx packet which will be used as SURB
         and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
         which should be used to layer encrypt the payload. */
-
+        if surb_route.is_empty() {
+            return Err(Error::new(
+                ErrorKind::InvalidSURB,
+                "tried to create SURB for an empty route",
+            ));
+        }
         if surb_route.len() != surb_delays.len() {
-            return Err(SURBError::LengthsNotMatching);
-        };
-        let first_hop = surb_route.first().ok_or(SURBError::IncorrectSURBRoute)?;
+            return Err(Error::new(ErrorKind::InvalidSURB, format!("creating SURB for contradictory data: route has len {} while there are {} delays generated", surb_route.len(), surb_delays.len())));
+        }
+
+        let first_hop = surb_route.first().unwrap();
 
         let (header, payload_keys) = header::SphinxHeader::new(
             surb_initial_secret,
@@ -57,7 +57,7 @@ impl SURB {
         self,
         plaintext_message: &[u8],
         surb_destination: &Destination,
-    ) -> Result<(SphinxPacket, NodeAddressBytes), SphinxError> {
+    ) -> Result<(SphinxPacket, NodeAddressBytes)> {
         /* Function takes the precomputed surb header, layer encrypts the plaintext payload content
         using the precomputed payload key material and returns the full Sphinx packet
         together with the address of first hop to which it should be forwarded. */
@@ -66,7 +66,10 @@ impl SURB {
 
         if plaintext_message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER
         {
-            return Err(SphinxError::NotEnoughPayload);
+            return Err(Error::new(
+                ErrorKind::InvalidSURB,
+                "not enough payload left to fit a SURB",
+            ));
         };
 
         let payload = Payload::encapsulate_message(
@@ -93,6 +96,7 @@ impl SURB {
 mod prepare_and_use_process_surb {
     use super::*;
     use crate::constants::NODE_ADDRESS_LENGTH;
+    use crate::crypto;
     use crate::header::{delays, HEADER_SIZE};
     use crate::route::destination_fixture;
     use std::time::Duration;
@@ -104,7 +108,7 @@ mod prepare_and_use_process_surb {
         let surb_initial_secret = crypto::generate_secret();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
-        let expected = SURBError::IncorrectSURBRoute;
+        let expected = ErrorKind::InvalidSURB;
 
         match SURB::new(
             surb_initial_secret,
@@ -112,7 +116,7 @@ mod prepare_and_use_process_surb {
             &surb_delays,
             &surb_destination,
         ) {
-            Err(err) => assert_eq!(expected, err),
+            Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when route empty"),
         };
     }
@@ -227,12 +231,11 @@ mod prepare_and_use_process_surb {
             &surb_destination,
         )
         .unwrap();
-
         let plaintext_message = vec![42u8; 5000];
-        let expected = SphinxError::NotEnoughPayload;
+        let expected = ErrorKind::InvalidSURB;
 
         match SURB::use_surb(pre_surb, &plaintext_message, &surb_destination) {
-            Err(err) => assert_eq!(expected, err),
+            Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when payload bytes too long"),
         };
     }
