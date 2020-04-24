@@ -14,6 +14,7 @@
 
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
 use crate::crypto;
+use crate::{Error, ErrorKind, Result};
 
 // in paper delta
 #[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
@@ -24,13 +25,28 @@ impl DestinationAddressBytes {
         bs58::encode(&self.0).into_string()
     }
 
-    pub fn from_base58_string(value: String) -> Self {
-        let decoded_address = bs58::decode(&value).into_vec().unwrap();
-        assert_eq!(decoded_address.len(), DESTINATION_ADDRESS_LENGTH);
-        let mut address_bytes = [0; DESTINATION_ADDRESS_LENGTH];
-        address_bytes.copy_from_slice(&decoded_address[..]);
+    pub fn try_from_base58_string<S: Into<String>>(val: S) -> Result<Self> {
+        let decoded = match bs58::decode(val.into()).into_vec() {
+            Ok(decoded) => decoded,
+            Err(e) => {
+                return Err(Error::new(
+                    ErrorKind::InvalidRouting,
+                    format!("failed to decode destination from b58 string: {:?}", e),
+                ))
+            }
+        };
 
-        DestinationAddressBytes(address_bytes)
+        if decoded.len() != DESTINATION_ADDRESS_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                "decoded destination address has invalid length",
+            ));
+        }
+
+        let mut address_bytes = [0; DESTINATION_ADDRESS_LENGTH];
+        address_bytes.copy_from_slice(&decoded[..]);
+
+        Ok(DestinationAddressBytes(address_bytes))
     }
 
     pub fn from_bytes(b: [u8; DESTINATION_ADDRESS_LENGTH]) -> Self {
