@@ -73,13 +73,28 @@ impl NodeAddressBytes {
         bs58::encode(&self.0).into_string()
     }
 
-    pub fn from_base58_string(value: String) -> Self {
-        let decoded_address = bs58::decode(&value).into_vec().unwrap();
-        assert_eq!(decoded_address.len(), NODE_ADDRESS_LENGTH);
-        let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
-        address_bytes.copy_from_slice(&decoded_address[..]);
+    pub fn try_from_base58_string<S: Into<String>>(val: S) -> Result<Self> {
+        let decoded = match bs58::decode(val.into()).into_vec() {
+            Ok(decoded) => decoded,
+            Err(e) => {
+                return Err(Error::new(
+                    ErrorKind::InvalidRouting,
+                    format!("failed to decode node address from b58 string: {:?}", e),
+                ))
+            }
+        };
 
-        NodeAddressBytes(address_bytes)
+        if decoded.len() != NODE_ADDRESS_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                "decoded node address has invalid length",
+            ));
+        }
+
+        let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
+        address_bytes.copy_from_slice(&decoded[..]);
+
+        Ok(NodeAddressBytes(address_bytes))
     }
 
     pub fn from_bytes(b: [u8; NODE_ADDRESS_LENGTH]) -> Self {
@@ -163,7 +178,7 @@ mod address_encoding {
     fn it_is_possible_to_encode_and_decode_address() {
         let dummy_address = NodeAddressBytes([42u8; 32]);
         let dummy_address_str = dummy_address.to_base58_string();
-        let recovered = NodeAddressBytes::from_base58_string(dummy_address_str);
+        let recovered = NodeAddressBytes::try_from_base58_string(dummy_address_str).unwrap();
         assert_eq!(dummy_address, recovered)
     }
 }
