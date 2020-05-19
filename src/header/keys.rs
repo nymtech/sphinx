@@ -183,9 +183,9 @@ mod computing_blinding_factor {
 //
 #[cfg(test)]
 mod deriving_key_material {
-    use crate::route::Node;
-
     use super::*;
+    use crate::route::Node;
+    use rand_core::OsRng;
 
     #[cfg(test)]
     mod with_an_empty_route {
@@ -193,8 +193,9 @@ mod deriving_key_material {
 
         #[test]
         fn it_returns_no_routing_keys() {
+            let mut rng = OsRng;
             let empty_route: Vec<Node> = vec![];
-            let initial_secret = crypto::generate_secret();
+            let initial_secret = crypto::generate_secret(&mut rng);
             let key_material = KeyMaterial::derive(&empty_route, initial_secret);
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
@@ -206,13 +207,14 @@ mod deriving_key_material {
 
     #[cfg(test)]
     mod for_a_route_with_3_forward_hops {
-        use crate::route::random_node;
-
         use super::*;
+        use crate::route::random_node;
+        use rand_core::OsRng;
 
         fn setup() -> (Vec<Node>, Scalar, KeyMaterial) {
+            let mut rng = OsRng;
             let route: Vec<Node> = vec![random_node(), random_node(), random_node()];
-            let initial_secret = crypto::generate_secret();
+            let initial_secret = crypto::generate_secret(&mut rng);
             let key_material = KeyMaterial::derive(&route, initial_secret);
             (route, initial_secret, key_material)
         }
@@ -257,10 +259,12 @@ mod deriving_key_material {
 #[cfg(test)]
 mod key_derivation_function {
     use super::*;
+    use rand_core::OsRng;
 
     #[test]
     fn it_expands_the_seed_key_to_expected_length() {
-        let shared_key = crypto::generate_random_curve_point();
+        let mut rng = OsRng;
+        let shared_key = crypto::generate_random_curve_point(&mut rng);
         let routing_keys = RoutingKeys::derive(shared_key);
         assert_eq!(
             crypto::STREAM_CIPHER_KEY_SIZE,
@@ -270,7 +274,8 @@ mod key_derivation_function {
 
     #[test]
     fn it_returns_the_same_output_for_two_equal_inputs() {
-        let shared_key = crypto::generate_random_curve_point();
+        let mut rng = OsRng;
+        let shared_key = crypto::generate_random_curve_point(&mut rng);
         let routing_keys1 = RoutingKeys::derive(shared_key);
         let routing_keys2 = RoutingKeys::derive(shared_key);
         assert_eq!(routing_keys1, routing_keys2);

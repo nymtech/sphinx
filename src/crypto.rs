@@ -18,7 +18,7 @@ use aes_ctr::Aes128Ctr;
 use curve25519_dalek::montgomery::MontgomeryPoint;
 use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
-use rand_core::OsRng;
+use rand_core::{RngCore, CryptoRng};
 use sha2::Sha256;
 
 type HmacSha256 = Hmac<Sha256>;
@@ -31,17 +31,16 @@ pub type PublicKey = MontgomeryPoint;
 pub type SharedSecret = MontgomeryPoint;
 pub type SharedKey = MontgomeryPoint;
 
-pub fn generate_secret() -> Scalar {
-    let mut rng = OsRng;
-    Scalar::random(&mut rng)
+pub fn generate_secret<R: RngCore + CryptoRng>(rng: &mut R) -> Scalar {
+    Scalar::random(rng)
 }
 
-pub fn generate_random_curve_point() -> MontgomeryPoint {
-    CURVE_GENERATOR * generate_secret()
+pub fn generate_random_curve_point<R: RngCore + CryptoRng>(rng: &mut R) -> MontgomeryPoint {
+    CURVE_GENERATOR * generate_secret(rng)
 }
 
-pub fn keygen() -> (Scalar, MontgomeryPoint) {
-    let secret_key = generate_secret();
+pub fn keygen<R: RngCore + CryptoRng>(rng: &mut R) -> (Scalar, MontgomeryPoint) {
+    let secret_key = generate_secret(rng);
     let public_key = CURVE_GENERATOR * secret_key;
     (secret_key, public_key)
 }
@@ -62,7 +61,7 @@ pub fn generate_pseudorandom_bytes(
 }
 
 pub fn compute_keyed_hmac(key: Vec<u8>, data: &[u8]) -> Vec<u8> {
-    let mut mac = HmacSha256::new_varkey(&key).expect("HMAC can take key of any size");
+    let mut mac = HmacSha256::new_varkey(&key).expect("HMAC should be able to take key of any size");
     mac.input(&data);
     mac.result().code().to_vec()
 }
@@ -86,10 +85,12 @@ mod generating_pseudorandom_bytes {
 #[cfg(test)]
 mod secret_generation {
     use super::*;
+    use rand_core::OsRng;
 
     #[test]
     fn it_returns_a_32_byte_scalar() {
-        let secret = generate_secret();
+        let mut rng = OsRng;
+        let secret = generate_secret(&mut rng);
         assert_eq!(32, secret.to_bytes().len());
     }
 }
@@ -97,10 +98,12 @@ mod secret_generation {
 #[cfg(test)]
 mod generating_a_random_curve_point {
     use super::*;
+    use rand_core::OsRng;
 
     #[test]
     fn it_returns_a_32_byte_montgomery_point() {
-        let secret = generate_random_curve_point();
+        let mut rng = OsRng;
+        let secret = generate_random_curve_point(&mut rng);
         assert_eq!(32, secret.to_bytes().len())
     }
 }

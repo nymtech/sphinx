@@ -83,9 +83,9 @@ impl Filler {
 
 #[cfg(test)]
 mod test_creating_pseudorandom_bytes {
-    use crate::header::keys;
-
     use super::*;
+    use crate::header::keys;
+    use rand_core::OsRng;
 
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
@@ -97,7 +97,8 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_3_times_security_parameter() {
-        let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point()];
+        let mut rng = OsRng;
+        let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point(&mut rng)];
         let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::RoutingKeys::derive(key))
@@ -109,10 +110,11 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_3_key_it_generates_filler_of_length_3_times_3_times_security_parameter() {
+        let mut rng = OsRng;
         let shared_keys: Vec<crypto::SharedKey> = vec![
-            crypto::generate_random_curve_point(),
-            crypto::generate_random_curve_point(),
-            crypto::generate_random_curve_point(),
+            crypto::generate_random_curve_point(&mut rng),
+            crypto::generate_random_curve_point(&mut rng),
+            crypto::generate_random_curve_point(&mut rng),
         ];
         let routing_keys: Vec<_> = shared_keys
             .iter()
@@ -125,9 +127,10 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     #[should_panic]
     fn panics_with_more_keys_than_the_maximum_path_length() {
+        let mut rng = OsRng;
         let shared_keys: Vec<crypto::SharedKey> = std::iter::repeat(())
             .take(constants::MAX_PATH_LENGTH + 1)
-            .map(|_| crypto::generate_random_curve_point())
+            .map(|_| crypto::generate_random_curve_point(&mut rng))
             .collect();
         let routing_keys: Vec<_> = shared_keys
             .iter()

@@ -12,15 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use curve25519_dalek::scalar::Scalar;
-
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER};
 use crate::error::ErrorKind;
+pub use crate::error::{Error, Result};
 use crate::header::delays::Delay;
 use crate::header::{ProcessedHeader, SphinxHeader, HEADER_SIZE};
 use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::surb::SURB;
+use curve25519_dalek::scalar::Scalar;
+use rand_core::{CryptoRng, RngCore};
 
 pub mod constants;
 pub mod crypto;
@@ -32,11 +33,10 @@ pub mod surb;
 mod utils;
 
 pub const PACKET_SIZE: usize = HEADER_SIZE + PAYLOAD_SIZE;
+const DEFAULT_RNG: rand_core::OsRng = rand_core::OsRng;
 
 // cleaned-up modules + imports here:
 pub mod error;
-
-pub use crate::error::{Error, Result};
 
 pub enum ProcessedPacket {
     // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
@@ -65,14 +65,32 @@ impl SphinxPacket {
         delays: &[Delay],
         surb_material: Option<SURBMaterial>,
     ) -> Result<SphinxPacket> {
-        let initial_secret = crypto::generate_secret();
+        Self::new_with_rng(
+            &mut DEFAULT_RNG,
+            message,
+            route,
+            destination,
+            delays,
+            surb_material,
+        )
+    }
+
+    pub fn new_with_rng<R: RngCore + CryptoRng>(
+        mut rng: R,
+        message: Vec<u8>,
+        route: &[Node],
+        destination: &Destination,
+        delays: &[Delay],
+        surb_material: Option<SURBMaterial>,
+    ) -> Result<SphinxPacket> {
+        let initial_secret = crypto::generate_secret(&mut rng);
         let (header, payload_keys) =
             header::SphinxHeader::new(initial_secret, route, delays, destination);
 
         let mut plaintext = message.clone();
 
         if let Some(surb_material) = surb_material {
-            let surb_initial_secret = crypto::generate_secret();
+            let surb_initial_secret = crypto::generate_secret(&mut rng);
             let surb = SURB::new(
                 surb_initial_secret,
                 &surb_material.surb_route,

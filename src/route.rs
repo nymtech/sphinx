@@ -157,9 +157,11 @@ pub fn surb_identifier_fixture() -> SURBIdentifier {
 }
 
 pub fn random_node() -> Node {
+    let mut rng = rand_core::OsRng;
+
     Node {
         address: NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
-        pub_key: crypto::generate_random_curve_point(),
+        pub_key: crypto::generate_random_curve_point(&mut rng),
     }
 }
 

@@ -100,12 +100,14 @@ mod prepare_and_use_process_surb {
     use crate::header::{delays, HEADER_SIZE};
     use crate::route::destination_fixture;
     use std::time::Duration;
+    use rand_core::OsRng;
 
     #[test]
     fn returns_error_if_surb_route_empty() {
+        let mut rng = OsRng;
         let surb_route = [];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = crypto::generate_secret(&mut rng);
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
         let expected = ErrorKind::InvalidSURB;
@@ -123,17 +125,19 @@ mod prepare_and_use_process_surb {
 
     #[test]
     fn surb_header_has_correct_length() {
-        let (_, node1_pk) = crypto::keygen();
+        let mut rng = OsRng;
+
+        let (_, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -141,7 +145,7 @@ mod prepare_and_use_process_surb {
 
         let surb_route = [node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = crypto::generate_secret(&mut rng);
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 
@@ -158,17 +162,19 @@ mod prepare_and_use_process_surb {
 
     #[test]
     fn to_bytes_returns_correct_value() {
-        let (_, node1_pk) = crypto::keygen();
+        let mut rng = OsRng;
+
+        let (_, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -176,7 +182,7 @@ mod prepare_and_use_process_surb {
 
         let surb_route = [node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = crypto::generate_secret(&mut rng);
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 
@@ -202,17 +208,19 @@ mod prepare_and_use_process_surb {
 
     #[test]
     fn returns_error_is_payload_too_large() {
-        let (_, node1_pk) = crypto::keygen();
+        let mut rng = OsRng;
+
+        let (_, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -220,7 +228,7 @@ mod prepare_and_use_process_surb {
 
         let surb_route = [node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = crypto::generate_secret(&mut rng);
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 

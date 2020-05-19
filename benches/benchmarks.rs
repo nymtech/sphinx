@@ -35,17 +35,18 @@ mod tests {
     // two of those can be run concurrently to perform credential verification
     #[bench]
     fn bench_new_no_surb(b: &mut Bencher) {
-        let (_, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+        let (_, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -60,23 +61,31 @@ mod tests {
 
         let message = vec![13u8, 16];
         b.iter(|| {
-            SphinxPacket::new(message.clone(), &route, &destination, &delays, None).unwrap();
+            SphinxPacket::new(
+                message.clone(),
+                &route,
+                &destination,
+                &delays,
+                None,
+            )
+            .unwrap();
         })
     }
 
     #[bench]
     fn bench_unwrap(b: &mut Bencher) {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+        let (node1_sk, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -90,8 +99,14 @@ mod tests {
         );
 
         let message = vec![13u8, 16];
-        let packet =
-            SphinxPacket::new(message.clone(), &route, &destination, &delays, None).unwrap();
+        let packet = SphinxPacket::new(
+            message.clone(),
+            &route,
+            &destination,
+            &delays,
+            None,
+        )
+        .unwrap();
         b.iter(|| {
             packet.clone().process(node1_sk).unwrap();
         })

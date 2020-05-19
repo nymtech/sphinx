@@ -34,17 +34,18 @@ mod create_and_process_sphinx_packet {
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes_without_surb() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+        let (node1_sk, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -120,32 +121,34 @@ mod create_and_process_sphinx_packet {
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes_with_surb() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+
+        let (node1_sk, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
         );
-        let (_, node4_pk) = crypto::keygen();
+        let (_, node4_pk) = crypto::keygen(&mut rng);
         let node4 = Node::new(
             NodeAddressBytes::from_bytes([11u8; NODE_ADDRESS_LENGTH]),
             node4_pk,
         );
-        let (_, node5_pk) = crypto::keygen();
+        let (_, node5_pk) = crypto::keygen(&mut rng);
         let node5 = Node::new(
             NodeAddressBytes::from_bytes([12u8; NODE_ADDRESS_LENGTH]),
             node5_pk,
         );
-        let (_, node6_pk) = crypto::keygen();
+        let (_, node6_pk) = crypto::keygen(&mut rng);
         let node6 = Node::new(
             NodeAddressBytes::from_bytes([13u8; NODE_ADDRESS_LENGTH]),
             node6_pk,
@@ -222,17 +225,19 @@ mod converting_sphinx_packet_to_and_from_bytes {
 
     #[test]
     fn it_is_possible_to_do_the_conversion_without_data_loss() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+
+        let (node1_sk, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -314,17 +319,19 @@ mod converting_sphinx_packet_to_and_from_bytes {
     #[test]
     #[should_panic]
     fn it_panics_if_data_of_invalid_length_is_provided() {
-        let (_, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+
+        let (_, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -339,10 +346,17 @@ mod converting_sphinx_packet_to_and_from_bytes {
         );
 
         let message = vec![13u8, 16];
-        let sphinx_packet =
-            match SphinxPacket::new(message, &route, &destination, &delays, None).unwrap() {
-                SphinxPacket { header, payload } => SphinxPacket { header, payload },
-            };
+        let sphinx_packet = match SphinxPacket::new(
+            message,
+            &route,
+            &destination,
+            &delays,
+            None,
+        )
+        .unwrap()
+        {
+            SphinxPacket { header, payload } => SphinxPacket { header, payload },
+        };
 
         let sphinx_packet_bytes = &sphinx_packet.to_bytes()[..300];
         SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
@@ -359,17 +373,19 @@ mod create_and_process_surb {
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let mut rng = rand_core::OsRng;
+
+        let (node1_sk, node1_pk) = crypto::keygen(&mut rng);
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = crypto::keygen(&mut rng);
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = crypto::keygen(&mut rng);
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -377,7 +393,7 @@ mod create_and_process_surb {
 
         let surb_route = [node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = crypto::generate_secret(&mut rng);
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 
