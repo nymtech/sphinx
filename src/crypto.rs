@@ -21,15 +21,20 @@ use hmac::{Hmac, Mac};
 use rand_core::OsRng;
 use sha2::Sha256;
 
-type HmacSha256 = Hmac<Sha256>;
-
 pub const CURVE_GENERATOR: MontgomeryPoint = curve25519_dalek::constants::X25519_BASEPOINT;
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 
+type HmacSha256 = Hmac<Sha256>;
+
+pub type SecretKey = Scalar;
 pub type PublicKey = MontgomeryPoint;
 pub type SharedSecret = MontgomeryPoint;
 pub type SharedKey = MontgomeryPoint;
+
+pub fn public_key_from_bytes(bytes: [u8; 32]) -> PublicKey {
+    MontgomeryPoint(bytes)
+}
 
 pub fn generate_secret() -> Scalar {
     let mut rng = OsRng;
@@ -40,7 +45,7 @@ pub fn generate_random_curve_point() -> MontgomeryPoint {
     CURVE_GENERATOR * generate_secret()
 }
 
-pub fn keygen() -> (Scalar, MontgomeryPoint) {
+pub fn keygen() -> (SecretKey, PublicKey) {
     let secret_key = generate_secret();
     let public_key = CURVE_GENERATOR * secret_key;
     (secret_key, public_key)

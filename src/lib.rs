@@ -15,7 +15,6 @@
 pub mod constants;
 pub mod crypto;
 pub mod header;
-pub mod key;
 pub mod packet;
 pub mod payload;
 pub mod route;
