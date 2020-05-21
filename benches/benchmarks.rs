@@ -60,7 +60,7 @@ mod tests {
 
         let message = vec![13u8, 16];
         b.iter(|| {
-            SphinxPacket::new(message.clone(), &route, &destination, &delays, None).unwrap();
+            SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
         })
     }
 
@@ -91,7 +91,7 @@ mod tests {
 
         let message = vec![13u8, 16];
         let packet =
-            SphinxPacket::new(message.clone(), &route, &destination, &delays, None).unwrap();
+            SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
         b.iter(|| {
             packet.clone().process(node1_sk).unwrap();
         })

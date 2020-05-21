@@ -278,11 +278,10 @@ mod encapsulating_all_routing_information {
 
 #[cfg(test)]
 mod encapsulating_forward_routing_information {
+    use super::*;
     use crate::header::filler::filler_fixture;
     use crate::header::keys::routing_keys_fixture;
     use crate::route::{destination_fixture, random_node};
-
-    use super::*;
 
     #[test]
     fn it_correctly_generates_sphinx_routing_information_for_route_of_length_3() {

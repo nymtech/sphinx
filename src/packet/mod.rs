@@ -1,16 +1,14 @@
 use crate::{
-    constants::{DESTINATION_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
-    crypto,
     header::{self, delays::Delay, HEADER_SIZE},
-    payload::Payload,
+    payload::{Payload, PAYLOAD_OVERHEAD_SIZE},
     route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier},
-    surb::{SURBMaterial, SURB},
     Error, ErrorKind, Result,
 };
+use builder::SphinxPacketBuilder;
 use curve25519_dalek::scalar::Scalar;
 use header::{ProcessedHeader, SphinxHeader};
 
-pub const PACKET_SIZE: usize = HEADER_SIZE + PAYLOAD_SIZE;
+pub mod builder;
 
 pub enum ProcessedPacket {
     // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
@@ -26,45 +24,14 @@ pub struct SphinxPacket {
 }
 
 impl SphinxPacket {
+    // `new` works as before and does not care about changes made; it uses default values everywhere
     pub fn new(
         message: Vec<u8>,
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
-        surb_material: Option<SURBMaterial>,
     ) -> Result<SphinxPacket> {
-        let initial_secret = crypto::generate_secret();
-        let (header, payload_keys) =
-            header::SphinxHeader::new(initial_secret, route, delays, destination);
-
-        let mut plaintext = message.clone();
-
-        if let Some(surb_material) = surb_material {
-            let surb_initial_secret = crypto::generate_secret();
-            let surb = SURB::new(
-                surb_initial_secret,
-                &surb_material.surb_route,
-                &surb_material.surb_delays,
-                &surb_material.surb_destination,
-            )?;
-
-            plaintext = surb
-                .to_bytes()
-                .iter()
-                .cloned()
-                .chain(message.iter().cloned())
-                .collect();
-        }
-
-        if plaintext.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER {
-            return Err(Error::new(
-                ErrorKind::InvalidPayload,
-                "too long plaintext message provided",
-            ));
-        }
-        let payload =
-            Payload::encapsulate_message(&plaintext, &payload_keys, destination.address.clone())?;
-        Ok(SphinxPacket { header, payload })
+        SphinxPacketBuilder::default().build_packet(message, route, destination, delays)
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
@@ -109,13 +76,15 @@ impl SphinxPacket {
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
-        if bytes.len() != PACKET_SIZE {
+        // with payloads being dynamic in size, the only thing we can do
+        // is to check if it at least is longer than the minimum length
+        if bytes.len() < HEADER_SIZE + PAYLOAD_OVERHEAD_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidPacket,
                 format!(
-                    "tried to recover sphinx packet using {} bytes, expected {}",
+                    "tried to recover sphinx packet using {} bytes, expected at least {}",
                     bytes.len(),
-                    PACKET_SIZE
+                    HEADER_SIZE + PAYLOAD_OVERHEAD_SIZE
                 ),
             ));
         }
@@ -140,16 +109,6 @@ mod test_building_packet_from_bytes {
         match SphinxPacket::from_bytes(&bytes) {
             Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when packet bytes too short"),
-        };
-    }
-
-    #[test]
-    fn from_bytes_panics_if_bytes_are_too_long() {
-        let bytes = [0u8; 6666];
-        let expected = ErrorKind::InvalidPacket;
-        match SphinxPacket::from_bytes(&bytes) {
-            Err(err) => assert_eq!(expected, err.kind()),
-            _ => panic!("Should have returned an error when packet bytes too long"),
         };
     }
 }

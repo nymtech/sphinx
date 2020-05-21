@@ -61,6 +61,8 @@ pub fn generate_pseudorandom_bytes(
     data
 }
 
+// FUTURE TODO: THIS IS DONE INCORRECTLY AND INTRODUCES TIMING ATTACKS
+// https://github.com/nymtech/sphinx/issues/61
 pub fn compute_keyed_hmac(key: Vec<u8>, data: &[u8]) -> Vec<u8> {
     let mut mac = HmacSha256::new_varkey(&key).expect("HMAC can take key of any size");
     mac.input(&data);
