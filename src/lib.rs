@@ -26,4 +26,5 @@ mod utils;
 pub mod error;
 
 pub use crate::error::{Error, ErrorKind, Result};
-pub use crate::packet::{ProcessedPacket, SphinxPacket};
+pub use crate::packet::{builder::SphinxPacketBuilder, ProcessedPacket, SphinxPacket};
+pub use crate::surb::{SURBMaterial, SURB};
