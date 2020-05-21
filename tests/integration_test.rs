@@ -29,7 +29,7 @@ const PAYLOAD_SIZE: usize = 1024;
 mod create_and_process_sphinx_packet {
     use super::*;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx::{ProcessedPacket, SURBMaterial};
+    use sphinx::{surb::SURBMaterial, ProcessedPacket};
     use std::time::Duration;
 
     #[test]

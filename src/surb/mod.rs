@@ -8,13 +8,20 @@ use crate::{Error, ErrorKind, Result};
 use curve25519_dalek::scalar::Scalar;
 
 #[derive(Clone)]
+#[allow(non_snake_case)]
 pub struct SURB {
     /* A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
     the address of the first hop in the route of the SURB, and the key material
     used to layer encrypt the payload. */
-    pub SURBHeader: header::SphinxHeader,
+    pub SURB_header: header::SphinxHeader,
     pub first_hop_address: NodeAddressBytes,
     pub payload_keys: Vec<PayloadKey>,
+}
+
+pub struct SURBMaterial {
+    pub surb_route: Vec<Node>,
+    pub surb_delays: Vec<Delay>,
+    pub surb_destination: Destination,
 }
 
 impl SURB {
@@ -47,9 +54,9 @@ impl SURB {
         );
 
         Ok(SURB {
-            SURBHeader: header,
+            SURB_header: header,
             first_hop_address: first_hop.address.clone(),
-            payload_keys: payload_keys,
+            payload_keys,
         })
     }
 
@@ -62,7 +69,7 @@ impl SURB {
         using the precomputed payload key material and returns the full Sphinx packet
         together with the address of first hop to which it should be forwarded. */
 
-        let header = self.SURBHeader;
+        let header = self.SURB_header;
 
         if plaintext_message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER
         {
@@ -82,7 +89,7 @@ impl SURB {
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
-        self.SURBHeader
+        self.SURB_header
             .to_bytes()
             .iter()
             .cloned()
@@ -153,7 +160,7 @@ mod prepare_and_use_process_surb {
         )
         .unwrap();
 
-        assert_eq!(pre_surb.SURBHeader.to_bytes().len(), HEADER_SIZE);
+        assert_eq!(pre_surb.SURB_header.to_bytes().len(), HEADER_SIZE);
     }
 
     #[test]
@@ -190,7 +197,7 @@ mod prepare_and_use_process_surb {
 
         let pre_surb_bytes = pre_surb.to_bytes();
         let expected = [
-            pre_surb.SURBHeader.to_bytes(),
+            pre_surb.SURB_header.to_bytes(),
             [5u8; NODE_ADDRESS_LENGTH].to_vec(),
             pre_surb.payload_keys[0].to_vec(),
             pre_surb.payload_keys[1].to_vec(),
