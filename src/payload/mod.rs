@@ -118,14 +118,11 @@ impl Payload {
         }
     }
 
-    pub fn unwrap(self, payload_key: &PayloadKey) -> Self {
-        let mut payload_content = self.content;
+    pub fn unwrap(mut self, payload_key: &PayloadKey) -> Self {
         let lioness_cipher =
             Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_key, 0, RAW_KEY_SIZE));
-        lioness_cipher.decrypt(&mut payload_content).unwrap();
-        Payload {
-            content: payload_content,
-        }
+        lioness_cipher.decrypt(&mut self.content).unwrap();
+        self
     }
 
     pub fn try_recover_destination_and_plaintext(
