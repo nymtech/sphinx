@@ -130,7 +130,7 @@ impl Payload {
 
     pub fn try_recover_destination_and_plaintext(
         self,
-    ) -> Option<(DestinationAddressBytes, Vec<u8>)> {
+    ) -> Result<(DestinationAddressBytes, Vec<u8>)> {
         // assuming our payload is fully decrypted it has the structure of:
         // 00000.... (SECURITY_PARAMETER length)
         // ADDRESS (DESTINATION_ADDRESS_LENGTH length)
@@ -154,11 +154,11 @@ impl Payload {
         if let Some(i) = padded_plaintext.iter().rposition(|b| *b == 1) {
             // and now we only take bytes until that point (but not including it)
             let plaintext = padded_plaintext.iter().cloned().take(i).collect();
-            return Some((destination_address, plaintext));
+            return Ok((destination_address, plaintext));
         }
 
         // our plaintext is invalid
-        None
+        Err(Error::new(ErrorKind::InvalidPayload, "malformed payload"))
     }
 
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
@@ -405,6 +405,8 @@ mod plaintext_recovery {
         let zero_payload = Payload {
             content: vec![0u8; PAYLOAD_SIZE],
         };
-        assert_eq!(None, zero_payload.try_recover_destination_and_plaintext());
+        assert!(zero_payload
+            .try_recover_destination_and_plaintext()
+            .is_err());
     }
 }
