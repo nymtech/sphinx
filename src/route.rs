@@ -53,6 +53,20 @@ impl DestinationAddressBytes {
         DestinationAddressBytes(b)
     }
 
+    pub fn try_from_byte_slice(b: &[u8]) -> Result<Self> {
+        if b.len() != DESTINATION_ADDRESS_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                "received bytes got invalid length",
+            ));
+        }
+
+        let mut address_bytes = [0; DESTINATION_ADDRESS_LENGTH];
+        address_bytes.copy_from_slice(&b[..]);
+
+        Ok(DestinationAddressBytes(address_bytes))
+    }
+
     /// View this `DestinationAddressBytes` as an array of bytes.
     pub fn as_bytes(&self) -> &[u8; DESTINATION_ADDRESS_LENGTH] {
         &self.0
@@ -93,6 +107,20 @@ impl NodeAddressBytes {
 
         let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
         address_bytes.copy_from_slice(&decoded[..]);
+
+        Ok(NodeAddressBytes(address_bytes))
+    }
+
+    pub fn try_from_byte_slice(b: &[u8]) -> Result<Self> {
+        if b.len() != NODE_ADDRESS_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                "received bytes got invalid length",
+            ));
+        }
+
+        let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
+        address_bytes.copy_from_slice(&b[..]);
 
         Ok(NodeAddressBytes(address_bytes))
     }

@@ -39,5 +39,3 @@ pub const FLAG_LENGTH: usize = 1;
 pub const PAYLOAD_SIZE: usize = 1024;
 pub const VERSION_LENGTH: usize = 3; // since version is represented as 3 u8 values: major, minor and patch
                                      // we need the single byte to detect padding length
-pub const MAXIMUM_PLAINTEXT_LENGTH: usize =
-    PAYLOAD_SIZE - SECURITY_PARAMETER - DESTINATION_ADDRESS_LENGTH - 1;
