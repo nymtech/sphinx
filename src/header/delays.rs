@@ -15,8 +15,10 @@
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
 use rand_distr::{Distribution, Exp};
-use std::time::Duration;
+use std::{borrow::Borrow, time::Duration};
 
+// TODO: once we get to proper refactoring, I think this should just be
+// a type alias to probably time::Duration
 #[derive(Debug, Clone, PartialEq)]
 pub struct Delay(u64);
 
@@ -42,6 +44,38 @@ impl Delay {
 
     pub fn from_bytes(delay_bytes: [u8; DELAY_LENGTH]) -> Self {
         Delay(BigEndian::read_u64(&delay_bytes))
+    }
+}
+
+impl<T> std::iter::Sum<T> for Delay
+where
+    T: Borrow<Delay>,
+{
+    fn sum<I>(iter: I) -> Self
+    where
+        I: Iterator<Item = T>,
+    {
+        iter.fold(Delay(0), |acc, item| acc + item)
+    }
+}
+
+impl<T> std::ops::Add<T> for &Delay
+where
+    T: Borrow<Delay>,
+{
+    type Output = Delay;
+    fn add(self, rhs: T) -> Self::Output {
+        Delay(self.0 + rhs.borrow().0)
+    }
+}
+
+impl<T> std::ops::Add<T> for Delay
+where
+    T: Borrow<Delay>,
+{
+    type Output = Delay;
+    fn add(self, rhs: T) -> Self::Output {
+        &self + rhs
     }
 }
 
@@ -110,5 +144,32 @@ mod test_delay_generation {
         let delay = Delay::new_from_nanos(expected_delay_nanos);
         let delay_duration = delay.to_duration();
         assert_eq!(Duration::from_nanos(expected_delay_nanos), delay_duration);
+    }
+}
+
+#[cfg(test)]
+mod delay_summing {
+    use super::*;
+
+    #[test]
+    fn works_with_std_ops_only() {
+        let delay1 = Delay(42);
+        let delay2 = Delay(123);
+
+        let expected1 = Delay(165);
+        assert_eq!(expected1, &delay1 + &delay2);
+
+        let expected2 = Delay(265);
+        let delay3 = Delay(100);
+        assert_eq!(expected2, delay1 + delay2 + delay3)
+    }
+
+    #[test]
+    fn works_with_iterator() {
+        let delays = vec![Delay(42), Delay(123), Delay(100)];
+        let expected = Delay(265);
+
+        assert_eq!(expected, delays.iter().sum());
+        assert_eq!(Delay(0), Vec::new().iter().sum())
     }
 }
