@@ -34,6 +34,11 @@ impl SphinxPacket {
         SphinxPacketBuilder::default().build_packet(message, route, destination, delays)
     }
 
+    pub fn len(&self) -> usize {
+        // header always has constant size
+        HEADER_SIZE + self.payload.len()
+    }
+
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
     pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedPacket> {
         let unwrapped_header = self.header.process(node_secret_key)?;
