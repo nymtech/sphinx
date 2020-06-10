@@ -79,6 +79,19 @@ where
     }
 }
 
+impl std::ops::Mul<f64> for Delay {
+    type Output = Delay;
+    fn mul(self, rhs: f64) -> Self::Output {
+        // TODO: the question whether it's safe-ish to do it?
+        // Because for high enough delay (not sure about how "high"),
+        // the casting will not be lossless.
+        // Perhaps it's not a problem as we don't expect delays to realistically
+        // be more than minutes/hours and definitely not thousands of thousands
+        // of years.
+        Delay((self.0 as f64 * rhs) as u64)
+    }
+}
+
 // TODO: in both of those methods we are converting u64 to f64 to perform the division
 // surely this is a lossy conversion - how much does it affect us?
 
