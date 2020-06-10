@@ -256,20 +256,6 @@ mod test_encapsulating_final_routing_information {
 
     #[test]
     #[should_panic]
-    fn it_panics_route_of_length_0() {
-        let final_keys = routing_keys_fixture();
-        let route_len = 0;
-        let filler = filler_fixture(route_len - 1);
-        let destination = destination_fixture();
-
-        FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
-            .encrypt(final_keys.stream_cipher_key, route_len)
-            .combine_with_filler(filler, route_len);
-    }
-
-    #[test]
-    #[should_panic]
     fn it_panics_if_it_receives_filler_different_than_filler_step_multiplied_with_i() {
         let final_keys = routing_keys_fixture();
         let route_len = 3;
