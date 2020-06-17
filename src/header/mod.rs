@@ -89,7 +89,7 @@ impl SphinxHeader {
             .parse()
     }
 
-    pub fn process(self, node_secret_key: Scalar) -> Result<ProcessedHeader> {
+    pub fn process(self, node_secret_key: &Scalar) -> Result<ProcessedHeader> {
         let shared_secret = self.shared_secret;
         let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
         let routing_keys = keys::RoutingKeys::derive(shared_key);
@@ -219,7 +219,7 @@ mod create_and_process_sphinx_packet_header {
         let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &delays, &destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
-        let new_header = match sphinx_header.process(node1_sk).unwrap() {
+        let new_header = match sphinx_header.process(&node1_sk).unwrap() {
             ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
@@ -231,7 +231,7 @@ mod create_and_process_sphinx_packet_header {
             _ => panic!(),
         };
 
-        let new_header2 = match new_header.process(node2_sk).unwrap() {
+        let new_header2 = match new_header.process(&node2_sk).unwrap() {
             ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
@@ -242,7 +242,7 @@ mod create_and_process_sphinx_packet_header {
             }
             _ => panic!(),
         };
-        match new_header2.process(node3_sk).unwrap() {
+        match new_header2.process(&node3_sk).unwrap() {
             ProcessedHeader::ProcessedHeaderFinalHop(final_destination, _, _) => {
                 assert_eq!(destination.address, final_destination);
             }
