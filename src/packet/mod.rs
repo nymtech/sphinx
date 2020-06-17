@@ -23,6 +23,7 @@ pub struct SphinxPacket {
     pub payload: Payload,
 }
 
+#[allow(clippy::len_without_is_empty)]
 impl SphinxPacket {
     // `new` works as before and does not care about changes made; it uses default values everywhere
     pub fn new(
