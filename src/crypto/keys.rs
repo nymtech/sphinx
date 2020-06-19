@@ -40,7 +40,7 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
     Scalar::from_bits(scalar_bytes)
 }
 
-// TODO: similarly to what x25519_dalek is going, we should probably
+// TODO: similarly to what x25519_dalek is doing, we should probably
 // derive zeroize::Zeroize on drop here
 pub struct PrivateKey(Scalar);
 
