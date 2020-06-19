@@ -214,9 +214,10 @@ mod building_payload_from_bytes {
 #[cfg(test)]
 mod test_encrypting_final_payload {
     use super::*;
-    use crate::header::keys::routing_keys_fixture;
-    use crate::packet::builder::DEFAULT_PAYLOAD_SIZE;
-    use crate::route::destination_address_fixture;
+    use crate::{
+        packet::builder::DEFAULT_PAYLOAD_SIZE,
+        test_utils::fixtures::{destination_address_fixture, routing_keys_fixture},
+    };
 
     #[test]
     fn it_returns_encrypted_payload_of_expected_payload_size_for_default_payload_size() {
@@ -285,8 +286,9 @@ mod test_encrypting_final_payload {
 mod test_encapsulating_payload {
     use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
-    use crate::packet::builder::DEFAULT_PAYLOAD_SIZE;
-    use crate::route::destination_address_fixture;
+    use crate::{
+        packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_address_fixture,
+    };
 
     #[test]
     fn always_the_payload_is_of_the_same_expected_type() {
@@ -314,8 +316,9 @@ mod test_encapsulating_payload {
 mod test_unwrapping_payload {
     use super::*;
     use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
-    use crate::packet::builder::DEFAULT_PAYLOAD_SIZE;
-    use crate::route::destination_address_fixture;
+    use crate::{
+        packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_address_fixture,
+    };
 
     #[test]
     fn unwrapping_results_in_original_payload_plaintext() {

@@ -13,15 +13,12 @@
 // limitations under the License.
 
 use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_SIZE};
-use crate::header;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::RoutingKeys;
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::destination::FinalRoutingInformation;
-use crate::header::routing::nodes::{
-    encrypted_routing_information_fixture, EncryptedRoutingInformation, RoutingInformation,
-};
+use crate::header::routing::nodes::{EncryptedRoutingInformation, RoutingInformation};
 use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{Error, ErrorKind, Result};
 
@@ -197,11 +194,11 @@ impl EncapsulatedRoutingInformation {
 
 #[cfg(test)]
 mod encapsulating_all_routing_information {
-    use crate::header::filler::filler_fixture;
-    use crate::header::keys::routing_keys_fixture;
-    use crate::route::{destination_fixture, random_node};
-
     use super::*;
+    use crate::test_utils::{
+        fixtures::{destination_fixture, filler_fixture, routing_keys_fixture},
+        random_node,
+    };
 
     #[test]
     #[should_panic]
@@ -279,9 +276,10 @@ mod encapsulating_all_routing_information {
 #[cfg(test)]
 mod encapsulating_forward_routing_information {
     use super::*;
-    use crate::header::filler::filler_fixture;
-    use crate::header::keys::routing_keys_fixture;
-    use crate::route::{destination_fixture, random_node};
+    use crate::test_utils::{
+        fixtures::{destination_fixture, filler_fixture, routing_keys_fixture},
+        random_node,
+    };
 
     #[test]
     fn it_correctly_generates_sphinx_routing_information_for_route_of_length_3() {
@@ -377,7 +375,6 @@ mod encapsulating_forward_routing_information {
         i is destination identifier
         p is destination padding
         */
-
         // TODO: IMPLEMENT SPHINX HEADER LAYER UNWRAPPING
         // HOWEVER! to test it, we need to first wrap function to unwrap header layer because each consecutive (ni, mi) pair is encrypted
     }
@@ -386,6 +383,7 @@ mod encapsulating_forward_routing_information {
 #[cfg(test)]
 mod converting_encapsulated_routing_info_to_bytes {
     use super::*;
+    use crate::test_utils::fixtures::encapsulated_routing_information_fixture;
 
     #[test]
     fn it_is_possible_to_convert_back_and_forth() {
@@ -415,13 +413,5 @@ mod converting_encapsulated_routing_info_to_bytes {
                 .get_value_ref()
                 .to_vec()
         );
-    }
-}
-
-#[allow(dead_code)]
-pub fn encapsulated_routing_information_fixture() -> EncapsulatedRoutingInformation {
-    EncapsulatedRoutingInformation {
-        enc_routing_information: encrypted_routing_information_fixture(),
-        integrity_mac: header::mac::header_integrity_mac_fixture(),
     }
 }

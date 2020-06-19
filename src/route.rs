@@ -160,7 +160,7 @@ impl Destination {
     }
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug)]
 pub struct Node {
     pub address: NodeAddressBytes,
     pub pub_key: crypto::PublicKey,
@@ -169,32 +169,6 @@ pub struct Node {
 impl Node {
     pub fn new(address: NodeAddressBytes, pub_key: crypto::PublicKey) -> Self {
         Self { address, pub_key }
-    }
-}
-
-pub fn destination_address_fixture() -> DestinationAddressBytes {
-    DestinationAddressBytes([0u8; DESTINATION_ADDRESS_LENGTH])
-}
-
-pub fn node_address_fixture() -> NodeAddressBytes {
-    NodeAddressBytes([0u8; NODE_ADDRESS_LENGTH])
-}
-
-pub fn surb_identifier_fixture() -> SURBIdentifier {
-    [0u8; IDENTIFIER_LENGTH]
-}
-
-pub fn random_node() -> Node {
-    Node {
-        address: NodeAddressBytes([2u8; NODE_ADDRESS_LENGTH]),
-        pub_key: crypto::generate_random_curve_point(),
-    }
-}
-
-pub fn destination_fixture() -> Destination {
-    Destination {
-        address: DestinationAddressBytes([3u8; DESTINATION_ADDRESS_LENGTH]),
-        identifier: [4u8; IDENTIFIER_LENGTH],
     }
 }
 

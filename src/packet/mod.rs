@@ -1,11 +1,11 @@
 use crate::{
+    crypto::PrivateKey,
     header::{self, delays::Delay, HEADER_SIZE},
     payload::{Payload, PAYLOAD_OVERHEAD_SIZE},
     route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier},
     Error, ErrorKind, Result,
 };
 use builder::SphinxPacketBuilder;
-use curve25519_dalek::scalar::Scalar;
 use header::{ProcessedHeader, SphinxHeader};
 
 pub mod builder;
@@ -17,7 +17,6 @@ pub enum ProcessedPacket {
     ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
 
-#[derive(Clone)]
 pub struct SphinxPacket {
     pub header: header::SphinxHeader,
     pub payload: Payload,
@@ -41,7 +40,7 @@ impl SphinxPacket {
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
-    pub fn process(self, node_secret_key: &Scalar) -> Result<ProcessedPacket> {
+    pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedPacket> {
         let unwrapped_header = self.header.process(node_secret_key)?;
         match unwrapped_header {
             ProcessedHeader::ProcessedHeaderForwardHop(

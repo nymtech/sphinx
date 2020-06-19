@@ -148,11 +148,14 @@ impl EncryptedPaddedFinalRoutingInformation {
 
 #[cfg(test)]
 mod test_encapsulating_final_routing_information_and_mac {
-    use crate::header::filler::filler_fixture;
-    use crate::header::keys::routing_keys_fixture;
     use crate::header::mac::HeaderIntegrityMac;
-    use crate::header::routing::EncapsulatedRoutingInformation;
-    use crate::route::{destination_fixture, random_node};
+    use crate::{
+        header::routing::EncapsulatedRoutingInformation,
+        test_utils::{
+            fixtures::{destination_fixture, filler_fixture, routing_keys_fixture},
+            random_node,
+        },
+    };
 
     #[test]
     fn it_returns_mac_on_correct_data() {
@@ -185,11 +188,8 @@ mod test_encapsulating_final_routing_information_and_mac {
 
 #[cfg(test)]
 mod test_encapsulating_final_routing_information {
-    use crate::header::filler::filler_fixture;
-    use crate::header::keys::routing_keys_fixture;
-    use crate::route::destination_fixture;
-
     use super::*;
+    use crate::test_utils::fixtures::{destination_fixture, filler_fixture, routing_keys_fixture};
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_and_flag_for_route_of_length_5(

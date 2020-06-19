@@ -19,17 +19,19 @@ use sphinx::header::delays;
 use sphinx::route::{Destination, Node};
 use sphinx::SphinxPacket;
 
-const NODE_ADDRESS_LENGTH: usize = 32;
-const DESTINATION_ADDRESS_LENGTH: usize = 32;
-const IDENTIFIER_LENGTH: usize = 16;
-const SECURITY_PARAMETER: usize = 16;
-const PAYLOAD_SIZE: usize = 1024;
+// const PAYLOAD_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx::ProcessedPacket;
+    use sphinx::{
+        constants::{
+            DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
+            SECURITY_PARAMETER,
+        },
+        ProcessedPacket,
+    };
     use std::time::Duration;
 
     #[test]
@@ -116,7 +118,13 @@ mod create_and_process_sphinx_packet {
 mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx::ProcessedPacket;
+    use sphinx::{
+        constants::{
+            DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
+            SECURITY_PARAMETER,
+        },
+        ProcessedPacket,
+    };
     use std::time::Duration;
 
     #[test]
@@ -244,9 +252,15 @@ mod converting_sphinx_packet_to_and_from_bytes {
 #[cfg(test)]
 mod create_and_process_surb {
     use super::*;
-    use sphinx::route::{destination_fixture, NodeAddressBytes};
+    use crypto::EphemeralSecret;
+    use sphinx::route::NodeAddressBytes;
     use sphinx::surb::{SURBMaterial, SURB};
-    use sphinx::{packet::builder::DEFAULT_PAYLOAD_SIZE, ProcessedPacket};
+    use sphinx::{
+        constants::{NODE_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
+        packet::builder::DEFAULT_PAYLOAD_SIZE,
+        test_utils::fixtures::destination_fixture,
+        ProcessedPacket,
+    };
     use std::time::Duration;
 
     #[test]
@@ -269,7 +283,7 @@ mod create_and_process_surb {
 
         let surb_route = vec![node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = EphemeralSecret::new();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 

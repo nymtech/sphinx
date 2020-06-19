@@ -79,6 +79,10 @@ impl Filler {
     pub fn get_value(self) -> Vec<u8> {
         self.value
     }
+
+    pub(crate) fn from_raw(raw_value: Vec<u8>) -> Self {
+        Filler { value: raw_value }
+    }
 }
 
 #[cfg(test)]
@@ -86,6 +90,7 @@ mod test_creating_pseudorandom_bytes {
     use crate::header::keys;
 
     use super::*;
+    use crypto::{EphemeralSecret, SharedSecret};
 
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
@@ -97,7 +102,7 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_3_times_security_parameter() {
-        let shared_keys: Vec<crypto::SharedKey> = vec![crypto::generate_random_curve_point()];
+        let shared_keys = vec![SharedSecret::from(&EphemeralSecret::new())];
         let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::RoutingKeys::derive(key))
@@ -109,10 +114,10 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_3_key_it_generates_filler_of_length_3_times_3_times_security_parameter() {
-        let shared_keys: Vec<crypto::SharedKey> = vec![
-            crypto::generate_random_curve_point(),
-            crypto::generate_random_curve_point(),
-            crypto::generate_random_curve_point(),
+        let shared_keys = vec![
+            SharedSecret::from(&EphemeralSecret::new()),
+            SharedSecret::from(&EphemeralSecret::new()),
+            SharedSecret::from(&EphemeralSecret::new()),
         ];
         let routing_keys: Vec<_> = shared_keys
             .iter()
@@ -125,9 +130,9 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     #[should_panic]
     fn panics_with_more_keys_than_the_maximum_path_length() {
-        let shared_keys: Vec<crypto::SharedKey> = std::iter::repeat(())
+        let shared_keys: Vec<_> = std::iter::repeat(())
             .take(constants::MAX_PATH_LENGTH + 1)
-            .map(|_| crypto::generate_random_curve_point())
+            .map(|_| SharedSecret::from(&EphemeralSecret::new()))
             .collect();
         let routing_keys: Vec<_> = shared_keys
             .iter()
@@ -139,9 +144,8 @@ mod test_creating_pseudorandom_bytes {
 
 #[cfg(test)]
 mod test_new_filler_bytes {
-    use crate::header::keys::routing_keys_fixture;
-
     use super::*;
+    use crate::test_utils::fixtures::routing_keys_fixture;
 
     #[test]
     fn it_retusn_filler_bytes_of_correct_length_for_3_routing_keys() {
@@ -231,12 +235,5 @@ mod test_generating_filler_bytes {
             let wrong_accumulator = vec![0; 25];
             Filler::filler_step(wrong_accumulator, 1, good_pseudorandom_bytes);
         }
-    }
-}
-
-#[allow(dead_code)]
-pub fn filler_fixture(i: usize) -> Filler {
-    Filler {
-        value: vec![9u8; FILLER_STEP_SIZE_INCREASE * i],
     }
 }

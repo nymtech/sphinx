@@ -254,12 +254,13 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 
 #[cfg(test)]
 mod preparing_header_layer {
-    use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
-    use crate::header::keys::routing_keys_fixture;
-    use crate::header::routing::encapsulated_routing_information_fixture;
-    use crate::route::node_address_fixture;
-
     use super::*;
+    use crate::{
+        constants::HEADER_INTEGRITY_MAC_SIZE,
+        test_utils::fixtures::{
+            encapsulated_routing_information_fixture, node_address_fixture, routing_keys_fixture,
+        },
+    };
 
     #[test]
     fn it_returns_encrypted_truncated_address_and_flag_concatenated_with_inner_layer_and_mac_on_it()
@@ -324,11 +325,11 @@ mod preparing_header_layer {
 
 #[cfg(test)]
 mod encrypting_routing_information {
-    use crate::crypto::STREAM_CIPHER_KEY_SIZE;
-    use crate::header::mac::header_integrity_mac_fixture;
-    use crate::route::node_address_fixture;
-
     use super::*;
+    use crate::{
+        crypto::STREAM_CIPHER_KEY_SIZE,
+        test_utils::fixtures::{header_integrity_mac_fixture, node_address_fixture},
+    };
 
     #[test]
     fn it_is_possible_to_decrypt_it_to_recover_original_data() {
@@ -373,7 +374,7 @@ mod encrypting_routing_information {
 
 #[cfg(test)]
 mod truncating_routing_information {
-    use super::*;
+    use crate::test_utils::fixtures::encrypted_routing_information_fixture;
 
     #[test]
     fn it_does_not_change_prefixed_data() {
@@ -389,11 +390,11 @@ mod truncating_routing_information {
 
 #[cfg(test)]
 mod parse_decrypted_routing_information {
-    use crate::header::mac::header_integrity_mac_fixture;
-    use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
-    use crate::route::node_address_fixture;
-
     use super::*;
+    use crate::{
+        header::routing::ENCRYPTED_ROUTING_INFO_SIZE,
+        test_utils::fixtures::{header_integrity_mac_fixture, node_address_fixture},
+    };
 
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
@@ -437,12 +438,5 @@ mod parse_decrypted_routing_information {
             }
             ParsedRawRoutingInformation::FinalHopRoutingInformation(_, _) => panic!(),
         }
-    }
-}
-
-#[allow(dead_code)]
-pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
-    EncryptedRoutingInformation {
-        value: [5u8; ENCRYPTED_ROUTING_INFO_SIZE],
     }
 }

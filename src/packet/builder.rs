@@ -1,5 +1,5 @@
 use crate::{
-    crypto,
+    crypto::EphemeralSecret,
     header::{delays::Delay, SphinxHeader},
     payload::Payload,
     route::{Destination, Node},
@@ -31,7 +31,7 @@ impl SphinxPacketBuilder {
         destination: &Destination,
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
-        let initial_secret = crypto::generate_secret();
+        let initial_secret = EphemeralSecret::new();
         let (header, payload_keys) = SphinxHeader::new(initial_secret, route, delays, destination);
 
         // no need to check for if plaintext has correct length as this check is already performed in payload encapsulation

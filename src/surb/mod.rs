@@ -6,12 +6,10 @@ use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
 use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::{crypto, Error, ErrorKind, Result};
+use crate::{crypto::EphemeralSecret, Error, ErrorKind, Result};
 use crate::{header, SphinxPacket};
-use curve25519_dalek::scalar::Scalar;
 use header::{SphinxHeader, HEADER_SIZE};
 
-#[derive(Clone)]
 #[allow(non_snake_case)]
 pub struct SURB {
     /* A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
@@ -39,14 +37,14 @@ impl SURBMaterial {
 
     #[allow(non_snake_case)]
     pub fn construct_SURB(self) -> Result<SURB> {
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = EphemeralSecret::new();
         SURB::new(surb_initial_secret, self)
     }
 }
 
 #[allow(non_snake_case)]
 impl SURB {
-    pub fn new(surb_initial_secret: Scalar, surb_material: SURBMaterial) -> Result<Self> {
+    pub fn new(surb_initial_secret: EphemeralSecret, surb_material: SURBMaterial) -> Result<Self> {
         let surb_route = surb_material.surb_route;
         let surb_delays = surb_material.surb_delays;
         let surb_destination = surb_material.surb_destination;
@@ -170,7 +168,7 @@ mod prepare_and_use_process_surb {
     use crate::constants::NODE_ADDRESS_LENGTH;
     use crate::crypto;
     use crate::header::{delays, HEADER_SIZE};
-    use crate::{packet::builder::DEFAULT_PAYLOAD_SIZE, route::destination_fixture};
+    use crate::{packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_fixture};
     use std::time::Duration;
 
     #[allow(non_snake_case)]
@@ -193,7 +191,7 @@ mod prepare_and_use_process_surb {
 
         let surb_route = vec![node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = EphemeralSecret::new();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 
@@ -208,7 +206,7 @@ mod prepare_and_use_process_surb {
     fn returns_error_if_surb_route_empty() {
         let surb_route = Vec::new();
         let surb_destination = destination_fixture();
-        let surb_initial_secret = crypto::generate_secret();
+        let surb_initial_secret = EphemeralSecret::new();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
         let expected = ErrorKind::InvalidSURB;
