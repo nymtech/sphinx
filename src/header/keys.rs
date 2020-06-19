@@ -14,17 +14,17 @@
 
 use std::fmt;
 
-use curve25519_dalek::scalar::Scalar;
-use hkdf::Hkdf;
-use sha2::Sha256;
-
 use crate::constants::{
     BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
     ROUTING_KEYS_LENGTH,
 };
-use crate::crypto;
-use crate::crypto::{compute_keyed_hmac, CURVE_GENERATOR, STREAM_CIPHER_KEY_SIZE};
+use crate::crypto::STREAM_CIPHER_KEY_SIZE;
+use crate::crypto::{self, EphemeralSecret};
 use crate::route::Node;
+use crypto::SharedSecret;
+use curve25519_dalek::scalar::Scalar;
+use hkdf::Hkdf;
+use sha2::Sha256;
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -45,8 +45,8 @@ impl RoutingKeys {
     // or should this be renamed to 'new'?
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
-    pub fn derive(shared_key: crypto::SharedKey) -> Self {
-        let hkdf = Hkdf::<Sha256>::new(None, &shared_key.to_bytes());
+    pub fn derive(shared_key: crypto::SharedSecret) -> Self {
+        let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
 
         let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
@@ -64,6 +64,9 @@ impl RoutingKeys {
         payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
         i += PAYLOAD_KEY_SIZE;
 
+        // TODO: we later treat blinding factor as a Scalar, the question is, should it be clamped
+        // and/or go through montgomery reduction? We kinda need somebody with good ECC knowledge
+        // to answer this question (and other related ones).
         let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
         blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
 
@@ -104,88 +107,51 @@ pub struct KeyMaterial {
 
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
-    pub fn derive(route: &[Node], initial_secret: Scalar) -> Self {
-        let initial_shared_secret = CURVE_GENERATOR * initial_secret;
+    pub fn derive(route: &[Node], initial_secret: EphemeralSecret) -> Self {
+        let initial_shared_secret = SharedSecret::from(&initial_secret);
+        let mut routing_keys = Vec::with_capacity(route.len());
 
-        let routing_keys = route
-            .iter()
-            .scan(initial_secret, |accumulator, node| {
-                let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
-                let routing_keys = RoutingKeys::derive(shared_key);
+        let mut accumulator = initial_secret;
+        for (i, node) in route.iter().enumerate() {
+            // pub^{a * b * ...}
+            let shared_key = accumulator.diffie_hellman(&node.pub_key);
+            // let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
+            let node_routing_keys = RoutingKeys::derive(shared_key);
 
-                // TODO: if we're on last iteration, do NOT compute_blinding_factor (no need for it)
-                *accumulator *= Scalar::from_bytes_mod_order(routing_keys.blinding_factor);
-                Some(routing_keys)
-            })
-            .collect();
+            // it's not the last iteration
+            if i != route.len() + 1 {
+                // TODO: do we need to make the reduction here or could we get away with clamping or even nothing at all?
+                // considering (I *think*) proper reductions will happen during scalar multiplication, i.e. g^x?
+                // So far it *seems* to produce correct result, but could it be the case it introduces
+                // some vulnerabilities? Need some ECC expert here.
+
+                // performs montgomery reduction
+                let blinding_factor_scalar =
+                    Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor);
+                // alternatives:
+
+                // 'only' clamps the scalar
+                // let blinding_factor_scalar = crypto::clamp_scalar_bytes(node_routing_keys.blinding_factor);
+
+                // 'only' makes it 255 bit long
+                // let blinding_factor_scalar = Scalar::from_bits(node_routing_keys.blinding_factor);
+                accumulator = &accumulator * &blinding_factor_scalar;
+            }
+
+            routing_keys.push(node_routing_keys);
+        }
 
         Self {
             routing_keys,
             initial_shared_secret,
         }
     }
-
-    #[allow(dead_code)]
-    fn compute_blinding_factor(shared_key: crypto::SharedKey, exponent: &Scalar) -> Scalar {
-        let shared_secret = CURVE_GENERATOR * exponent;
-        let hmac_full = compute_keyed_hmac(
-            shared_secret.to_bytes().to_vec(),
-            &shared_key.to_bytes().to_vec(),
-        );
-        let mut hmac = [0u8; 32];
-        hmac.copy_from_slice(&hmac_full[..32]);
-        Scalar::from_bytes_mod_order(hmac)
-    }
-
-    pub fn compute_shared_key(base: crypto::PublicKey, exponent: &Scalar) -> crypto::SharedKey {
-        base * exponent
-    }
 }
 
-#[cfg(test)]
-mod computing_shared_key {
-    use super::*;
-
-    #[test]
-    fn it_returns_g_to_power_x() {
-        let g = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
-        let x = Scalar::from_bytes_mod_order([42u8; 32]);
-
-        assert_eq!(g * x, KeyMaterial::compute_shared_key(g, &x));
-    }
-}
-
-#[cfg(test)]
-mod computing_blinding_factor {
-    use super::*;
-
-    #[test]
-    fn it_returns_hash_of_g_to_the_power_x_with_y() {
-        //        returns expected H(g^x, y) for predefined x and y, where
-        //            H is an HMAC function,
-        //            g is the curve generator
-        //            x is a scalar
-        //            y is a shared key (g^z), where z is a scalar
-        let x = Scalar::from_bytes_mod_order([42u8; 32]);
-        let y = CURVE_GENERATOR * Scalar::from_bytes_mod_order([16u8; 32]);
-
-        // given the above exponent and shared key, we should see:
-        let expected_blinding_factor = Scalar::from_bytes_mod_order([
-            65, 236, 88, 7, 186, 168, 172, 170, 90, 46, 49, 164, 225, 73, 145, 77, 181, 151, 37,
-            178, 37, 181, 248, 165, 180, 75, 103, 133, 191, 146, 10, 8,
-        ]);
-
-        let blinding_factor = KeyMaterial::compute_blinding_factor(y, &x);
-        assert_eq!(expected_blinding_factor, blinding_factor)
-    }
-}
-
-//
 #[cfg(test)]
 mod deriving_key_material {
-    use crate::route::Node;
-
     use super::*;
+    use crate::route::Node;
 
     #[cfg(test)]
     mod with_an_empty_route {
@@ -194,27 +160,28 @@ mod deriving_key_material {
         #[test]
         fn it_returns_no_routing_keys() {
             let empty_route: Vec<Node> = vec![];
-            let initial_secret = crypto::generate_secret();
+            let initial_secret = EphemeralSecret::new();
+            let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
             let key_material = KeyMaterial::derive(&empty_route, initial_secret);
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
-                CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
+                SharedSecret::from(&hacky_secret_copy).as_bytes(),
+                key_material.initial_shared_secret.as_bytes()
             )
         }
     }
 
     #[cfg(test)]
     mod for_a_route_with_3_forward_hops {
-        use crate::route::random_node;
-
         use super::*;
+        use crate::test_utils::random_node;
 
-        fn setup() -> (Vec<Node>, Scalar, KeyMaterial) {
+        fn setup() -> (Vec<Node>, EphemeralSecret, KeyMaterial) {
             let route: Vec<Node> = vec![random_node(), random_node(), random_node()];
-            let initial_secret = crypto::generate_secret();
+            let initial_secret = EphemeralSecret::new();
+            let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
             let key_material = KeyMaterial::derive(&route, initial_secret);
-            (route, initial_secret, key_material)
+            (route, hacky_secret_copy, key_material)
         }
 
         #[test]
@@ -227,8 +194,8 @@ mod deriving_key_material {
         fn it_returns_correctly_inited_shared_secret() {
             let (_, initial_secret, key_material) = setup();
             assert_eq!(
-                CURVE_GENERATOR * initial_secret,
-                key_material.initial_shared_secret
+                SharedSecret::from(&initial_secret).as_bytes(),
+                key_material.initial_shared_secret.as_bytes()
             );
         }
 
@@ -241,12 +208,12 @@ mod deriving_key_material {
             // Sphinx packet header. So this test ensures that the accumulator gets incremented
             // properly on each run through the loop.
             let mut expected_accumulator = initial_secret;
-            for i in 0..3 {
-                let expected_shared_key =
-                    KeyMaterial::compute_shared_key(route[i].pub_key, &expected_accumulator);
+            for (i, node) in route.iter().enumerate() {
+                let expected_shared_key = expected_accumulator.diffie_hellman(&node.pub_key);
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
-                expected_accumulator *=
-                    Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
+
+                expected_accumulator = &expected_accumulator
+                    * &Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
@@ -260,7 +227,8 @@ mod key_derivation_function {
 
     #[test]
     fn it_expands_the_seed_key_to_expected_length() {
-        let shared_key = crypto::generate_random_curve_point();
+        let initial_secret = EphemeralSecret::new();
+        let shared_key = SharedSecret::from(&initial_secret);
         let routing_keys = RoutingKeys::derive(shared_key);
         assert_eq!(
             crypto::STREAM_CIPHER_KEY_SIZE,
@@ -270,19 +238,10 @@ mod key_derivation_function {
 
     #[test]
     fn it_returns_the_same_output_for_two_equal_inputs() {
-        let shared_key = crypto::generate_random_curve_point();
+        let initial_secret = EphemeralSecret::new();
+        let shared_key = SharedSecret::from(&initial_secret);
         let routing_keys1 = RoutingKeys::derive(shared_key);
         let routing_keys2 = RoutingKeys::derive(shared_key);
         assert_eq!(routing_keys1, routing_keys2);
-    }
-}
-
-#[allow(dead_code)]
-pub fn routing_keys_fixture() -> RoutingKeys {
-    RoutingKeys {
-        stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
-        header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
-        payload_key: [3u8; PAYLOAD_KEY_SIZE],
-        blinding_factor: [4u8; BLINDING_FACTOR_SIZE],
     }
 }

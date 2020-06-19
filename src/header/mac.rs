@@ -57,18 +57,11 @@ impl HeaderIntegrityMac {
     }
 }
 
-pub fn header_integrity_mac_fixture() -> HeaderIntegrityMac {
-    HeaderIntegrityMac {
-        value: [6u8; HEADER_INTEGRITY_MAC_SIZE],
-    }
-}
-
 #[cfg(test)]
 mod computing_integrity_mac {
+    use super::*;
     use crate::constants::INTEGRITY_MAC_KEY_SIZE;
     use crate::header::routing::ENCRYPTED_ROUTING_INFO_SIZE;
-
-    use super::*;
 
     #[test]
     fn it_is_possible_to_verify_correct_mac() {
