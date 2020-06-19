@@ -64,6 +64,9 @@ impl RoutingKeys {
         payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
         i += PAYLOAD_KEY_SIZE;
 
+        // TODO: we later treat blinding factor as a Scalar, the question is, should it be clamped
+        // and/or go through montgomery reduction? We kinda need somebody with good ECC knowledge
+        // to answer this question (and other related ones).
         let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
         blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
 
@@ -107,17 +110,21 @@ impl KeyMaterial {
     pub fn derive(route: &[Node], initial_secret: Scalar) -> Self {
         let initial_shared_secret = CURVE_GENERATOR * initial_secret;
 
-        let routing_keys = route
-            .iter()
-            .scan(initial_secret, |accumulator, node| {
-                let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
-                let routing_keys = RoutingKeys::derive(shared_key);
+        let mut routing_keys = Vec::with_capacity(route.len());
 
-                // TODO: if we're on last iteration, do NOT compute_blinding_factor (no need for it)
-                *accumulator *= Scalar::from_bytes_mod_order(routing_keys.blinding_factor);
-                Some(routing_keys)
-            })
-            .collect();
+        let mut accumulator = initial_secret;
+        for (i, node) in route.iter().enumerate() {
+            // pub^{a * b * ...}
+            let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
+            let node_routing_keys = RoutingKeys::derive(shared_key);
+
+            // it's not the last iteration
+            if i != route.len() + 1 {
+                accumulator *= Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor);
+            }
+
+            routing_keys.push(node_routing_keys);
+        }
 
         Self {
             routing_keys,
