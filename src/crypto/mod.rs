@@ -15,43 +15,21 @@
 use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes128Ctr;
-use curve25519_dalek::montgomery::MontgomeryPoint;
-use curve25519_dalek::scalar::Scalar;
 use hmac::{Hmac, Mac};
-use rand_core::OsRng;
 use sha2::Sha256;
 
-pub const CURVE_GENERATOR: MontgomeryPoint = curve25519_dalek::constants::X25519_BASEPOINT;
+pub mod keys;
+
+// to not break existing imports
+pub use keys::*;
+
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 
 type HmacSha256 = Hmac<Sha256>;
 
-pub type SecretKey = Scalar;
-pub type PublicKey = MontgomeryPoint;
-pub type SharedSecret = MontgomeryPoint;
-pub type SharedKey = MontgomeryPoint;
-
-pub fn public_key_from_bytes(bytes: [u8; 32]) -> PublicKey {
-    MontgomeryPoint(bytes)
-}
-
-pub fn generate_secret() -> Scalar {
-    let mut rng = OsRng;
-    Scalar::random(&mut rng)
-}
-
-pub fn generate_random_curve_point() -> MontgomeryPoint {
-    CURVE_GENERATOR * generate_secret()
-}
-
-pub fn keygen() -> (SecretKey, PublicKey) {
-    let secret_key = generate_secret();
-    let public_key = CURVE_GENERATOR * secret_key;
-    (secret_key, public_key)
-}
-
 pub fn generate_pseudorandom_bytes(
+    // TODO: those should use proper generic arrays to begin with!!
     key: &[u8; STREAM_CIPHER_KEY_SIZE],
     iv: &[u8; STREAM_CIPHER_KEY_SIZE],
     length: usize,
@@ -87,27 +65,5 @@ mod generating_pseudorandom_bytes {
 
         let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
         assert_eq!(10000, rand_bytes.len());
-    }
-}
-
-#[cfg(test)]
-mod secret_generation {
-    use super::*;
-
-    #[test]
-    fn it_returns_a_32_byte_scalar() {
-        let secret = generate_secret();
-        assert_eq!(32, secret.to_bytes().len());
-    }
-}
-
-#[cfg(test)]
-mod generating_a_random_curve_point {
-    use super::*;
-
-    #[test]
-    fn it_returns_a_32_byte_montgomery_point() {
-        let secret = generate_random_curve_point();
-        assert_eq!(32, secret.to_bytes().len())
     }
 }
