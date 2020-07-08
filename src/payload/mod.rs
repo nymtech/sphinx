@@ -20,7 +20,7 @@ use blake2::VarBlake2b;
 use chacha::ChaCha; // we might want to swap this one with a different implementation
 use lioness::{Lioness, RAW_KEY_SIZE};
 
-// payload consists of security parameter long zero-padding, destination address, plaintext and '1' byte to indicate start of padding
+// payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
 pub const PAYLOAD_OVERHEAD_SIZE: usize = SECURITY_PARAMETER + 1;
 
