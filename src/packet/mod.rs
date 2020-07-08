@@ -76,7 +76,7 @@ impl SphinxPacket {
             .to_bytes()
             .iter()
             .cloned()
-            .chain(self.payload.get_content_ref().iter().cloned())
+            .chain(self.payload.as_bytes().iter().cloned())
             .collect()
     }
 

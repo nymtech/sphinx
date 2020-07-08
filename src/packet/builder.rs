@@ -35,12 +35,7 @@ impl SphinxPacketBuilder {
         let (header, payload_keys) = SphinxHeader::new(initial_secret, route, delays, destination);
 
         // no need to check for if plaintext has correct length as this check is already performed in payload encapsulation
-        let payload = Payload::encapsulate_message(
-            &message,
-            &payload_keys,
-            destination.address.clone(),
-            self.payload_size,
-        )?;
+        let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
         Ok(SphinxPacket { header, payload })
     }
 }

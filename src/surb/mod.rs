@@ -48,7 +48,6 @@ impl SURB {
         let surb_route = surb_material.surb_route;
         let surb_delays = surb_material.surb_delays;
         let surb_destination = surb_material.surb_destination;
-        // let surb_payload_size = surb_material.surb_payload_size;
 
         /* Pre-computes the header of the Sphinx packet which will be used as SURB
         and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
@@ -83,9 +82,6 @@ impl SURB {
         self,
         plaintext_message: &[u8],
         payload_size: usize,
-        // TODO: surb_destination might get removed here
-        // you might not know who you are replying to.
-        surb_destination: &Destination,
     ) -> Result<(SphinxPacket, NodeAddressBytes)> {
         /* Function takes the precomputed surb header, layer encrypts the plaintext payload content
         using the precomputed payload key material and returns the full Sphinx packet
@@ -101,12 +97,8 @@ impl SURB {
             ));
         };
 
-        let payload = Payload::encapsulate_message(
-            &plaintext_message,
-            &self.payload_keys,
-            surb_destination.address.clone(),
-            payload_size,
-        )?;
+        let payload =
+            Payload::encapsulate_message(&plaintext_message, &self.payload_keys, payload_size)?;
 
         Ok((SphinxPacket { header, payload }, self.first_hop_address))
     }
@@ -245,17 +237,10 @@ mod prepare_and_use_process_surb {
     #[test]
     fn returns_error_is_payload_too_large() {
         let pre_surb = SURB_fixture();
-        // SURB_fixture uses destination_fixture for its destination
-        let surb_destination = destination_fixture();
         let plaintext_message = vec![42u8; 5000];
         let expected = ErrorKind::InvalidSURB;
 
-        match SURB::use_surb(
-            pre_surb,
-            &plaintext_message,
-            DEFAULT_PAYLOAD_SIZE,
-            &surb_destination,
-        ) {
+        match SURB::use_surb(pre_surb, &plaintext_message, DEFAULT_PAYLOAD_SIZE) {
             Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when payload bytes too long"),
         };

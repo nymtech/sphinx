@@ -91,23 +91,10 @@ mod create_and_process_sphinx_packet {
         match next_sphinx_packet_2.process(&node3_sk).unwrap() {
             ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let additional_padding = vec![
-                    0u8;
-                    PAYLOAD_SIZE
-                        - SECURITY_PARAMETER
-                        - message.len()
-                        - destination.address.as_bytes().len()
-                        - 1
-                ];
-                let expected_payload = [
-                    zero_bytes,
-                    destination.address.to_bytes().to_vec(),
-                    message,
-                    vec![1],
-                    additional_padding,
-                ]
-                .concat();
-                assert_eq!(expected_payload, payload.get_content());
+                let additional_padding =
+                    vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - 1];
+                let expected_payload = [zero_bytes, message, vec![1], additional_padding].concat();
+                assert_eq!(expected_payload, payload.as_bytes());
             }
             _ => panic!(),
         };
@@ -189,23 +176,10 @@ mod converting_sphinx_packet_to_and_from_bytes {
         match next_sphinx_packet_2.process(&node3_sk).unwrap() {
             ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let additional_padding = vec![
-                    0u8;
-                    PAYLOAD_SIZE
-                        - SECURITY_PARAMETER
-                        - message.len()
-                        - destination.address.as_bytes().len()
-                        - 1
-                ];
-                let expected_payload = [
-                    zero_bytes,
-                    destination.address.to_bytes().to_vec(),
-                    message,
-                    vec![1],
-                    additional_padding,
-                ]
-                .concat();
-                assert_eq!(expected_payload, payload.get_content());
+                let additional_padding =
+                    vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - 1];
+                let expected_payload = [zero_bytes, message, vec![1], additional_padding].concat();
+                assert_eq!(expected_payload, payload.as_bytes());
             }
             _ => panic!(),
         };
@@ -294,13 +268,8 @@ mod create_and_process_surb {
         .unwrap();
 
         let plaintext_message = vec![42u8; 160];
-        let (surb_sphinx_packet, first_hop) = SURB::use_surb(
-            pre_surb,
-            &plaintext_message,
-            DEFAULT_PAYLOAD_SIZE,
-            &surb_destination,
-        )
-        .unwrap();
+        let (surb_sphinx_packet, first_hop) =
+            SURB::use_surb(pre_surb, &plaintext_message, DEFAULT_PAYLOAD_SIZE).unwrap();
 
         assert_eq!(
             first_hop,
@@ -334,23 +303,11 @@ mod create_and_process_surb {
         match next_sphinx_packet_2.process(&node3_sk).unwrap() {
             ProcessedPacket::ProcessedPacketFinalHop(_, _, payload) => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let additional_padding = vec![
-                    0u8;
-                    PAYLOAD_SIZE
-                        - SECURITY_PARAMETER
-                        - plaintext_message.len()
-                        - surb_destination.address.as_bytes().len()
-                        - 1
-                ];
-                let expected_payload = [
-                    zero_bytes,
-                    surb_destination.address.to_bytes().to_vec(),
-                    plaintext_message,
-                    vec![1],
-                    additional_padding,
-                ]
-                .concat();
-                assert_eq!(expected_payload, payload.get_content());
+                let additional_padding =
+                    vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - plaintext_message.len() - 1];
+                let expected_payload =
+                    [zero_bytes, plaintext_message, vec![1], additional_padding].concat();
+                assert_eq!(expected_payload, payload.as_bytes());
             }
             _ => panic!(),
         };
