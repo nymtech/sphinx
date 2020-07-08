@@ -12,174 +12,193 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::constants::{DESTINATION_ADDRESS_LENGTH, SECURITY_PARAMETER};
+use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
-use crate::route::DestinationAddressBytes;
 use crate::{Error, ErrorKind, Result};
 use arrayref::array_ref;
 use blake2::VarBlake2b;
 use chacha::ChaCha; // we might want to swap this one with a different implementation
-use lioness::{Lioness, RAW_KEY_SIZE};
+use lioness::Lioness;
 
-// payload consists of security parameter long zero-padding, destination address, plaintext and '1' byte to indicate start of padding
+// payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
-pub const PAYLOAD_OVERHEAD_SIZE: usize = SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH + 1;
+pub const PAYLOAD_OVERHEAD_SIZE: usize = SECURITY_PARAMETER + 1;
 
-// we might want to swap this one with a different implementation
-#[derive(Clone)]
-pub struct Payload {
-    // We may be able to switch from Vec to array types as an optimization,
-    // as in theory everything will have a constant size which we already know.
-    // For now we'll stick with Vectors.
-    content: Vec<u8>,
-}
+// TODO: question: is padding to some pre-defined length a sphinx-specific thing or rather
+// something for our particular use case?
+#[derive(Debug)]
+#[cfg_attr(test, derive(PartialEq))]
+pub struct Payload(Vec<u8>);
 
 // is_empty does not make sense in this context, as you can't construct an empty Payload
 #[allow(clippy::len_without_is_empty)]
 impl Payload {
+    /// Tries to encapsulate provided plaintext message inside a sphinx payload adding
+    /// as many layers of encryption as there are keys provided.
+    /// Note that the encryption layers are going to be added in *reverse* order!
     pub fn encapsulate_message(
         plaintext_message: &[u8],
         payload_keys: &[PayloadKey],
-        destination_address: DestinationAddressBytes,
         payload_size: usize,
     ) -> Result<Self> {
-        let final_payload_key = payload_keys
-            .last()
-            .expect("The keys should be already initialized");
-        // encapsulate_most_inner_payload
-        let final_payload_layer = Self::encrypt_final_layer(
-            plaintext_message,
-            final_payload_key,
-            destination_address,
-            payload_size,
-        )?;
+        Self::validate_parameters(payload_size, plaintext_message.len())?;
+        let mut payload = Self::set_final_payload(plaintext_message, payload_size);
 
-        Ok(Self::encrypt_outer_layers(
-            final_payload_layer,
-            payload_keys,
-        ))
+        // remember that we need to reverse the order of encryption
+        for payload_key in payload_keys.iter().rev() {
+            payload = payload.add_encryption_layer(payload_key)?;
+        }
+
+        Ok(payload)
     }
 
-    // this is expected to get called after unwrapping all layers so it should be fine to get ownership of the content
-    // as the payload object should no longer be used
-    pub fn get_content(self) -> Vec<u8> {
-        self.content
-    }
-
-    pub fn get_content_ref(&self) -> &[u8] {
-        self.content.as_ref()
-    }
-
-    pub fn len(&self) -> usize {
-        self.content.len()
-    }
-
-    // in this context final means most inner layer
-    fn encrypt_final_layer(
-        message: &[u8],
-        final_payload_key: &PayloadKey,
-        destination_address: DestinationAddressBytes,
-        payload_size: usize,
-    ) -> Result<Self> {
+    /// Ensures the desires payload_size is longer than the required overhead as well
+    /// as the blocksize of lioness encryption.
+    /// It also checks if the plaintext can fit in the specified payload [size].
+    fn validate_parameters(payload_size: usize, plaintext_len: usize) -> Result<()> {
         if payload_size < PAYLOAD_OVERHEAD_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
                 "specified payload_size is smaller than the required overhead",
             ));
+        // lioness blocksize is 32 bytes (in this implementation)
+        // Technically this check shouldn't happen if you're not going to add any
+        // encryption layers to the payload, but then why are you even using sphinx?
+        } else if payload_size < lioness::DIGEST_RESULT_SIZE {
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                "specified payload_size is smaller lioness block size",
+            ));
         }
 
         let maximum_plaintext_length = payload_size - PAYLOAD_OVERHEAD_SIZE;
-        if message.len() > maximum_plaintext_length {
+        if plaintext_len > maximum_plaintext_length {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
                 format!(
                     "too long message provided. Message was: {}B long, maximum_plaintext_length is: {}B",
-                    message.len(),
+                    plaintext_len,
                     maximum_plaintext_length
                 ),
             ));
         }
-        // concatenate security zero padding with destination and message and additional length padding
-        let mut final_payload: Vec<u8> = std::iter::repeat(0u8)
+        Ok(())
+    }
+
+    /// Attaches leading and trailing paddings of correct lenghts to the provided plaintext message.
+    /// Note: this function should only ever be called in [`encapsulate_message`] after
+    /// [`validate_parameters`] was performed.
+    fn set_final_payload(plaintext_message: &[u8], payload_size: usize) -> Self {
+        let final_payload: Vec<u8> = std::iter::repeat(0u8)
             .take(SECURITY_PARAMETER) // start with zero-padding
-            .chain(destination_address.to_bytes().iter().cloned())
-            .chain(message.iter().cloned())
+            .chain(plaintext_message.iter().cloned()) // put the plaintext
             .chain(std::iter::repeat(1u8).take(1)) // add single 1 byte to indicate start of padding
             .chain(std::iter::repeat(0u8)) // and fill everything else with zeroes
             .take(payload_size) // take however much we need (remember, iterators are lazy)
             .collect();
 
-        // encrypt the padded plaintext using the payload key
-        let lioness_cipher =
-            Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(final_payload_key, 0, RAW_KEY_SIZE));
-        lioness_cipher.encrypt(&mut final_payload).unwrap();
-
-        Ok(Payload {
-            content: final_payload,
-        })
+        Payload(final_payload)
     }
 
-    fn encrypt_outer_layers(final_payload_layer: Self, route_payload_keys: &[PayloadKey]) -> Self {
-        route_payload_keys
-            .iter()
-            .take(route_payload_keys.len() - 1) // don't take the last key as it was used in create_final_encrypted_payload
-            .rev()
-            .fold(
-                final_payload_layer,
-                |previous_payload_layer, payload_key| {
-                    previous_payload_layer.add_layer_of_encryption(payload_key)
-                },
-            )
+    /// Tries to add an additional layer of encryption onto self.
+    fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
+            payload_enc_key,
+            0,
+            lioness::RAW_KEY_SIZE
+        ));
+
+        if let Err(err) = lioness_cipher.encrypt(&mut self.0) {
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                format!("error while encrypting payload - {}", err),
+            ));
+        };
+        Ok(self)
     }
 
-    fn add_layer_of_encryption(mut self, payload_enc_key: &PayloadKey) -> Self {
-        let lioness_cipher =
-            Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_enc_key, 0, RAW_KEY_SIZE));
-
-        lioness_cipher.encrypt(&mut self.content).unwrap();
-        self
+    /// Tries to remove single layer of encryption from self.
+    pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
+            payload_key,
+            0,
+            lioness::RAW_KEY_SIZE
+        ));
+        if let Err(err) = lioness_cipher.decrypt(&mut self.0) {
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                format!("error while unwrapping payload - {}", err),
+            ));
+        };
+        Ok(self)
     }
 
-    pub fn unwrap(mut self, payload_key: &PayloadKey) -> Self {
-        let lioness_cipher =
-            Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(payload_key, 0, RAW_KEY_SIZE));
-        lioness_cipher.decrypt(&mut self.content).unwrap();
-        self
-    }
+    /// After calling [`unwrap`] required number of times with correct `payload_keys`, tries to parse
+    /// the resultant payload content into original encapsulated plaintext message.
+    pub fn recover_plaintext(self) -> Result<Vec<u8>> {
+        debug_assert!(self.len() > PAYLOAD_OVERHEAD_SIZE);
 
-    pub fn try_recover_destination_and_plaintext(
-        self,
-    ) -> Result<(DestinationAddressBytes, Vec<u8>)> {
-        // assuming our payload is fully decrypted it has the structure of:
+        // assuming our payload is fully decrypted it has the following structure:
         // 00000.... (SECURITY_PARAMETER length)
-        // ADDRESS (DESTINATION_ADDRESS_LENGTH length)
         // plaintext (variable)
         // 1 (single 1 byte)
-        // 0000 ... to pad to PAYLOAD_SIZE
+        // 0000 ... to pad to specified `payload_size`
 
-        // so we need to ignore first SECURITY_PARAMETER bytes
-        // then parse next DESTINATION_ADDRESS_LENGTH bytes as destination address
-        // from the remaining remove all tailing zeroes until first 1
-        // and finally remove the first 1
-        let (padded_destination, padded_plaintext) = self
-            .content
-            .split_at(SECURITY_PARAMETER + DESTINATION_ADDRESS_LENGTH);
+        // In order to recover the plaintext we need to ignore first SECURITY_PARAMETER bytes
+        // Then remove all tailing zeroes until first 1
+        // and finally remove the first 1. The result should be our plaintext.
+        // However, we must check if first SECURITY_PARAMETER bytes are actually 0
+        if !self.0.iter().take(SECURITY_PARAMETER).all(|b| *b == 0) {
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                "malformed payload - no leading zero padding present",
+            ));
+        }
 
-        let mut destination_address = [0u8; DESTINATION_ADDRESS_LENGTH];
-        destination_address.copy_from_slice(&padded_destination[SECURITY_PARAMETER..]);
-        let destination_address = DestinationAddressBytes::from_bytes(destination_address);
+        // only trailing padding present
+        let padded_plaintext = self
+            .into_inner()
+            .into_iter()
+            .skip(SECURITY_PARAMETER)
+            .collect::<Vec<_>>();
 
         // we are looking for first occurrence of 1 in the tail and we get its index
         if let Some(i) = padded_plaintext.iter().rposition(|b| *b == 1) {
             // and now we only take bytes until that point (but not including it)
-            let plaintext = padded_plaintext.iter().cloned().take(i).collect();
-            return Ok((destination_address, plaintext));
+            let plaintext = padded_plaintext.into_iter().take(i).collect();
+            return Ok(plaintext);
         }
 
         // our plaintext is invalid
-        Err(Error::new(ErrorKind::InvalidPayload, "malformed payload"))
+        Err(Error::new(
+            ErrorKind::InvalidPayload,
+            "malformed payload - invalid trailing padding",
+        ))
     }
 
+    fn into_inner(self) -> Vec<u8> {
+        self.0
+    }
+
+    fn inner(&self) -> &[u8] {
+        &self.0
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    /// View this `Payload` as slice of bytes.
+    pub fn as_bytes(&self) -> &[u8] {
+        self.inner()
+    }
+
+    /// Convert this `Payload` as a vector of bytes.
+    pub fn into_bytes(self) -> Vec<u8> {
+        self.into_inner()
+    }
+
+    /// Tries to recover `Payload` from a slice of bytes.
     pub fn from_bytes(bytes: &[u8]) -> Result<Self> {
         // with payloads being dynamic in size, the only thing we can do
         // is to check if it at least is longer than the minimum length
@@ -190,9 +209,7 @@ impl Payload {
             ));
         }
 
-        Ok(Payload {
-            content: bytes.to_vec(),
-        })
+        Ok(Payload(bytes.to_vec()))
     }
 }
 
@@ -212,73 +229,60 @@ mod building_payload_from_bytes {
 }
 
 #[cfg(test)]
-mod test_encrypting_final_payload {
+mod parameter_verification {
     use super::*;
-    use crate::{
-        packet::builder::DEFAULT_PAYLOAD_SIZE,
-        test_utils::fixtures::{destination_address_fixture, routing_keys_fixture},
-    };
-
-    #[test]
-    fn it_returns_encrypted_payload_of_expected_payload_size_for_default_payload_size() {
-        let message = vec![1u8; 16];
-        let destination = destination_address_fixture();
-        let routing_keys = routing_keys_fixture();
-        let final_enc_payload = Payload::encrypt_final_layer(
-            &message,
-            &routing_keys.payload_key,
-            destination,
-            DEFAULT_PAYLOAD_SIZE,
-        )
-        .unwrap();
-
-        assert_eq!(DEFAULT_PAYLOAD_SIZE, final_enc_payload.content.len());
-    }
 
     #[test]
     fn it_returns_an_error_if_payload_size_is_smaller_than_the_overhead() {
-        let message = vec![1u8; 16];
-        let destination = destination_address_fixture();
-        let routing_keys = routing_keys_fixture();
-        assert!(Payload::encrypt_final_layer(
-            &message,
-            &routing_keys.payload_key,
-            destination,
-            PAYLOAD_OVERHEAD_SIZE - 1
-        )
-        .is_err());
+        assert!(Payload::validate_parameters(PAYLOAD_OVERHEAD_SIZE - 1, 16).is_err());
+    }
+
+    #[test]
+    fn it_returns_an_error_if_payload_size_is_smaller_than_the_lioness_blocklen() {
+        assert!(Payload::validate_parameters(lioness::DIGEST_RESULT_SIZE - 1, 16).is_err());
     }
 
     #[test]
     fn it_returns_an_error_if_message_is_longer_than_maximum_allowed_length() {
         let payload_length = 100;
         let max_allowed_length = payload_length - PAYLOAD_OVERHEAD_SIZE;
-        let message = vec![1u8; max_allowed_length + 1];
-        let destination = destination_address_fixture();
-        let routing_keys = routing_keys_fixture();
-        assert!(Payload::encrypt_final_layer(
-            &message,
-            &routing_keys.payload_key,
-            destination,
-            PAYLOAD_OVERHEAD_SIZE - 1
-        )
-        .is_err());
+        assert!(Payload::validate_parameters(payload_length, max_allowed_length + 1).is_err());
     }
+}
+
+#[cfg(test)]
+mod final_payload_setting {
+    use super::*;
 
     #[test]
-    fn it_returns_encrypted_payload_of_expected_size_for_empty_message() {
-        let message = Vec::new();
-        let destination = destination_address_fixture();
-        let routing_keys = routing_keys_fixture();
-        let final_enc_payload = Payload::encrypt_final_layer(
-            &message,
-            &routing_keys.payload_key,
-            destination,
-            PAYLOAD_OVERHEAD_SIZE,
-        )
-        .unwrap();
+    fn adds_correct_padding() {
+        let plaintext_lenghts = vec![0, 1, 16, 128, 4096];
+        for plaintext_length in plaintext_lenghts {
+            // ensure payload always has correct length, because we're not testing for that
+            let payload_size = plaintext_length + lioness::DIGEST_RESULT_SIZE;
+            let final_payload =
+                Payload::set_final_payload(&vec![42u8; plaintext_length], payload_size);
+            let final_payload_inner = final_payload.into_inner();
+            // first SECURITY_PARAMETER bytes have to be 0
+            for i in 0..SECURITY_PARAMETER {
+                assert_eq!(final_payload_inner[i], 0)
+            }
+            // then the actual message should follow
+            for i in SECURITY_PARAMETER..SECURITY_PARAMETER + plaintext_length {
+                assert_eq!(final_payload_inner[i], 42)
+            }
+            // single one
+            assert_eq!(
+                final_payload_inner[SECURITY_PARAMETER + plaintext_length],
+                1
+            );
 
-        assert_eq!(PAYLOAD_OVERHEAD_SIZE, final_enc_payload.content.len());
+            // and the rest should be 0 padding
+            assert!(final_payload_inner
+                .iter()
+                .skip(SECURITY_PARAMETER + plaintext_length + 1)
+                .all(|b| *b == 0))
+        }
     }
 }
 
@@ -286,29 +290,52 @@ mod test_encrypting_final_payload {
 mod test_encapsulating_payload {
     use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
-    use crate::{
-        packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_address_fixture,
-    };
 
     #[test]
-    fn always_the_payload_is_of_the_same_expected_type() {
+    fn can_be_encapsulated_without_encryption() {
         let message = vec![1u8, 16];
-        let destination = destination_address_fixture();
+        let payload_size = 512;
+        let unencrypted_message =
+            Payload::encapsulate_message(&message, &[], payload_size).unwrap();
+
+        // should be equivalent to just setting final payload
+        assert_eq!(
+            unencrypted_message,
+            Payload::set_final_payload(&message, payload_size)
+        )
+    }
+
+    #[test]
+    fn works_with_single_encryption_layer() {
+        let message = vec![1u8, 16];
+        let payload_size = 512;
+        let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
+
+        assert!(Payload::encapsulate_message(&message, &[payload_key_1], payload_size).is_ok())
+    }
+
+    #[test]
+    fn works_with_five_encryption_layers() {
+        let message = vec![1u8, 16];
+        let payload_size = 512;
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
-        let payload_keys = vec![payload_key_1, payload_key_2, payload_key_3];
+        let payload_key_4 = [6u8; PAYLOAD_KEY_SIZE];
+        let payload_key_5 = [7u8; PAYLOAD_KEY_SIZE];
 
-        let final_enc_payload = Payload::encrypt_final_layer(
+        assert!(Payload::encapsulate_message(
             &message,
-            &payload_key_1,
-            destination,
-            DEFAULT_PAYLOAD_SIZE,
+            &[
+                payload_key_1,
+                payload_key_2,
+                payload_key_3,
+                payload_key_4,
+                payload_key_5
+            ],
+            payload_size
         )
-        .unwrap();
-        let payload_encapsulation =
-            Payload::encrypt_outer_layers(final_enc_payload.clone(), &payload_keys);
-        assert_eq!(final_enc_payload.len(), payload_encapsulation.len());
+        .is_ok())
     }
 }
 
@@ -316,45 +343,30 @@ mod test_encapsulating_payload {
 mod test_unwrapping_payload {
     use super::*;
     use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
-    use crate::{
-        packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_address_fixture,
-    };
+    use crate::packet::builder::DEFAULT_PAYLOAD_SIZE;
 
     #[test]
     fn unwrapping_results_in_original_payload_plaintext() {
         let message = vec![42u8; 16];
-        let destination = destination_address_fixture();
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
-        let encrypted_payload = Payload::encapsulate_message(
-            &message,
-            &payload_keys,
-            destination.clone(),
-            DEFAULT_PAYLOAD_SIZE,
-        )
-        .unwrap();
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, DEFAULT_PAYLOAD_SIZE).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
             .fold(encrypted_payload, |current_layer, payload_key| {
-                current_layer.unwrap(payload_key)
+                current_layer.unwrap(payload_key).unwrap()
             });
 
         let zero_bytes = vec![0u8; SECURITY_PARAMETER];
         let additional_padding =
             vec![0u8; DEFAULT_PAYLOAD_SIZE - PAYLOAD_OVERHEAD_SIZE - message.len()];
-        let expected_payload = [
-            zero_bytes,
-            destination.to_bytes().to_vec(),
-            message,
-            vec![1],
-            additional_padding,
-        ]
-        .concat();
-        assert_eq!(expected_payload, unwrapped_payload.get_content());
+        let expected_payload = [zero_bytes, message, vec![1], additional_padding].concat();
+        assert_eq!(expected_payload, unwrapped_payload.into_inner());
     }
 }
 
@@ -367,139 +379,100 @@ mod plaintext_recovery {
     #[test]
     fn it_is_possible_to_recover_plaintext_from_valid_payload() {
         let message = vec![42u8; 160];
-        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
-        let encrypted_payload = Payload::encapsulate_message(
-            &message,
-            &payload_keys,
-            destination.clone(),
-            DEFAULT_PAYLOAD_SIZE,
-        )
-        .unwrap();
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, DEFAULT_PAYLOAD_SIZE).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
             .fold(encrypted_payload, |current_layer, payload_key| {
-                current_layer.unwrap(payload_key)
+                current_layer.unwrap(payload_key).unwrap()
             });
 
-        let (recovered_address, recovered_plaintext) = unwrapped_payload
-            .try_recover_destination_and_plaintext()
-            .unwrap();
+        let recovered_plaintext = unwrapped_payload.recover_plaintext().unwrap();
 
-        assert_eq!(destination, recovered_address);
         assert_eq!(message, recovered_plaintext);
     }
 
+    // tests for correct padding detection
     #[test]
     fn it_is_possible_to_recover_plaintext_even_if_is_just_ones() {
         let message = vec![1u8; 160];
-        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
-        let encrypted_payload = Payload::encapsulate_message(
-            &message,
-            &payload_keys,
-            destination.clone(),
-            DEFAULT_PAYLOAD_SIZE,
-        )
-        .unwrap();
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, DEFAULT_PAYLOAD_SIZE).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
             .fold(encrypted_payload, |current_layer, payload_key| {
-                current_layer.unwrap(payload_key)
+                current_layer.unwrap(payload_key).unwrap()
             });
 
-        let (recovered_address, recovered_plaintext) = unwrapped_payload
-            .try_recover_destination_and_plaintext()
-            .unwrap();
+        let recovered_plaintext = unwrapped_payload.recover_plaintext().unwrap();
 
-        assert_eq!(destination, recovered_address);
         assert_eq!(message, recovered_plaintext);
     }
 
+    // tests for correct padding detection
     #[test]
     fn it_is_possible_to_recover_plaintext_even_if_is_just_zeroes() {
         let message = vec![0u8; 160];
-        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
-        let encrypted_payload = Payload::encapsulate_message(
-            &message,
-            &payload_keys,
-            destination.clone(),
-            DEFAULT_PAYLOAD_SIZE,
-        )
-        .unwrap();
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, DEFAULT_PAYLOAD_SIZE).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
             .fold(encrypted_payload, |current_layer, payload_key| {
-                current_layer.unwrap(payload_key)
+                current_layer.unwrap(payload_key).unwrap()
             });
 
-        let (recovered_address, recovered_plaintext) = unwrapped_payload
-            .try_recover_destination_and_plaintext()
-            .unwrap();
+        let recovered_plaintext = unwrapped_payload.recover_plaintext().unwrap();
 
-        assert_eq!(destination, recovered_address);
         assert_eq!(message, recovered_plaintext);
     }
 
     #[test]
     fn it_fails_to_recover_plaintext_from_invalid_payload() {
         let message = vec![42u8; 160];
-        let destination = DestinationAddressBytes::from_bytes([11u8; DESTINATION_ADDRESS_LENGTH]);
 
         let payload_key_1 = [3u8; PAYLOAD_KEY_SIZE];
         let payload_key_2 = [4u8; PAYLOAD_KEY_SIZE];
         let payload_key_3 = [5u8; PAYLOAD_KEY_SIZE];
         let payload_keys = [payload_key_1, payload_key_2, payload_key_3];
 
-        let encrypted_payload = Payload::encapsulate_message(
-            &message,
-            &payload_keys,
-            destination.clone(),
-            DEFAULT_PAYLOAD_SIZE,
-        )
-        .unwrap();
+        let encrypted_payload =
+            Payload::encapsulate_message(&message, &payload_keys, DEFAULT_PAYLOAD_SIZE).unwrap();
 
         let unwrapped_payload = payload_keys
             .iter()
             .skip(1) // 'forget' about one key to obtain invalid decryption
             .fold(encrypted_payload, |current_layer, payload_key| {
-                current_layer.unwrap(payload_key)
+                current_layer.unwrap(payload_key).unwrap()
             });
 
-        let (recovered_address, recovered_plaintext) = unwrapped_payload
-            .try_recover_destination_and_plaintext()
-            .unwrap();
-
-        assert_ne!(destination, recovered_address);
-        assert_ne!(message, recovered_plaintext);
+        assert!(unwrapped_payload.recover_plaintext().is_err())
     }
 
     #[test]
     fn it_fails_to_recover_plaintext_from_incorrectly_constructed_payload() {
-        let zero_payload = Payload {
-            content: vec![0u8; DEFAULT_PAYLOAD_SIZE],
-        };
-        assert!(zero_payload
-            .try_recover_destination_and_plaintext()
-            .is_err());
+        let zero_payload = Payload(vec![0u8; DEFAULT_PAYLOAD_SIZE]);
+
+        assert!(zero_payload.recover_plaintext().is_err());
     }
 }

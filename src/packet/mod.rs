@@ -49,7 +49,7 @@ impl SphinxPacket {
                 delay,
                 payload_key,
             ) => {
-                let new_payload = self.payload.unwrap(&payload_key);
+                let new_payload = self.payload.unwrap(&payload_key)?;
                 let new_packet = SphinxPacket {
                     header: new_header,
                     payload: new_payload,
@@ -61,7 +61,7 @@ impl SphinxPacket {
                 ))
             }
             ProcessedHeader::ProcessedHeaderFinalHop(destination, identifier, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key);
+                let new_payload = self.payload.unwrap(&payload_key)?;
                 Ok(ProcessedPacket::ProcessedPacketFinalHop(
                     destination,
                     identifier,
@@ -76,7 +76,7 @@ impl SphinxPacket {
             .to_bytes()
             .iter()
             .cloned()
-            .chain(self.payload.get_content_ref().iter().cloned())
+            .chain(self.payload.as_bytes().iter().cloned())
             .collect()
     }
 
