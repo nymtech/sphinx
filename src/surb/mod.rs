@@ -231,7 +231,7 @@ mod prepare_and_use_process_surb {
     fn returns_error_is_payload_too_large() {
         let pre_surb = SURB_fixture();
         let plaintext_message = vec![42u8; 5000];
-        let expected = ErrorKind::InvalidSURB;
+        let expected = ErrorKind::InvalidPayload;
 
         match SURB::use_surb(pre_surb, &plaintext_message, DEFAULT_PAYLOAD_SIZE) {
             Err(err) => assert_eq!(expected, err.kind()),
