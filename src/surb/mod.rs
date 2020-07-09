@@ -1,7 +1,4 @@
-use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE, PAYLOAD_SIZE,
-    SECURITY_PARAMETER,
-};
+use crate::constants::{NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
 use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
 use crate::payload::Payload;
@@ -78,25 +75,18 @@ impl SURB {
         })
     }
 
+    /// Function takes the precomputed surb header, layer encrypts the plaintext payload content
+    /// using the precomputed payload key material and returns the full Sphinx packet
+    /// together with the address of first hop to which it should be forwarded.
     pub fn use_surb(
         self,
         plaintext_message: &[u8],
         payload_size: usize,
     ) -> Result<(SphinxPacket, NodeAddressBytes)> {
-        /* Function takes the precomputed surb header, layer encrypts the plaintext payload content
-        using the precomputed payload key material and returns the full Sphinx packet
-        together with the address of first hop to which it should be forwarded. */
-
         let header = self.SURB_header;
 
-        if plaintext_message.len() + DESTINATION_ADDRESS_LENGTH > PAYLOAD_SIZE - SECURITY_PARAMETER
-        {
-            return Err(Error::new(
-                ErrorKind::InvalidSURB,
-                "not enough payload left to fit a SURB",
-            ));
-        };
-
+        // Note that Payload::encapsulate_message performs checks to verify whether the plaintext
+        // is going to fit in the packet.
         let payload =
             Payload::encapsulate_message(&plaintext_message, &self.payload_keys, payload_size)?;
 
@@ -238,7 +228,7 @@ mod prepare_and_use_process_surb {
     fn returns_error_is_payload_too_large() {
         let pre_surb = SURB_fixture();
         let plaintext_message = vec![42u8; 5000];
-        let expected = ErrorKind::InvalidSURB;
+        let expected = ErrorKind::InvalidPayload;
 
         match SURB::use_surb(pre_surb, &plaintext_message, DEFAULT_PAYLOAD_SIZE) {
             Err(err) => assert_eq!(expected, err.kind()),
