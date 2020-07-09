@@ -1,7 +1,4 @@
-use crate::constants::{
-    DESTINATION_ADDRESS_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE, PAYLOAD_SIZE,
-    SECURITY_PARAMETER,
-};
+use crate::constants::{NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
 use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
 use crate::payload::Payload;
