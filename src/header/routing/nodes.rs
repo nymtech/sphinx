@@ -28,6 +28,7 @@ use crate::header::routing::{
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 use crate::{Error, ErrorKind, Result};
+use std::fmt;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
@@ -102,6 +103,16 @@ impl RoutingInformation {
 #[derive(Clone)]
 pub struct EncryptedRoutingInformation {
     value: [u8; ENCRYPTED_ROUTING_INFO_SIZE],
+}
+
+impl fmt::Debug for EncryptedRoutingInformation {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "EncryptedRoutingInformation: {{ value: {:?} }}",
+            self.value.to_vec()
+        )
+    }
 }
 
 impl EncryptedRoutingInformation {

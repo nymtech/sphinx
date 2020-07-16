@@ -6,6 +6,7 @@ use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{crypto::EphemeralSecret, Error, ErrorKind, Result};
 use crate::{header, SphinxPacket};
 use header::{SphinxHeader, HEADER_SIZE};
+use std::fmt;
 
 #[allow(non_snake_case)]
 pub struct SURB {
@@ -15,6 +16,22 @@ pub struct SURB {
     SURB_header: header::SphinxHeader,
     first_hop_address: NodeAddressBytes,
     payload_keys: Vec<PayloadKey>,
+}
+
+impl fmt::Debug for SURB {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut formatted_keys_inner = Vec::with_capacity(self.payload_keys.len());
+        for payload_key in &self.payload_keys {
+            formatted_keys_inner.push(format!("{{ payload_key: {:?} }}", payload_key.to_vec()))
+        }
+        let formatted_keys = format!("{{ {} }}", formatted_keys_inner.join(", "));
+
+        write!(
+            f,
+            "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {:?} }}",
+            self.SURB_header, self.first_hop_address, formatted_keys
+        )
+    }
 }
 
 pub struct SURBMaterial {

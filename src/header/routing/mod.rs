@@ -57,7 +57,7 @@ impl Version {
 }
 
 // the derivation is only required for the tests. please remove it in production
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct EncapsulatedRoutingInformation {
     pub(crate) enc_routing_information: EncryptedRoutingInformation,
     pub(crate) integrity_mac: HeaderIntegrityMac,

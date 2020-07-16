@@ -18,7 +18,7 @@ use crate::header::keys::HeaderIntegrityMacKey;
 
 // In paper gamma
 // the derivation is only required for the tests. please remove it in production
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct HeaderIntegrityMac {
     value: [u8; HEADER_INTEGRITY_MAC_SIZE],
 }
