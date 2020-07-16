@@ -8,11 +8,11 @@ use crate::{header, SphinxPacket};
 use header::{SphinxHeader, HEADER_SIZE};
 use std::fmt;
 
+/// A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
+/// the address of the first hop in the route of the SURB, and the key material
+/// used to layer encrypt the payload.
 #[allow(non_snake_case)]
 pub struct SURB {
-    /* A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
-    the address of the first hop in the route of the SURB, and the key material
-    used to layer encrypt the payload. */
     SURB_header: header::SphinxHeader,
     first_hop_address: NodeAddressBytes,
     payload_keys: Vec<PayloadKey>,
