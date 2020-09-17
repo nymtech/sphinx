@@ -104,10 +104,6 @@ impl SphinxHeader {
             ));
         }
 
-        // blind the shared_secret in the header
-        let new_shared_secret =
-            Self::blind_the_shared_secret(shared_secret, routing_keys.blinding_factor);
-
         let unwrapped_routing_information = Self::unwrap_routing_information(
             self.routing_info.enc_routing_information,
             routing_keys.stream_cipher_key,
@@ -118,15 +114,21 @@ impl SphinxHeader {
                 next_hop_address,
                 delay,
                 new_encapsulated_routing_info,
-            ) => Ok(ProcessedHeader::ProcessedHeaderForwardHop(
-                SphinxHeader {
-                    shared_secret: new_shared_secret,
-                    routing_info: new_encapsulated_routing_info,
-                },
-                next_hop_address,
-                delay,
-                routing_keys.payload_key,
-            )),
+            ) => {
+                // blind the shared_secret in the header
+                let new_shared_secret =
+                    Self::blind_the_shared_secret(shared_secret, routing_keys.blinding_factor);
+
+                Ok(ProcessedHeader::ProcessedHeaderForwardHop(
+                    SphinxHeader {
+                        shared_secret: new_shared_secret,
+                        routing_info: new_encapsulated_routing_info,
+                    },
+                    next_hop_address,
+                    delay,
+                    routing_keys.payload_key,
+                ))
+            },
             ParsedRawRoutingInformation::FinalHopRoutingInformation(
                 destination_address,
                 identifier,
