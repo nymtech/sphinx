@@ -1,3 +1,4 @@
+use crate::crypto::keys::SharedSecret;
 use crate::{
     crypto::PrivateKey,
     header::{self, delays::Delay, HEADER_SIZE},
@@ -32,6 +33,10 @@ impl SphinxPacket {
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
         SphinxPacketBuilder::default().build_packet(message, route, destination, delays)
+    }
+
+    pub fn shared_secret(&self) -> SharedSecret {
+        self.header.shared_secret
     }
 
     pub fn len(&self) -> usize {
