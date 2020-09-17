@@ -24,7 +24,7 @@ pub struct Delay(u64);
 
 impl Delay {
     // Be more explicit about what kind of value we are expecting
-    pub fn new_from_nanos(value: u64) -> Self {
+    pub const fn new_from_nanos(value: u64) -> Self {
         Delay(value)
     }
 
