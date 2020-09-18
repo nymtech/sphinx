@@ -23,6 +23,7 @@ use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::{RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
+use rand::rngs::OsRng;
 
 // this is going through the following transformations:
 /*
@@ -66,6 +67,7 @@ impl FinalRoutingInformation {
         // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
         // attack on sphinx described by Kuhn et al.
         let padding = utils::bytes::random(
+            &mut OsRng,
             ENCRYPTED_ROUTING_INFO_SIZE
                 - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
                 - FINAL_NODE_META_INFO_LENGTH,
