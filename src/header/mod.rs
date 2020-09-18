@@ -77,22 +77,17 @@ impl SphinxHeader {
         )
     }
 
-    fn unwrap_routing_information(
-        enc_routing_information: EncryptedRoutingInformation,
-        stream_cipher_key: StreamCipherKey,
-    ) -> Result<ParsedRawRoutingInformation> {
-        // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
-        enc_routing_information
-            .add_zero_padding()
-            .decrypt(stream_cipher_key)
-            .parse()
+    /// Using the provided shared_secret and node's secret key, derive all routing keys for this hop.
+    pub fn compute_routing_keys(
+        shared_secret: &SharedSecret,
+        node_secret_key: &PrivateKey,
+    ) -> RoutingKeys {
+        let shared_key = node_secret_key.diffie_hellman(shared_secret);
+        keys::RoutingKeys::derive(shared_key)
     }
 
     pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedHeader> {
-        let shared_secret = self.shared_secret;
-        // let shared_key = keys::KeyMaterial::compute_shared_key(shared_secret, &node_secret_key);
-        let shared_key = node_secret_key.diffie_hellman(&shared_secret);
-        let routing_keys = keys::RoutingKeys::derive(shared_key);
+        let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
 
         if !self.routing_info.integrity_mac.verify(
             routing_keys.header_integrity_hmac_key,
