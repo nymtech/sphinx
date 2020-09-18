@@ -155,6 +155,14 @@ impl EncryptedRoutingInformation {
             value: padded_enc_routing_info,
         }
     }
+
+    pub(crate) fn unwrap(
+        self,
+        stream_cipher_key: StreamCipherKey,
+    ) -> Result<ParsedRawRoutingInformation> {
+        // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
+        self.add_zero_padding().decrypt(stream_cipher_key).parse()
+    }
 }
 
 pub struct PaddedEncryptedRoutingInformation {
