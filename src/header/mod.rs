@@ -41,8 +41,8 @@ pub struct SphinxHeader {
 }
 
 pub enum ProcessedHeader {
-    ProcessedHeaderForwardHop(SphinxHeader, NodeAddressBytes, Delay, PayloadKey),
-    ProcessedHeaderFinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
+    ForwardHop(SphinxHeader, NodeAddressBytes, Delay, PayloadKey),
+    FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
 }
 
 impl SphinxHeader {
@@ -111,7 +111,7 @@ impl SphinxHeader {
                 new_encapsulated_routing_info,
             ) => {
                 if let Some(new_blinded_secret) = new_blinded_secret {
-                    Ok(ProcessedHeader::ProcessedHeaderForwardHop(
+                    Ok(ProcessedHeader::ForwardHop(
                         SphinxHeader {
                             shared_secret: new_blinded_secret,
                             routing_info: new_encapsulated_routing_info,
@@ -130,7 +130,7 @@ impl SphinxHeader {
             ParsedRawRoutingInformation::FinalHopRoutingInformation(
                 destination_address,
                 identifier,
-            ) => Ok(ProcessedHeader::ProcessedHeaderFinalHop(
+            ) => Ok(ProcessedHeader::FinalHop(
                 destination_address,
                 identifier,
                 routing_keys.payload_key,
@@ -175,7 +175,7 @@ impl SphinxHeader {
                 let new_shared_secret =
                     Self::blind_the_shared_secret(self.shared_secret, routing_keys.blinding_factor);
 
-                Ok(ProcessedHeader::ProcessedHeaderForwardHop(
+                Ok(ProcessedHeader::ForwardHop(
                     SphinxHeader {
                         shared_secret: new_shared_secret,
                         routing_info: new_encapsulated_routing_info,
@@ -188,7 +188,7 @@ impl SphinxHeader {
             ParsedRawRoutingInformation::FinalHopRoutingInformation(
                 destination_address,
                 identifier,
-            ) => Ok(ProcessedHeader::ProcessedHeaderFinalHop(
+            ) => Ok(ProcessedHeader::FinalHop(
                 destination_address,
                 identifier,
                 routing_keys.payload_key,
@@ -279,7 +279,7 @@ mod create_and_process_sphinx_packet_header {
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header.process(&node1_sk).unwrap() {
-            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
@@ -291,7 +291,7 @@ mod create_and_process_sphinx_packet_header {
         };
 
         let new_header2 = match new_header.process(&node2_sk).unwrap() {
-            ProcessedHeader::ProcessedHeaderForwardHop(new_header, next_hop_address, delay, _) => {
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
@@ -302,7 +302,7 @@ mod create_and_process_sphinx_packet_header {
             _ => panic!(),
         };
         match new_header2.process(&node3_sk).unwrap() {
-            ProcessedHeader::ProcessedHeaderFinalHop(final_destination, _, _) => {
+            ProcessedHeader::FinalHop(final_destination, _, _) => {
                 assert_eq!(destination.address, final_destination);
             }
             _ => panic!(),
