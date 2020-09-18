@@ -53,8 +53,8 @@ impl SphinxPacket {
     /// Prefer normal [process] instead.
     pub fn process_with_derived_keys(
         self,
-        new_blinded_secret: Option<SharedSecret>,
-        routing_keys: RoutingKeys,
+        new_blinded_secret: &Option<SharedSecret>,
+        routing_keys: &RoutingKeys,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self
             .header

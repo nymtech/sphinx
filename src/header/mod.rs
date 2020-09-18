@@ -86,8 +86,8 @@ impl SphinxHeader {
     /// Prefer normal [process] instead.
     pub fn process_with_derived_keys(
         self,
-        new_blinded_secret: Option<SharedSecret>,
-        routing_keys: RoutingKeys,
+        new_blinded_secret: &Option<SharedSecret>,
+        routing_keys: &RoutingKeys,
     ) -> Result<ProcessedHeader> {
         if !self.routing_info.integrity_mac.verify(
             routing_keys.header_integrity_hmac_key,
@@ -113,7 +113,7 @@ impl SphinxHeader {
                 if let Some(new_blinded_secret) = new_blinded_secret {
                     Ok(ProcessedHeader::ForwardHop(
                         SphinxHeader {
-                            shared_secret: new_blinded_secret,
+                            shared_secret: new_blinded_secret.clone(),
                             routing_info: new_encapsulated_routing_info,
                         },
                         next_hop_address,
