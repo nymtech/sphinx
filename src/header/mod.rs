@@ -16,13 +16,14 @@ use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
-use crate::header::keys::{BlindingFactor, PayloadKey, StreamCipherKey};
-use crate::header::routing::nodes::{EncryptedRoutingInformation, ParsedRawRoutingInformation};
+use crate::header::keys::{BlindingFactor, PayloadKey};
+use crate::header::routing::nodes::ParsedRawRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{Error, ErrorKind, Result};
 use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
 use curve25519_dalek::scalar::Scalar;
+use keys::RoutingKeys;
 
 pub mod delays;
 pub mod filler;
@@ -77,6 +78,66 @@ impl SphinxHeader {
         )
     }
 
+    /// Processes the header with the provided derived keys.
+    /// It could be useful in the situation where sender is re-using initial secret
+    /// and we could cache processing results.
+    ///
+    /// However, unless you know exactly what you are doing, you should NEVER use this method!
+    /// Prefer normal [process] instead.
+    pub fn process_with_derived_keys(
+        self,
+        new_blinded_secret: Option<SharedSecret>,
+        routing_keys: RoutingKeys,
+    ) -> Result<ProcessedHeader> {
+        if !self.routing_info.integrity_mac.verify(
+            routing_keys.header_integrity_hmac_key,
+            self.routing_info.enc_routing_information.get_value_ref(),
+        ) {
+            return Err(Error::new(
+                ErrorKind::InvalidHeader,
+                "failed to verify integrity MAC",
+            ));
+        }
+
+        let unwrapped_routing_information = self
+            .routing_info
+            .enc_routing_information
+            .unwrap(routing_keys.stream_cipher_key)
+            .unwrap();
+        match unwrapped_routing_information {
+            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                next_hop_address,
+                delay,
+                new_encapsulated_routing_info,
+            ) => {
+                if let Some(new_blinded_secret) = new_blinded_secret {
+                    Ok(ProcessedHeader::ProcessedHeaderForwardHop(
+                        SphinxHeader {
+                            shared_secret: new_blinded_secret,
+                            routing_info: new_encapsulated_routing_info,
+                        },
+                        next_hop_address,
+                        delay,
+                        routing_keys.payload_key,
+                    ))
+                } else {
+                    Err(Error::new(
+                        ErrorKind::InvalidHeader,
+                        "tried to process forward hop without blinded secret",
+                    ))
+                }
+            }
+            ParsedRawRoutingInformation::FinalHopRoutingInformation(
+                destination_address,
+                identifier,
+            ) => Ok(ProcessedHeader::ProcessedHeaderFinalHop(
+                destination_address,
+                identifier,
+                routing_keys.payload_key,
+            )),
+        }
+    }
+
     /// Using the provided shared_secret and node's secret key, derive all routing keys for this hop.
     pub fn compute_routing_keys(
         shared_secret: &SharedSecret,
@@ -99,11 +160,11 @@ impl SphinxHeader {
             ));
         }
 
-        let unwrapped_routing_information = Self::unwrap_routing_information(
-            self.routing_info.enc_routing_information,
-            routing_keys.stream_cipher_key,
-        )
-        .unwrap();
+        let unwrapped_routing_information = self
+            .routing_info
+            .enc_routing_information
+            .unwrap(routing_keys.stream_cipher_key)?;
+
         match unwrapped_routing_information {
             ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                 next_hop_address,
@@ -112,7 +173,7 @@ impl SphinxHeader {
             ) => {
                 // blind the shared_secret in the header
                 let new_shared_secret =
-                    Self::blind_the_shared_secret(shared_secret, routing_keys.blinding_factor);
+                    Self::blind_the_shared_secret(self.shared_secret, routing_keys.blinding_factor);
 
                 Ok(ProcessedHeader::ProcessedHeaderForwardHop(
                     SphinxHeader {
@@ -123,7 +184,7 @@ impl SphinxHeader {
                     delay,
                     routing_keys.payload_key,
                 ))
-            },
+            }
             ParsedRawRoutingInformation::FinalHopRoutingInformation(
                 destination_address,
                 identifier,
@@ -251,15 +312,15 @@ mod create_and_process_sphinx_packet_header {
 
 #[cfg(test)]
 mod unwrap_routing_information {
+    use super::*;
     use crate::constants::{
         HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
         STREAM_CIPHER_OUTPUT_LENGTH,
     };
     use crate::crypto;
+    use crate::header::routing::nodes::EncryptedRoutingInformation;
     use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, FORWARD_HOP};
     use crate::utils;
-
-    use super::*;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
@@ -291,9 +352,7 @@ mod unwrap_routing_information {
         ]
         .concat();
         let next_hop_encapsulated_routing_info =
-            match SphinxHeader::unwrap_routing_information(enc_routing_info, stream_cipher_key)
-                .unwrap()
-            {
+            match enc_routing_info.unwrap(stream_cipher_key).unwrap() {
                 ParsedRawRoutingInformation::ForwardHopRoutingInformation(
                     next_hop_address,
                     _delay,
