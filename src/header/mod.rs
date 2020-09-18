@@ -105,7 +105,7 @@ impl SphinxHeader {
             .unwrap(routing_keys.stream_cipher_key)
             .unwrap();
         match unwrapped_routing_information {
-            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+            ParsedRawRoutingInformation::ForwardHop(
                 next_hop_address,
                 delay,
                 new_encapsulated_routing_info,
@@ -127,14 +127,13 @@ impl SphinxHeader {
                     ))
                 }
             }
-            ParsedRawRoutingInformation::FinalHopRoutingInformation(
-                destination_address,
-                identifier,
-            ) => Ok(ProcessedHeader::FinalHop(
-                destination_address,
-                identifier,
-                routing_keys.payload_key,
-            )),
+            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
+                Ok(ProcessedHeader::FinalHop(
+                    destination_address,
+                    identifier,
+                    routing_keys.payload_key,
+                ))
+            }
         }
     }
 
@@ -166,7 +165,7 @@ impl SphinxHeader {
             .unwrap(routing_keys.stream_cipher_key)?;
 
         match unwrapped_routing_information {
-            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+            ParsedRawRoutingInformation::ForwardHop(
                 next_hop_address,
                 delay,
                 new_encapsulated_routing_info,
@@ -185,14 +184,13 @@ impl SphinxHeader {
                     routing_keys.payload_key,
                 ))
             }
-            ParsedRawRoutingInformation::FinalHopRoutingInformation(
-                destination_address,
-                identifier,
-            ) => Ok(ProcessedHeader::FinalHop(
-                destination_address,
-                identifier,
-                routing_keys.payload_key,
-            )),
+            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
+                Ok(ProcessedHeader::FinalHop(
+                    destination_address,
+                    identifier,
+                    routing_keys.payload_key,
+                ))
+            }
         }
     }
 
@@ -353,7 +351,7 @@ mod unwrap_routing_information {
         .concat();
         let next_hop_encapsulated_routing_info =
             match enc_routing_info.unwrap(stream_cipher_key).unwrap() {
-                ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+                ParsedRawRoutingInformation::ForwardHop(
                     next_hop_address,
                     _delay,
                     next_hop_encapsulated_routing_info,
