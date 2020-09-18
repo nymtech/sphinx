@@ -44,7 +44,7 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
 // derive zeroize::Zeroize on drop here
 pub struct PrivateKey(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Hash)]
 pub struct PublicKey(MontgomeryPoint);
 
 // type aliases for easier reasoning
@@ -117,6 +117,14 @@ impl From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
         PublicKey(MontgomeryPoint(bytes))
     }
 }
+
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl Eq for PublicKey {}
 
 pub fn keygen() -> (PrivateKey, PublicKey) {
     let private_key = PrivateKey::new();
