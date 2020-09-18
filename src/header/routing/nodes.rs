@@ -141,8 +141,9 @@ impl EncryptedRoutingInformation {
         }
     }
 
-    pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
-        let zero_bytes = vec![0u8; NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE];
+    fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
+        let zero_bytes =
+            std::iter::repeat(0u8).take(NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE);
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().cloned().chain(zero_bytes).collect();
 
