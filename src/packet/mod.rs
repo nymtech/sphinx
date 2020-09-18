@@ -19,6 +19,15 @@ pub enum ProcessedPacket {
     FinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
 
+impl ProcessedPacket {
+    pub fn shared_secret(&self) -> Option<SharedSecret> {
+        match self {
+            ProcessedPacket::ForwardHop(packet, ..) => Some(packet.shared_secret()),
+            ProcessedPacket::FinalHop(..) => None,
+        }
+    }
+}
+
 pub struct SphinxPacket {
     pub header: header::SphinxHeader,
     pub payload: Payload,
