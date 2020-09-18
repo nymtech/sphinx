@@ -74,7 +74,7 @@ impl FinalRoutingInformation {
         // return D || I || PAD
         PaddedFinalRoutingInformation {
             value: std::iter::once(self.flag)
-                .chain(self.version.to_bytes().iter().cloned())
+                .chain(self.version.to_bytes().into_iter())
                 .chain(self.destination.to_bytes().iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
@@ -134,8 +134,7 @@ impl EncryptedPaddedFinalRoutingInformation {
             FILLER_STEP_SIZE_INCREASE * (route_len - 1)
         );
 
-        let final_routing_info_vec: Vec<u8> =
-            self.value.iter().cloned().chain(filler_value).collect();
+        let final_routing_info_vec: Vec<u8> = self.value.into_iter().chain(filler_value).collect();
 
         // sanity check assertion, because we're using vectors
         assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);
