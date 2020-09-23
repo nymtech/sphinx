@@ -18,7 +18,7 @@ use crate::{Error, ErrorKind, Result};
 use std::fmt::{self, Display, Formatter};
 
 // in paper delta
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub struct DestinationAddressBytes([u8; DESTINATION_ADDRESS_LENGTH]);
 
 impl DestinationAddressBytes {
@@ -86,7 +86,7 @@ impl Display for DestinationAddressBytes {
 }
 
 // in paper nu
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub struct NodeAddressBytes([u8; NODE_ADDRESS_LENGTH]);
 
 impl NodeAddressBytes {
