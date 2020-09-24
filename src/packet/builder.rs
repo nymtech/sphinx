@@ -10,8 +10,7 @@ pub const DEFAULT_PAYLOAD_SIZE: usize = 1024;
 
 pub struct SphinxPacketBuilder {
     payload_size: usize,
-    // I'm still not entirely convinced it should live here rather than in `common/nymsphinx`
-    // surb_material: Option<SURBMaterial>,
+    initial_secret: Option<EphemeralSecret>,
 }
 
 impl SphinxPacketBuilder {
@@ -24,6 +23,11 @@ impl SphinxPacketBuilder {
         self
     }
 
+    pub fn with_initial_secret(mut self, initial_secret: EphemeralSecret) -> Self {
+        self.initial_secret = Some(initial_secret);
+        self
+    }
+
     pub fn build_packet(
         &self,
         message: Vec<u8>,
@@ -31,8 +35,10 @@ impl SphinxPacketBuilder {
         destination: &Destination,
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
-        let initial_secret = EphemeralSecret::new();
-        let (header, payload_keys) = SphinxHeader::new(initial_secret, route, delays, destination);
+        let (header, payload_keys) = match self.initial_secret.as_ref() {
+            Some(initial_secret) => SphinxHeader::new(initial_secret, route, delays, destination),
+            None => SphinxHeader::new(&EphemeralSecret::new(), route, delays, destination),
+        };
 
         // no need to check for if plaintext has correct length as this check is already performed in payload encapsulation
         let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
@@ -44,7 +50,7 @@ impl Default for SphinxPacketBuilder {
     fn default() -> Self {
         SphinxPacketBuilder {
             payload_size: DEFAULT_PAYLOAD_SIZE,
-            // surb_material: None,
+            initial_secret: None,
         }
     }
 }

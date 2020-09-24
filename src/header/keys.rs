@@ -107,11 +107,11 @@ pub struct KeyMaterial {
 
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
-    pub fn derive(route: &[Node], initial_secret: EphemeralSecret) -> Self {
-        let initial_shared_secret = SharedSecret::from(&initial_secret);
+    pub fn derive(route: &[Node], initial_secret: &EphemeralSecret) -> Self {
+        let initial_shared_secret = SharedSecret::from(initial_secret);
         let mut routing_keys = Vec::with_capacity(route.len());
 
-        let mut accumulator = initial_secret;
+        let mut accumulator = initial_secret.clone();
         for (i, node) in route.iter().enumerate() {
             // pub^{a * b * ...}
             let shared_key = accumulator.diffie_hellman(&node.pub_key);
@@ -127,7 +127,7 @@ impl KeyMaterial {
 
                 // performs montgomery reduction
                 let blinding_factor_scalar =
-                    Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor);
+                    &Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor);
                 // alternatives:
 
                 // 'only' clamps the scalar
@@ -135,7 +135,7 @@ impl KeyMaterial {
 
                 // 'only' makes it 255 bit long
                 // let blinding_factor_scalar = Scalar::from_bits(node_routing_keys.blinding_factor);
-                accumulator = &accumulator * &blinding_factor_scalar;
+                accumulator *= blinding_factor_scalar;
             }
 
             routing_keys.push(node_routing_keys);
@@ -162,7 +162,7 @@ mod deriving_key_material {
             let empty_route: Vec<Node> = vec![];
             let initial_secret = EphemeralSecret::new();
             let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
-            let key_material = KeyMaterial::derive(&empty_route, initial_secret);
+            let key_material = KeyMaterial::derive(&empty_route, &initial_secret);
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
                 SharedSecret::from(&hacky_secret_copy).as_bytes(),
@@ -180,7 +180,7 @@ mod deriving_key_material {
             let route: Vec<Node> = vec![random_node(), random_node(), random_node()];
             let initial_secret = EphemeralSecret::new();
             let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
-            let key_material = KeyMaterial::derive(&route, initial_secret);
+            let key_material = KeyMaterial::derive(&route, &initial_secret);
             (route, hacky_secret_copy, key_material)
         }
 

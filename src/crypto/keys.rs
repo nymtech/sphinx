@@ -57,6 +57,11 @@ impl PrivateKey {
         PublicKey(self.0 * remote_public_key.0)
     }
 
+    // Do not expose this. It can lead to serious security issues if used incorrectly.
+    pub(crate) fn clone(&self) -> Self {
+        PrivateKey(self.0.clone())
+    }
+
     // honestly, this method shouldn't really be exist, but right now we have no decent
     // rng propagation in the library
     pub fn new() -> Self {
@@ -80,6 +85,12 @@ impl<'a, 'b> std::ops::Mul<&'b Scalar> for &'a EphemeralSecret {
     type Output = EphemeralSecret;
     fn mul(self, rhs: &'b Scalar) -> EphemeralSecret {
         PrivateKey(self.0 * rhs)
+    }
+}
+
+impl<'b> std::ops::MulAssign<&'b Scalar> for EphemeralSecret {
+    fn mul_assign(&mut self, _rhs: &'b Scalar) {
+        self.0.mul_assign(_rhs)
     }
 }
 

@@ -49,7 +49,7 @@ impl SphinxHeader {
     // needs client's secret key, how should we inject this?
     // needs to deal with SURBs too at some point
     pub fn new(
-        initial_secret: EphemeralSecret,
+        initial_secret: &EphemeralSecret,
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
@@ -273,7 +273,7 @@ mod create_and_process_sphinx_packet_header {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let (sphinx_header, _) = SphinxHeader::new(initial_secret, &route, &delays, &destination);
+        let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header.process(&node1_sk).unwrap() {

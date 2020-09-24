@@ -79,7 +79,7 @@ impl SURB {
         let first_hop = surb_route.first().unwrap();
 
         let (header, payload_keys) = header::SphinxHeader::new(
-            surb_initial_secret,
+            &surb_initial_secret,
             &surb_route,
             &surb_delays,
             &surb_destination,
