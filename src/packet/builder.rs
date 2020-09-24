@@ -8,12 +8,12 @@ use crate::{
 
 pub const DEFAULT_PAYLOAD_SIZE: usize = 1024;
 
-pub struct SphinxPacketBuilder {
+pub struct SphinxPacketBuilder<'a> {
     payload_size: usize,
-    initial_secret: Option<EphemeralSecret>,
+    initial_secret: Option<&'a EphemeralSecret>,
 }
 
-impl SphinxPacketBuilder {
+impl<'a> SphinxPacketBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
     }
@@ -23,7 +23,7 @@ impl SphinxPacketBuilder {
         self
     }
 
-    pub fn with_initial_secret(mut self, initial_secret: EphemeralSecret) -> Self {
+    pub fn with_initial_secret(mut self, initial_secret: &'a EphemeralSecret) -> Self {
         self.initial_secret = Some(initial_secret);
         self
     }
@@ -46,7 +46,7 @@ impl SphinxPacketBuilder {
     }
 }
 
-impl Default for SphinxPacketBuilder {
+impl<'a> Default for SphinxPacketBuilder<'a> {
     fn default() -> Self {
         SphinxPacketBuilder {
             payload_size: DEFAULT_PAYLOAD_SIZE,
