@@ -35,6 +35,7 @@ pub mod routing;
 pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE;
 
 #[derive(Debug)]
+#[cfg_attr(test, derive(Clone))]
 pub struct SphinxHeader {
     pub shared_secret: SharedSecret,
     pub routing_info: EncapsulatedRoutingInformation,
@@ -113,7 +114,7 @@ impl SphinxHeader {
                 if let Some(new_blinded_secret) = new_blinded_secret {
                     Ok(ProcessedHeader::ForwardHop(
                         SphinxHeader {
-                            shared_secret: new_blinded_secret.clone(),
+                            shared_secret: *new_blinded_secret,
                             routing_info: new_encapsulated_routing_info,
                         },
                         next_hop_address,
@@ -340,8 +341,6 @@ mod unwrap_routing_information {
         let enc_routing_info =
             EncryptedRoutingInformation::from_bytes(encrypted_routing_info_array);
 
-        log::trace!("{:?}", routing_info.len());
-        log::trace!("{:?}", pseudorandom_bytes.len());
         let expected_next_hop_encrypted_routing_information = [
             routing_info[NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE..].to_vec(),
             pseudorandom_bytes
@@ -383,6 +382,97 @@ mod unwrap_routing_information {
                 next_hop_encrypted_routing_information[i]
             );
         }
+    }
+}
+
+#[cfg(test)]
+mod unwrapping_using_previously_derived_keys {
+    use super::*;
+    use crate::constants::NODE_ADDRESS_LENGTH;
+    use crate::test_utils::fixtures::destination_fixture;
+    use std::time::Duration;
+
+    #[test]
+    fn produces_same_result_for_forward_hop() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (_, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let route = [node1, node2];
+        let destination = destination_fixture();
+        let initial_secret = EphemeralSecret::new();
+        let average_delay = 1;
+        let delays =
+            delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
+        let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
+        let initial_secret = sphinx_header.shared_secret;
+
+        let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
+            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            _ => unreachable!(),
+        };
+
+        let new_secret = normally_unwrapped.shared_secret;
+        let routing_keys = SphinxHeader::compute_routing_keys(&initial_secret, &node1_sk);
+
+        let derived_unwrapped = match sphinx_header
+            .process_with_derived_keys(&Some(new_secret), &routing_keys)
+            .unwrap()
+        {
+            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(
+            normally_unwrapped.shared_secret,
+            derived_unwrapped.shared_secret
+        );
+        assert_eq!(
+            normally_unwrapped.routing_info.to_bytes(),
+            derived_unwrapped.routing_info.to_bytes()
+        )
+    }
+
+    #[test]
+    fn produces_same_result_for_final_hop() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let route = [node1];
+        let destination = destination_fixture();
+        let initial_secret = EphemeralSecret::new();
+        let average_delay = 1;
+        let delays =
+            delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
+        let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
+        let initial_secret = sphinx_header.shared_secret;
+
+        let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
+            ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
+            _ => unreachable!(),
+        };
+
+        let routing_keys = SphinxHeader::compute_routing_keys(&initial_secret, &node1_sk);
+
+        let derived_unwrapped = match sphinx_header
+            .process_with_derived_keys(&None, &routing_keys)
+            .unwrap()
+        {
+            ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
+            _ => unreachable!(),
+        };
+
+        assert_eq!(normally_unwrapped.0, derived_unwrapped.0);
+        assert_eq!(normally_unwrapped.1, derived_unwrapped.1);
+        assert_eq!(normally_unwrapped.2.to_vec(), derived_unwrapped.2.to_vec())
     }
 }
 
