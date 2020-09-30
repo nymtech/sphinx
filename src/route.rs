@@ -15,9 +15,10 @@
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
 use crate::crypto;
 use crate::{Error, ErrorKind, Result};
+use std::fmt::{self, Display, Formatter};
 
 // in paper delta
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub struct DestinationAddressBytes([u8; DESTINATION_ADDRESS_LENGTH]);
 
 impl DestinationAddressBytes {
@@ -78,8 +79,14 @@ impl DestinationAddressBytes {
     }
 }
 
+impl Display for DestinationAddressBytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "DestinationAddressBytes: {}", self.to_base58_string())
+    }
+}
+
 // in paper nu
-#[derive(Clone, Debug, Eq, PartialEq, PartialOrd, Hash)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, PartialOrd, Hash)]
 pub struct NodeAddressBytes([u8; NODE_ADDRESS_LENGTH]);
 
 impl NodeAddressBytes {
@@ -137,6 +144,12 @@ impl NodeAddressBytes {
     /// Convert this `NodeAddressBytes` to an array of bytes.
     pub fn to_bytes(&self) -> [u8; NODE_ADDRESS_LENGTH] {
         self.0
+    }
+}
+
+impl Display for NodeAddressBytes {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "NodeAddressBytes: {}", self.to_base58_string())
     }
 }
 

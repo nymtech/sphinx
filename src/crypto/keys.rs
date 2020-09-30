@@ -44,7 +44,8 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
 // derive zeroize::Zeroize on drop here
 pub struct PrivateKey(Scalar);
 
-#[derive(Copy, Clone, Debug)]
+#[allow(clippy::derive_hash_xor_eq)] // TODO: we must be careful about that one if anything changes in the future
+#[derive(Copy, Clone, Debug, Hash)]
 pub struct PublicKey(MontgomeryPoint);
 
 // type aliases for easier reasoning
@@ -55,6 +56,11 @@ impl PrivateKey {
     /// Perform a key exchange with another public key
     pub fn diffie_hellman(&self, remote_public_key: &PublicKey) -> SharedSecret {
         PublicKey(self.0 * remote_public_key.0)
+    }
+
+    // Do not expose this. It can lead to serious security issues if used incorrectly.
+    pub(crate) fn clone(&self) -> Self {
+        PrivateKey(self.0.clone())
     }
 
     // honestly, this method shouldn't really be exist, but right now we have no decent
@@ -80,6 +86,12 @@ impl<'a, 'b> std::ops::Mul<&'b Scalar> for &'a EphemeralSecret {
     type Output = EphemeralSecret;
     fn mul(self, rhs: &'b Scalar) -> EphemeralSecret {
         PrivateKey(self.0 * rhs)
+    }
+}
+
+impl<'b> std::ops::MulAssign<&'b Scalar> for EphemeralSecret {
+    fn mul_assign(&mut self, _rhs: &'b Scalar) {
+        self.0.mul_assign(_rhs)
     }
 }
 
@@ -117,6 +129,14 @@ impl From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
         PublicKey(MontgomeryPoint(bytes))
     }
 }
+
+impl PartialEq for PublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.0.eq(&other.0)
+    }
+}
+
+impl Eq for PublicKey {}
 
 pub fn keygen() -> (PrivateKey, PublicKey) {
     let private_key = PrivateKey::new();

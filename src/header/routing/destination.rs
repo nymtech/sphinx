@@ -23,6 +23,7 @@ use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::{RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
+use rand::rngs::OsRng;
 
 // this is going through the following transformations:
 /*
@@ -66,6 +67,7 @@ impl FinalRoutingInformation {
         // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
         // attack on sphinx described by Kuhn et al.
         let padding = utils::bytes::random(
+            &mut OsRng,
             ENCRYPTED_ROUTING_INFO_SIZE
                 - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
                 - FINAL_NODE_META_INFO_LENGTH,
@@ -74,7 +76,7 @@ impl FinalRoutingInformation {
         // return D || I || PAD
         PaddedFinalRoutingInformation {
             value: std::iter::once(self.flag)
-                .chain(self.version.to_bytes().iter().cloned())
+                .chain(self.version.to_bytes().into_iter())
                 .chain(self.destination.to_bytes().iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
@@ -134,8 +136,7 @@ impl EncryptedPaddedFinalRoutingInformation {
             FILLER_STEP_SIZE_INCREASE * (route_len - 1)
         );
 
-        let final_routing_info_vec: Vec<u8> =
-            self.value.iter().cloned().chain(filler_value).collect();
+        let final_routing_info_vec: Vec<u8> = self.value.into_iter().chain(filler_value).collect();
 
         // sanity check assertion, because we're using vectors
         assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);

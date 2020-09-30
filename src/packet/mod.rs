@@ -1,3 +1,5 @@
+use crate::crypto::keys::SharedSecret;
+use crate::header::keys::RoutingKeys;
 use crate::{
     crypto::PrivateKey,
     header::{self, delays::Delay, HEADER_SIZE},
@@ -13,8 +15,17 @@ pub mod builder;
 pub enum ProcessedPacket {
     // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
     // should follow clippy recommendation and box it
-    ProcessedPacketForwardHop(SphinxPacket, NodeAddressBytes, Delay),
-    ProcessedPacketFinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
+    ForwardHop(SphinxPacket, NodeAddressBytes, Delay),
+    FinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
+}
+
+impl ProcessedPacket {
+    pub fn shared_secret(&self) -> Option<SharedSecret> {
+        match self {
+            ProcessedPacket::ForwardHop(packet, ..) => Some(packet.shared_secret()),
+            ProcessedPacket::FinalHop(..) => None,
+        }
+    }
 }
 
 pub struct SphinxPacket {
@@ -34,35 +45,72 @@ impl SphinxPacket {
         SphinxPacketBuilder::default().build_packet(message, route, destination, delays)
     }
 
+    pub fn shared_secret(&self) -> SharedSecret {
+        self.header.shared_secret
+    }
+
     pub fn len(&self) -> usize {
         // header always has constant size
         HEADER_SIZE + self.payload.len()
+    }
+
+    /// Processes the header with the provided derived keys.
+    /// It could be useful in the situation where sender is re-using initial secret
+    /// and we could cache processing results.
+    ///
+    /// However, unless you know exactly what you are doing, you should NEVER use this method!
+    /// Prefer normal [process] instead.
+    pub fn process_with_derived_keys(
+        self,
+        new_blinded_secret: &Option<SharedSecret>,
+        routing_keys: &RoutingKeys,
+    ) -> Result<ProcessedPacket> {
+        let unwrapped_header = self
+            .header
+            .process_with_derived_keys(new_blinded_secret, routing_keys)?;
+        match unwrapped_header {
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
+                let new_payload = self.payload.unwrap(&payload_key)?;
+                let new_packet = SphinxPacket {
+                    header: new_header,
+                    payload: new_payload,
+                };
+                Ok(ProcessedPacket::ForwardHop(
+                    new_packet,
+                    next_hop_address,
+                    delay,
+                ))
+            }
+            ProcessedHeader::FinalHop(destination, identifier, payload_key) => {
+                let new_payload = self.payload.unwrap(&payload_key)?;
+                Ok(ProcessedPacket::FinalHop(
+                    destination,
+                    identifier,
+                    new_payload,
+                ))
+            }
+        }
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
     pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedPacket> {
         let unwrapped_header = self.header.process(node_secret_key)?;
         match unwrapped_header {
-            ProcessedHeader::ProcessedHeaderForwardHop(
-                new_header,
-                next_hop_address,
-                delay,
-                payload_key,
-            ) => {
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key)?;
                 let new_packet = SphinxPacket {
                     header: new_header,
                     payload: new_payload,
                 };
-                Ok(ProcessedPacket::ProcessedPacketForwardHop(
+                Ok(ProcessedPacket::ForwardHop(
                     new_packet,
                     next_hop_address,
                     delay,
                 ))
             }
-            ProcessedHeader::ProcessedHeaderFinalHop(destination, identifier, payload_key) => {
+            ProcessedHeader::FinalHop(destination, identifier, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key)?;
-                Ok(ProcessedPacket::ProcessedPacketFinalHop(
+                Ok(ProcessedPacket::FinalHop(
                     destination,
                     identifier,
                     new_payload,

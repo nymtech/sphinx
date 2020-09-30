@@ -141,8 +141,9 @@ impl EncryptedRoutingInformation {
         }
     }
 
-    pub fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
-        let zero_bytes = vec![0u8; NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE];
+    fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
+        let zero_bytes =
+            std::iter::repeat(0u8).take(NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE);
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().cloned().chain(zero_bytes).collect();
 
@@ -153,6 +154,14 @@ impl EncryptedRoutingInformation {
         PaddedEncryptedRoutingInformation {
             value: padded_enc_routing_info,
         }
+    }
+
+    pub(crate) fn unwrap(
+        self,
+        stream_cipher_key: StreamCipherKey,
+    ) -> Result<ParsedRawRoutingInformation> {
+        // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
+        self.add_zero_padding().decrypt(stream_cipher_key).parse()
     }
 }
 
@@ -180,8 +189,8 @@ pub struct RawRoutingInformation {
 }
 
 pub enum ParsedRawRoutingInformation {
-    ForwardHopRoutingInformation(NodeAddressBytes, Delay, EncapsulatedRoutingInformation),
-    FinalHopRoutingInformation(DestinationAddressBytes, SURBIdentifier),
+    ForwardHop(NodeAddressBytes, Delay, EncapsulatedRoutingInformation),
+    FinalHop(DestinationAddressBytes, SURBIdentifier),
 }
 
 impl RawRoutingInformation {
@@ -232,7 +241,7 @@ impl RawRoutingInformation {
             HeaderIntegrityMac::from_bytes(next_hop_integrity_mac),
         );
 
-        ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+        ParsedRawRoutingInformation::ForwardHop(
             NodeAddressBytes::from_bytes(next_hop_address),
             Delay::from_bytes(delay_bytes),
             next_hop_encapsulated_routing_info,
@@ -256,7 +265,7 @@ impl RawRoutingInformation {
         let mut identifier: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
         identifier.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
 
-        ParsedRawRoutingInformation::FinalHopRoutingInformation(destination, identifier)
+        ParsedRawRoutingInformation::FinalHop(destination, identifier)
     }
 }
 
@@ -429,7 +438,7 @@ mod parse_decrypted_routing_information {
         let raw_routing_info = RawRoutingInformation { value: data };
 
         match raw_routing_info.parse().unwrap() {
-            ParsedRawRoutingInformation::ForwardHopRoutingInformation(
+            ParsedRawRoutingInformation::ForwardHop(
                 next_address,
                 _delay,
                 encapsulated_routing_info,
@@ -447,7 +456,7 @@ mod parse_decrypted_routing_information {
                         .to_vec()
                 );
             }
-            ParsedRawRoutingInformation::FinalHopRoutingInformation(_, _) => panic!(),
+            ParsedRawRoutingInformation::FinalHop(_, _) => panic!(),
         }
     }
 }

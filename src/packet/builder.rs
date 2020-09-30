@@ -8,19 +8,23 @@ use crate::{
 
 pub const DEFAULT_PAYLOAD_SIZE: usize = 1024;
 
-pub struct SphinxPacketBuilder {
+pub struct SphinxPacketBuilder<'a> {
     payload_size: usize,
-    // I'm still not entirely convinced it should live here rather than in `common/nymsphinx`
-    // surb_material: Option<SURBMaterial>,
+    initial_secret: Option<&'a EphemeralSecret>,
 }
 
-impl SphinxPacketBuilder {
+impl<'a> SphinxPacketBuilder<'a> {
     pub fn new() -> Self {
         Self::default()
     }
 
     pub fn with_payload_size(mut self, payload_size: usize) -> Self {
         self.payload_size = payload_size;
+        self
+    }
+
+    pub fn with_initial_secret(mut self, initial_secret: &'a EphemeralSecret) -> Self {
+        self.initial_secret = Some(initial_secret);
         self
     }
 
@@ -31,8 +35,10 @@ impl SphinxPacketBuilder {
         destination: &Destination,
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
-        let initial_secret = EphemeralSecret::new();
-        let (header, payload_keys) = SphinxHeader::new(initial_secret, route, delays, destination);
+        let (header, payload_keys) = match self.initial_secret.as_ref() {
+            Some(initial_secret) => SphinxHeader::new(initial_secret, route, delays, destination),
+            None => SphinxHeader::new(&EphemeralSecret::new(), route, delays, destination),
+        };
 
         // no need to check for if plaintext has correct length as this check is already performed in payload encapsulation
         let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
@@ -40,11 +46,11 @@ impl SphinxPacketBuilder {
     }
 }
 
-impl Default for SphinxPacketBuilder {
+impl<'a> Default for SphinxPacketBuilder<'a> {
     fn default() -> Self {
         SphinxPacketBuilder {
             payload_size: DEFAULT_PAYLOAD_SIZE,
-            // surb_material: None,
+            initial_secret: None,
         }
     }
 }
