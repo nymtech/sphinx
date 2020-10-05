@@ -21,10 +21,10 @@ Unit + integration test coverage is currently well above 90%, please ensure that
 
 ### Benchmarks
 
-Rust benchmarks are currently an unstable feature. To run them, use: 
+To run benchmarks, use: 
 
 ```
-rustup run nightly cargo bench
+cargo bench
 ```
 
 Rust benchmarks run the operation multiple times to give a consistent output and report back in the number of nanoseconds (billionths of a second) per iteration. `1000000000 / result` gives you the number of operations per second.
