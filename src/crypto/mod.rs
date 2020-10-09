@@ -12,11 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use aes_ctr::stream_cipher::generic_array::GenericArray;
 use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
 use aes_ctr::Aes128Ctr;
-use hmac::{Hmac, Mac};
-use sha2::Sha256;
+use digest::generic_array::{ArrayLength, GenericArray};
+use digest::{BlockInput, FixedOutput, Reset, Update};
+use hmac::{crypto_mac, Hmac, Mac, NewMac};
 
 pub mod keys;
 
@@ -26,10 +26,12 @@ pub use keys::*;
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 
-type HmacSha256 = Hmac<Sha256>;
+// Type alias for ease of use so that it would not require explicit import of crypto_mac or Hmac
+pub type HmacOutput<D> = crypto_mac::Output<Hmac<D>>;
 
 pub fn generate_pseudorandom_bytes(
     // TODO: those should use proper generic arrays to begin with!!
+    // ^ will be done in next PR
     key: &[u8; STREAM_CIPHER_KEY_SIZE],
     iv: &[u8; STREAM_CIPHER_KEY_SIZE],
     length: usize,
@@ -44,12 +46,17 @@ pub fn generate_pseudorandom_bytes(
     data
 }
 
-// FUTURE TODO: THIS IS DONE INCORRECTLY AND INTRODUCES TIMING ATTACKS
-// https://github.com/nymtech/sphinx/issues/61
-pub fn compute_keyed_hmac(key: Vec<u8>, data: &[u8]) -> Vec<u8> {
-    let mut mac = HmacSha256::new_varkey(&key).expect("HMAC can take key of any size");
-    mac.input(&data);
-    mac.result().code().to_vec()
+/// Compute keyed hmac
+pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> HmacOutput<D>
+where
+    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
+    D::BlockSize: ArrayLength<u8>,
+    D::OutputSize: ArrayLength<u8>,
+{
+    let mut hmac =
+        Hmac::<D>::new_varkey(key).expect("HMAC should be able to take key of any size!");
+    hmac.update(data);
+    hmac.finalize()
 }
 
 #[cfg(test)]
