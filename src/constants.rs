@@ -13,6 +13,8 @@
 // limitations under the License.
 
 use crate::crypto;
+use digest::generic_array::typenum::U16;
+use sha2::Sha256;
 
 pub const SECURITY_PARAMETER: usize = 16; // k in the Sphinx paper. Measured in bytes; 128 bits.
 pub const MAX_PATH_LENGTH: usize = 5; // r in the Sphinx paper
@@ -39,3 +41,22 @@ pub const FLAG_LENGTH: usize = 1;
 pub const PAYLOAD_SIZE: usize = 1024;
 pub const VERSION_LENGTH: usize = 3; // since version is represented as 3 u8 values: major, minor and patch
                                      // we need the single byte to detect padding length
+
+pub type HeaderIntegrityMacSize = U16;
+
+// TODO: to replace with Blake3
+pub type HeaderIntegrityHmacAlgorithm = Sha256;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use digest::generic_array::typenum::Unsigned;
+
+    #[test]
+    fn generic_type_sizes_are_consistent_with_defined_constants() {
+        assert_eq!(
+            HeaderIntegrityMacSize::to_usize(),
+            HEADER_INTEGRITY_MAC_SIZE
+        )
+    }
+}

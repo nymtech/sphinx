@@ -181,8 +181,8 @@ mod test_encapsulating_final_routing_information_and_mac {
             &final_routing_info.enc_routing_information.get_value_ref(),
         );
         assert_eq!(
-            expected_mac.get_value(),
-            final_routing_info.integrity_mac.get_value()
+            expected_mac.into_inner(),
+            final_routing_info.integrity_mac.into_inner()
         );
     }
 }

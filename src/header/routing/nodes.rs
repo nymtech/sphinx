@@ -69,7 +69,7 @@ impl RoutingInformation {
             .chain(self.version.to_bytes().iter().cloned())
             .chain(self.node_address.as_bytes().iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
-            .chain(self.header_integrity_mac.get_value().iter().cloned())
+            .chain(self.header_integrity_mac.into_inner().into_iter())
             .chain(self.next_routing_information.iter().cloned())
             .collect()
     }
@@ -275,6 +275,7 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 #[cfg(test)]
 mod preparing_header_layer {
     use super::*;
+    use crate::constants::HeaderIntegrityHmacAlgorithm;
     use crate::{
         constants::HEADER_INTEGRITY_MAC_SIZE,
         test_utils::fixtures::{
@@ -297,7 +298,7 @@ mod preparing_header_layer {
             version.to_bytes().to_vec(),
             node_address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
-            inner_layer_routing.integrity_mac.get_value_ref().to_vec(),
+            inner_layer_routing.integrity_mac.as_bytes().to_vec(),
             inner_layer_routing
                 .enc_routing_information
                 .value
@@ -320,12 +321,11 @@ mod preparing_header_layer {
             &pseudorandom_bytes[..ENCRYPTED_ROUTING_INFO_SIZE],
         );
 
-        let mut expected_routing_mac = crypto::compute_keyed_hmac(
-            previous_node_routing_keys
-                .header_integrity_hmac_key
-                .to_vec(),
+        let expected_routing_mac = crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(
+            &previous_node_routing_keys.header_integrity_hmac_key,
             &expected_encrypted_routing_info_vec,
         );
+        let mut expected_routing_mac = expected_routing_mac.into_bytes().to_vec();
         expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
 
         let next_layer_routing = RoutingInformation::new(node_address, delay, inner_layer_routing)
@@ -338,7 +338,7 @@ mod preparing_header_layer {
         );
         assert_eq!(
             expected_routing_mac,
-            next_layer_routing.integrity_mac.get_value()
+            next_layer_routing.integrity_mac.as_bytes().to_vec()
         );
     }
 }
@@ -366,7 +366,7 @@ mod encrypting_routing_information {
             version.to_bytes().to_vec(),
             address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
-            mac.get_value_ref().to_vec(),
+            mac.as_bytes().to_vec(),
             next_routing.to_vec(),
         ]
         .concat();
@@ -421,7 +421,7 @@ mod parse_decrypted_routing_information {
         let flag = FORWARD_HOP;
         let address_fixture = node_address_fixture();
         let delay = Delay::new_from_nanos(10);
-        let integrity_mac = header_integrity_mac_fixture().get_value();
+        let integrity_mac = header_integrity_mac_fixture();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let version = Version::new();
 
@@ -430,7 +430,7 @@ mod parse_decrypted_routing_information {
             version.to_bytes().to_vec(),
             address_fixture.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
-            integrity_mac.to_vec(),
+            integrity_mac.as_bytes().to_vec(),
             next_routing_information.to_vec(),
         ]
         .concat();
@@ -445,8 +445,8 @@ mod parse_decrypted_routing_information {
             ) => {
                 assert_eq!(address_fixture, next_address);
                 assert_eq!(
-                    integrity_mac,
-                    encapsulated_routing_info.integrity_mac.get_value()
+                    integrity_mac.as_bytes().to_vec(),
+                    encapsulated_routing_info.integrity_mac.as_bytes().to_vec()
                 );
                 assert_eq!(
                     next_routing_information.to_vec(),

@@ -361,11 +361,12 @@ mod unwrap_routing_information {
                     );
                     assert_eq!(
                         routing_info
-                            [NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE],
+                            [NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE]
+                            .to_vec(),
                         next_hop_encapsulated_routing_info
                             .integrity_mac
-                            .clone()
-                            .get_value()
+                            .as_bytes()
+                            .to_vec()
                     );
                     next_hop_encapsulated_routing_info
                 }
