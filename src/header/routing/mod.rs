@@ -151,7 +151,7 @@ impl EncapsulatedRoutingInformation {
 
     pub fn to_bytes(&self) -> Vec<u8> {
         self.integrity_mac
-            .get_value_ref()
+            .as_bytes()
             .iter()
             .cloned()
             .chain(self.enc_routing_information.get_value_ref().iter().cloned())
@@ -320,8 +320,11 @@ mod encapsulating_forward_routing_information {
                 .to_vec()
         );
         assert_eq!(
-            destination_routing_info.integrity_mac.get_value_ref(),
-            destination_routing_info_copy.integrity_mac.get_value_ref()
+            destination_routing_info.integrity_mac.as_bytes().to_vec(),
+            destination_routing_info_copy
+                .integrity_mac
+                .as_bytes()
+                .to_vec()
         );
 
         let routing_info = EncapsulatedRoutingInformation::for_forward_hops(
@@ -356,8 +359,8 @@ mod encapsulating_forward_routing_information {
                 .to_vec()
         );
         assert_eq!(
-            routing_info.integrity_mac.get_value(),
-            layer_0_routing.integrity_mac.get_value()
+            routing_info.integrity_mac.into_inner(),
+            layer_0_routing.integrity_mac.into_inner()
         );
     }
     #[test]
@@ -404,14 +407,8 @@ mod converting_encapsulated_routing_info_to_bytes {
         );
 
         assert_eq!(
-            encapsulated_routing_info
-                .integrity_mac
-                .get_value_ref()
-                .to_vec(),
-            recovered_routing_info
-                .integrity_mac
-                .get_value_ref()
-                .to_vec()
+            encapsulated_routing_info.integrity_mac.into_inner(),
+            recovered_routing_info.integrity_mac.into_inner()
         );
     }
 }

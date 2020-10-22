@@ -12,35 +12,37 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
+use crate::constants::{
+    HeaderIntegrityHmacAlgorithm, HeaderIntegrityMacSize, HEADER_INTEGRITY_MAC_SIZE,
+};
 use crate::crypto;
 use crate::header::keys::HeaderIntegrityMacKey;
+use digest::generic_array::GenericArray;
+use subtle::{Choice, ConstantTimeEq};
 
 // In paper gamma
-// the derivation is only required for the tests. please remove it in production
 #[derive(Clone, Debug)]
-pub struct HeaderIntegrityMac {
-    value: [u8; HEADER_INTEGRITY_MAC_SIZE],
-}
+pub struct HeaderIntegrityMac(GenericArray<u8, HeaderIntegrityMacSize>);
 
 impl HeaderIntegrityMac {
-    // TODO: perhaps change header_data to concrete type? (but then we have issue with ownership)
     pub(crate) fn compute(key: HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
-        let routing_info_mac = crypto::compute_keyed_hmac(key.to_vec(), &header_data);
-        let mut integrity_mac = [0u8; HEADER_INTEGRITY_MAC_SIZE];
-        integrity_mac.copy_from_slice(&routing_info_mac[..HEADER_INTEGRITY_MAC_SIZE]);
-        Self {
-            value: integrity_mac,
+        let routing_info_mac =
+            crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(&key, &header_data);
+
+        // NOTE: BE EXTREMELY CAREFUL HOW YOU MANAGE THOSE BYTES
+        // YOU CAN'T TREAT THEM AS NORMAL ONES
+        let mac_bytes = routing_info_mac.into_bytes();
+        if mac_bytes.len() < HEADER_INTEGRITY_MAC_SIZE {
+            panic!("Algorithm used for computing header integrity mac produced output smaller than minimum length of {}", HEADER_INTEGRITY_MAC_SIZE)
         }
-    }
 
-    pub fn get_value(self) -> [u8; HEADER_INTEGRITY_MAC_SIZE] {
-        self.value
-    }
-
-    #[allow(dead_code)]
-    pub fn get_value_ref(&self) -> &[u8] {
-        self.value.as_ref()
+        // only take first HEADER_INTEGRITY_MAC_SIZE bytes
+        Self(
+            mac_bytes
+                .into_iter()
+                .take(HEADER_INTEGRITY_MAC_SIZE)
+                .collect(),
+        )
     }
 
     pub fn verify(
@@ -49,11 +51,25 @@ impl HeaderIntegrityMac {
         enc_routing_info: &[u8],
     ) -> bool {
         let recomputed_integrity_mac = Self::compute(integrity_mac_key, enc_routing_info);
-        self.value == recomputed_integrity_mac.get_value()
+        self.ct_eq(&recomputed_integrity_mac).into()
+    }
+
+    pub fn into_inner(self) -> GenericArray<u8, HeaderIntegrityMacSize> {
+        self.0
+    }
+
+    pub fn as_bytes(&self) -> &[u8] {
+        &self.0
     }
 
     pub fn from_bytes(bytes: [u8; HEADER_INTEGRITY_MAC_SIZE]) -> Self {
-        Self { value: bytes }
+        Self(bytes.into())
+    }
+}
+
+impl ConstantTimeEq for HeaderIntegrityMac {
+    fn ct_eq(&self, other: &Self) -> Choice {
+        self.0.ct_eq(&other.0)
     }
 }
 
