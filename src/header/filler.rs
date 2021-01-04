@@ -109,7 +109,7 @@ mod test_creating_pseudorandom_bytes {
             .collect();
         let filler_string = Filler::new(&routing_keys);
 
-        assert_eq!(1 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
+        assert_eq!(FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
     }
 
     #[test]
@@ -188,7 +188,7 @@ mod test_generating_filler_bytes {
             let filler_string_accumulator = vec![];
             let filler_string =
                 Filler::filler_step(filler_string_accumulator, 1, pseudorandom_bytes);
-            assert_eq!(FILLER_STEP_SIZE_INCREASE * 1, filler_string.len());
+            assert_eq!(FILLER_STEP_SIZE_INCREASE, filler_string.len());
             for x in filler_string {
                 assert_eq!(0, x); // XOR of 0 + 0 == 0
             }

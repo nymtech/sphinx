@@ -263,25 +263,21 @@ mod final_payload_setting {
             let final_payload =
                 Payload::set_final_payload(&vec![42u8; plaintext_length], payload_size);
             let final_payload_inner = final_payload.into_inner();
+
             // first SECURITY_PARAMETER bytes have to be 0
-            for i in 0..SECURITY_PARAMETER {
-                assert_eq!(final_payload_inner[i], 0)
-            }
+            assert!(final_payload_inner.iter().take(SECURITY_PARAMETER).all(|&b| b == 0));
             // then the actual message should follow
-            for i in SECURITY_PARAMETER..SECURITY_PARAMETER + plaintext_length {
-                assert_eq!(final_payload_inner[i], 42)
-            }
+            assert!(final_payload_inner.iter().skip(SECURITY_PARAMETER).take(plaintext_length).all(|&b| b == 42));
             // single one
             assert_eq!(
                 final_payload_inner[SECURITY_PARAMETER + plaintext_length],
                 1
             );
-
             // and the rest should be 0 padding
             assert!(final_payload_inner
                 .iter()
                 .skip(SECURITY_PARAMETER + plaintext_length + 1)
-                .all(|b| *b == 0))
+                .all(|&b| b == 0))
         }
     }
 }

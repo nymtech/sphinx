@@ -289,7 +289,7 @@ mod encapsulating_forward_routing_information {
         let delay0 = Delay::new_from_nanos(10);
         let delay1 = Delay::new_from_nanos(20);
         let delay2 = Delay::new_from_nanos(30);
-        let delays = [delay0.clone(), delay1.clone(), delay2.clone()].to_vec();
+        let delays = [delay0.clone(), delay1.clone(), delay2].to_vec();
         let routing_keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
@@ -335,7 +335,7 @@ mod encapsulating_forward_routing_information {
         );
 
         let layer_1_routing = RoutingInformation::new(
-            route[2].address.clone(),
+            route[2].address,
             delay1,
             destination_routing_info_copy,
         )
@@ -344,7 +344,7 @@ mod encapsulating_forward_routing_information {
 
         // this is what first mix should receive
         let layer_0_routing =
-            RoutingInformation::new(route[1].address.clone(), delay0, layer_1_routing)
+            RoutingInformation::new(route[1].address, delay0, layer_1_routing)
                 .encrypt(routing_keys[0].stream_cipher_key)
                 .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 

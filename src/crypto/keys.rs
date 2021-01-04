@@ -60,14 +60,13 @@ impl PrivateKey {
 
     // Do not expose this. It can lead to serious security issues if used incorrectly.
     pub(crate) fn clone(&self) -> Self {
-        PrivateKey(self.0.clone())
+        PrivateKey(self.0)
     }
 
     // honestly, this method shouldn't really be exist, but right now we have no decent
     // rng propagation in the library
     pub fn new() -> Self {
-        let mut rng = OsRng;
-        Self::new_with_rng(&mut rng)
+        Self::default()
     }
 
     pub fn new_with_rng<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
@@ -78,6 +77,13 @@ impl PrivateKey {
 
     pub fn to_bytes(&self) -> [u8; PRIVATE_KEY_SIZE] {
         self.0.to_bytes()
+    }
+}
+
+impl Default for PrivateKey {
+    fn default() -> Self {
+        let mut rng = OsRng;
+        Self::new_with_rng(&mut rng)
     }
 }
 
