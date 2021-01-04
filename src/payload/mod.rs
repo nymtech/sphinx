@@ -265,9 +265,16 @@ mod final_payload_setting {
             let final_payload_inner = final_payload.into_inner();
 
             // first SECURITY_PARAMETER bytes have to be 0
-            assert!(final_payload_inner.iter().take(SECURITY_PARAMETER).all(|&b| b == 0));
+            assert!(final_payload_inner
+                .iter()
+                .take(SECURITY_PARAMETER)
+                .all(|&b| b == 0));
             // then the actual message should follow
-            assert!(final_payload_inner.iter().skip(SECURITY_PARAMETER).take(plaintext_length).all(|&b| b == 42));
+            assert!(final_payload_inner
+                .iter()
+                .skip(SECURITY_PARAMETER)
+                .take(plaintext_length)
+                .all(|&b| b == 42));
             // single one
             assert_eq!(
                 final_payload_inner[SECURITY_PARAMETER + plaintext_length],

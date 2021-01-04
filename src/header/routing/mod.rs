@@ -334,19 +334,15 @@ mod encapsulating_forward_routing_information {
             &routing_keys,
         );
 
-        let layer_1_routing = RoutingInformation::new(
-            route[2].address,
-            delay1,
-            destination_routing_info_copy,
-        )
-        .encrypt(routing_keys[1].stream_cipher_key)
-        .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
+        let layer_1_routing =
+            RoutingInformation::new(route[2].address, delay1, destination_routing_info_copy)
+                .encrypt(routing_keys[1].stream_cipher_key)
+                .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
 
         // this is what first mix should receive
-        let layer_0_routing =
-            RoutingInformation::new(route[1].address, delay0, layer_1_routing)
-                .encrypt(routing_keys[0].stream_cipher_key)
-                .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
+        let layer_0_routing = RoutingInformation::new(route[1].address, delay0, layer_1_routing)
+            .encrypt(routing_keys[0].stream_cipher_key)
+            .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 
         assert_eq!(
             routing_info
