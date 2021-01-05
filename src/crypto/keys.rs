@@ -66,7 +66,8 @@ impl PrivateKey {
     // honestly, this method shouldn't really be exist, but right now we have no decent
     // rng propagation in the library
     pub fn new() -> Self {
-        Self::default()
+        let mut rng = OsRng;
+        Self::new_with_rng(&mut rng)
     }
 
     pub fn new_with_rng<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
@@ -82,8 +83,7 @@ impl PrivateKey {
 
 impl Default for PrivateKey {
     fn default() -> Self {
-        let mut rng = OsRng;
-        Self::new_with_rng(&mut rng)
+        PrivateKey::new()
     }
 }
 
