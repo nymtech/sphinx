@@ -63,7 +63,7 @@ impl PrivateKey {
         PrivateKey(self.0.clone())
     }
 
-    // honestly, this method shouldn't really be exist, but right now we have no decent
+    // honestly, this method shouldn't really exist, but right now we have no decent
     // rng propagation in the library
     pub fn new() -> Self {
         let mut rng = OsRng;
