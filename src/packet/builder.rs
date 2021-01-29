@@ -40,7 +40,7 @@ impl<'a> SphinxPacketBuilder<'a> {
             None => SphinxHeader::new(&EphemeralSecret::new(), route, delays, destination),
         };
 
-        // no need to check for if plaintext has correct length as this check is already performed in payload encapsulation
+        // no need to check if plaintext has correct length as this check is already performed in payload encapsulation
         let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
         Ok(SphinxPacket { header, payload })
     }

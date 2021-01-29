@@ -85,7 +85,7 @@ impl Payload {
         Ok(())
     }
 
-    /// Attaches leading and trailing paddings of correct lenghts to the provided plaintext message.
+    /// Attaches leading and trailing paddings of correct lengths to the provided plaintext message.
     /// Note: this function should only ever be called in [`encapsulate_message`] after
     /// [`validate_parameters`] was performed.
     fn set_final_payload(plaintext_message: &[u8], payload_size: usize) -> Self {
@@ -256,8 +256,8 @@ mod final_payload_setting {
 
     #[test]
     fn adds_correct_padding() {
-        let plaintext_lenghts = vec![0, 1, 16, 128, 4096];
-        for plaintext_length in plaintext_lenghts {
+        let plaintext_lengths = vec![0, 1, 16, 128, 4096];
+        for plaintext_length in plaintext_lengths {
             // ensure payload always has correct length, because we're not testing for that
             let payload_size = plaintext_length + lioness::DIGEST_RESULT_SIZE;
             let final_payload =
