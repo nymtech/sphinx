@@ -87,7 +87,7 @@ impl SURB {
 
         Ok(SURB {
             SURB_header: header,
-            first_hop_address: first_hop.address.clone(),
+            first_hop_address: first_hop.address,
             payload_keys,
         })
     }

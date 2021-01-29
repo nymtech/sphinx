@@ -60,7 +60,7 @@ impl PrivateKey {
 
     // Do not expose this. It can lead to serious security issues if used incorrectly.
     pub(crate) fn clone(&self) -> Self {
-        PrivateKey(self.0.clone())
+        PrivateKey(self.0)
     }
 
     // honestly, this method shouldn't really be exist, but right now we have no decent
@@ -78,6 +78,12 @@ impl PrivateKey {
 
     pub fn to_bytes(&self) -> [u8; PRIVATE_KEY_SIZE] {
         self.0.to_bytes()
+    }
+}
+
+impl Default for PrivateKey {
+    fn default() -> Self {
+        PrivateKey::new()
     }
 }
 

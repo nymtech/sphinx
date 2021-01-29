@@ -49,7 +49,7 @@ impl FinalRoutingInformation {
         Self {
             flag: FINAL_HOP,
             version: Version::new(),
-            destination: dest.address.clone(),
+            destination: dest.address,
             identifier: dest.identifier,
         }
     }

@@ -62,9 +62,7 @@ mod create_and_process_sphinx_packet {
 
         let message = vec![13u8, 16];
         let sphinx_packet =
-            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
-                SphinxPacket { header, payload } => SphinxPacket { header, payload },
-            };
+            SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
 
         let next_sphinx_packet_1 = match sphinx_packet.process(&node1_sk).unwrap() {
             ProcessedPacket::ForwardHop(next_packet, next_hop_addr1, _delay1) => {
@@ -142,9 +140,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
 
         let message = vec![13u8, 16];
         let sphinx_packet =
-            match SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap() {
-                SphinxPacket { header, payload } => SphinxPacket { header, payload },
-            };
+            SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
@@ -213,10 +209,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
         );
 
         let message = vec![13u8, 16];
-        let sphinx_packet = match SphinxPacket::new(message, &route, &destination, &delays).unwrap()
-        {
-            SphinxPacket { header, payload } => SphinxPacket { header, payload },
-        };
+        let sphinx_packet = SphinxPacket::new(message, &route, &destination, &delays).unwrap();
 
         let sphinx_packet_bytes = &sphinx_packet.to_bytes()[..300];
         SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
@@ -263,7 +256,7 @@ mod create_and_process_surb {
 
         let pre_surb = SURB::new(
             surb_initial_secret,
-            SURBMaterial::new(surb_route, surb_delays.clone(), surb_destination.clone()),
+            SURBMaterial::new(surb_route, surb_delays.clone(), surb_destination),
         )
         .unwrap();
 
