@@ -33,11 +33,13 @@ pub mod routing;
 
 // 32 represents size of a MontgomeryPoint on Curve25519
 pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE;
+pub type HKDFSalt = [u8; 32];
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
 pub struct SphinxHeader {
     pub shared_secret: SharedSecret,
+    pub hkdf_salt: HKDFSalt,
     pub routing_info: EncapsulatedRoutingInformation,
 }
 
@@ -141,14 +143,16 @@ impl SphinxHeader {
     /// Using the provided shared_secret and node's secret key, derive all routing keys for this hop.
     pub fn compute_routing_keys(
         shared_secret: &SharedSecret,
+        hkdf_salt: Option<[u8; 32]>,
         node_secret_key: &PrivateKey,
     ) -> RoutingKeys {
         let shared_key = node_secret_key.diffie_hellman(shared_secret);
-        keys::RoutingKeys::derive(shared_key, None)
+        keys::RoutingKeys::derive(shared_key, hkdf_salt)
     }
 
     pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedHeader> {
-        let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
+        let routing_keys =
+            Self::compute_routing_keys(&self.shared_secret, self.hkdf_salt, node_secret_key);
 
         if !self.routing_info.integrity_mac.verify(
             routing_keys.header_integrity_hmac_key,
