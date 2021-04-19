@@ -105,7 +105,7 @@ mod test_creating_pseudorandom_bytes {
         let shared_keys = vec![SharedSecret::from(&EphemeralSecret::new())];
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key))
+            .map(|&key| keys::RoutingKeys::derive(key, None))
             .collect();
         let filler_string = Filler::new(&routing_keys);
 
@@ -121,7 +121,7 @@ mod test_creating_pseudorandom_bytes {
         ];
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key))
+            .map(|&key| keys::RoutingKeys::derive(key, None))
             .collect();
         let filler_string = Filler::new(&routing_keys);
         assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
@@ -136,7 +136,7 @@ mod test_creating_pseudorandom_bytes {
             .collect();
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key))
+            .map(|&key| keys::RoutingKeys::derive(key, None))
             .collect();
         Filler::new(&routing_keys);
     }

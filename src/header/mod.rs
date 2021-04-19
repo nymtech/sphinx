@@ -144,7 +144,7 @@ impl SphinxHeader {
         node_secret_key: &PrivateKey,
     ) -> RoutingKeys {
         let shared_key = node_secret_key.diffie_hellman(shared_secret);
-        keys::RoutingKeys::derive(shared_key)
+        keys::RoutingKeys::derive(shared_key, None)
     }
 
     pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedHeader> {

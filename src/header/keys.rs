@@ -45,8 +45,8 @@ impl RoutingKeys {
     // or should this be renamed to 'new'?
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
-    pub fn derive(shared_key: crypto::SharedSecret) -> Self {
-        let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
+    pub fn derive(shared_key: crypto::SharedSecret, salt: Option<&[u8]>) -> Self {
+        let hkdf = Hkdf::<Sha256>::new(salt, shared_key.as_bytes());
 
         let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
@@ -116,7 +116,7 @@ impl KeyMaterial {
             // pub^{a * b * ...}
             let shared_key = accumulator.diffie_hellman(&node.pub_key);
             // let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
-            let node_routing_keys = RoutingKeys::derive(shared_key);
+            let node_routing_keys = RoutingKeys::derive(shared_key, None);
 
             // it's not the last iteration
             if i != route.len() + 1 {
@@ -210,11 +210,11 @@ mod deriving_key_material {
             let mut expected_accumulator = initial_secret;
             for (i, node) in route.iter().enumerate() {
                 let expected_shared_key = expected_accumulator.diffie_hellman(&node.pub_key);
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key, None);
 
                 expected_accumulator = &expected_accumulator
                     * &Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key, None);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
         }
@@ -229,7 +229,7 @@ mod key_derivation_function {
     fn it_expands_the_seed_key_to_expected_length() {
         let initial_secret = EphemeralSecret::new();
         let shared_key = SharedSecret::from(&initial_secret);
-        let routing_keys = RoutingKeys::derive(shared_key);
+        let routing_keys = RoutingKeys::derive(shared_key, None);
         assert_eq!(
             crypto::STREAM_CIPHER_KEY_SIZE,
             routing_keys.stream_cipher_key.len()
@@ -240,8 +240,8 @@ mod key_derivation_function {
     fn it_returns_the_same_output_for_two_equal_inputs() {
         let initial_secret = EphemeralSecret::new();
         let shared_key = SharedSecret::from(&initial_secret);
-        let routing_keys1 = RoutingKeys::derive(shared_key);
-        let routing_keys2 = RoutingKeys::derive(shared_key);
+        let routing_keys1 = RoutingKeys::derive(shared_key, None);
+        let routing_keys2 = RoutingKeys::derive(shared_key, None);
         assert_eq!(routing_keys1, routing_keys2);
     }
 }
