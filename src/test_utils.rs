@@ -20,6 +20,8 @@ use crate::{
 
 pub mod fixtures {
 
+    use crate::constants::HKDF_SALT_SIZE;
+    use crate::header::HKDFSalt;
     use crate::{
         constants::{
             BLINDING_FACTOR_SIZE, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE,

@@ -1,6 +1,7 @@
 use crate::constants::{NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
 use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
+use crate::header::HKDFSalt;
 use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{crypto::EphemeralSecret, Error, ErrorKind, Result};
@@ -37,14 +38,21 @@ impl fmt::Debug for SURB {
 pub struct SURBMaterial {
     surb_route: Vec<Node>,
     surb_delays: Vec<Delay>,
+    surb_hkdf_salt: Vec<HKDFSalt>,
     surb_destination: Destination,
 }
 
 impl SURBMaterial {
-    pub fn new(route: Vec<Node>, delays: Vec<Delay>, destination: Destination) -> Self {
+    pub fn new(
+        route: Vec<Node>,
+        delays: Vec<Delay>,
+        hkdf_salt: Vec<HKDFSalt>,
+        destination: Destination,
+    ) -> Self {
         SURBMaterial {
             surb_route: route,
             surb_delays: delays,
+            surb_hkdf_salt: hkdf_salt,
             surb_destination: destination,
         }
     }
@@ -61,6 +69,7 @@ impl SURB {
     pub fn new(surb_initial_secret: EphemeralSecret, surb_material: SURBMaterial) -> Result<Self> {
         let surb_route = surb_material.surb_route;
         let surb_delays = surb_material.surb_delays;
+        let surb_hkdf_salt = surb_material.surb_hkdf_salt;
         let surb_destination = surb_material.surb_destination;
 
         /* Pre-computes the header of the Sphinx packet which will be used as SURB
@@ -82,6 +91,7 @@ impl SURB {
             &surb_initial_secret,
             &surb_route,
             &surb_delays,
+            &surb_hkdf_salt,
             &surb_destination,
         );
 
@@ -128,10 +138,15 @@ impl SURB {
             ));
         }
 
+        println!("Hello world1");
+
         let header_bytes = &bytes[..HEADER_SIZE];
+        println!("Hello world2");
         let first_hop_bytes = &bytes[HEADER_SIZE..HEADER_SIZE + NODE_ADDRESS_LENGTH];
+        println!("Hello world3");
         let payload_keys_bytes = &bytes[HEADER_SIZE + NODE_ADDRESS_LENGTH..];
         // make sure that bytes of valid length were sent
+        println!("Hello world4");
         if payload_keys_bytes.len() % PAYLOAD_KEY_SIZE != 0 {
             return Err(Error::new(
                 ErrorKind::InvalidSURB,
@@ -139,7 +154,9 @@ impl SURB {
             ));
         }
 
+        println!("Hello world5");
         let SURB_header = SphinxHeader::from_bytes(header_bytes)?;
+        println!("Hello world6");
         let first_hop_address = NodeAddressBytes::try_from_byte_slice(first_hop_bytes)?;
 
         let key_count = payload_keys_bytes.len() / PAYLOAD_KEY_SIZE;
@@ -164,7 +181,7 @@ impl SURB {
 #[cfg(test)]
 mod prepare_and_use_process_surb {
     use super::*;
-    use crate::constants::NODE_ADDRESS_LENGTH;
+    use crate::constants::{HKDF_SALT_SIZE, NODE_ADDRESS_LENGTH};
     use crate::crypto;
     use crate::header::{delays, HEADER_SIZE};
     use crate::{packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_fixture};
@@ -193,10 +210,15 @@ mod prepare_and_use_process_surb {
         let surb_initial_secret = EphemeralSecret::new();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+        let surb_hkdf_salt = vec![
+            [6u8; HKDF_SALT_SIZE],
+            [3u8; HKDF_SALT_SIZE],
+            [1u8; HKDF_SALT_SIZE],
+        ];
 
         SURB::new(
             surb_initial_secret,
-            SURBMaterial::new(surb_route, surb_delays, surb_destination),
+            SURBMaterial::new(surb_route, surb_delays, surb_hkdf_salt, surb_destination),
         )
         .unwrap()
     }
@@ -208,11 +230,16 @@ mod prepare_and_use_process_surb {
         let surb_initial_secret = EphemeralSecret::new();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+        let surb_hkdf_salt = vec![
+            [6u8; HKDF_SALT_SIZE],
+            [3u8; HKDF_SALT_SIZE],
+            [1u8; HKDF_SALT_SIZE],
+        ];
         let expected = ErrorKind::InvalidSURB;
 
         match SURB::new(
             surb_initial_secret,
-            SURBMaterial::new(surb_route, surb_delays, surb_destination),
+            SURBMaterial::new(surb_route, surb_delays, surb_hkdf_salt, surb_destination),
         ) {
             Err(err) => assert_eq!(expected, err.kind()),
             _ => panic!("Should have returned an error when route empty"),

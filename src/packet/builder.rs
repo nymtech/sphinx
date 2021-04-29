@@ -1,3 +1,4 @@
+use crate::header::HKDFSalt;
 use crate::{
     crypto::EphemeralSecret,
     header::{delays::Delay, SphinxHeader},
@@ -34,10 +35,19 @@ impl<'a> SphinxPacketBuilder<'a> {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
+        hkdf_salt: &[HKDFSalt],
     ) -> Result<SphinxPacket> {
         let (header, payload_keys) = match self.initial_secret.as_ref() {
-            Some(initial_secret) => SphinxHeader::new(initial_secret, route, delays, destination),
-            None => SphinxHeader::new(&EphemeralSecret::new(), route, delays, destination),
+            Some(initial_secret) => {
+                SphinxHeader::new(initial_secret, route, delays, hkdf_salt, destination)
+            }
+            None => SphinxHeader::new(
+                &EphemeralSecret::new(),
+                route,
+                delays,
+                hkdf_salt,
+                destination,
+            ),
         };
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation

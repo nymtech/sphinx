@@ -1,5 +1,6 @@
 use crate::crypto::keys::SharedSecret;
 use crate::header::keys::RoutingKeys;
+use crate::header::HKDFSalt;
 use crate::{
     crypto::PrivateKey,
     header::{self, delays::Delay, HEADER_SIZE},
@@ -41,8 +42,9 @@ impl SphinxPacket {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
+        hkdf_salt: &[HKDFSalt],
     ) -> Result<SphinxPacket> {
-        SphinxPacketBuilder::default().build_packet(message, route, destination, delays)
+        SphinxPacketBuilder::default().build_packet(message, route, destination, delays, hkdf_salt)
     }
 
     pub fn shared_secret(&self) -> SharedSecret {

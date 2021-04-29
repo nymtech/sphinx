@@ -47,7 +47,7 @@ impl RoutingKeys {
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
     pub fn derive(shared_key: crypto::SharedSecret, salt: Option<&HKDFSalt>) -> Self {
-        let hkdf = Hkdf::<Sha256>::new(salt, shared_key.as_bytes());
+        let hkdf = Hkdf::<Sha256>::new(salt.map(|a| &a[..]), shared_key.as_bytes());
 
         let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
@@ -108,16 +108,20 @@ pub struct KeyMaterial {
 
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
-    pub fn derive(route: &[Node], initial_secret: &EphemeralSecret) -> Self {
+    pub fn derive(
+        route: &[Node],
+        initial_secret: &EphemeralSecret,
+        hkdf_salt: &[HKDFSalt],
+    ) -> Self {
         let initial_shared_secret = SharedSecret::from(initial_secret);
         let mut routing_keys = Vec::with_capacity(route.len());
 
         let mut accumulator = initial_secret.clone();
-        for (i, node) in route.iter().enumerate() {
+        for (i, (node, hkdf_salt)) in (route.iter().zip(hkdf_salt.iter())).enumerate() {
             // pub^{a * b * ...}
             let shared_key = accumulator.diffie_hellman(&node.pub_key);
             // let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
-            let node_routing_keys = RoutingKeys::derive(shared_key, None);
+            let node_routing_keys = RoutingKeys::derive(shared_key, Some(hkdf_salt));
 
             // it's not the last iteration
             if i != route.len() + 1 {
@@ -157,13 +161,19 @@ mod deriving_key_material {
     #[cfg(test)]
     mod with_an_empty_route {
         use super::*;
+        use crate::constants::HKDF_SALT_SIZE;
 
         #[test]
         fn it_returns_no_routing_keys() {
             let empty_route: Vec<Node> = vec![];
             let initial_secret = EphemeralSecret::new();
             let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
-            let key_material = KeyMaterial::derive(&empty_route, &initial_secret);
+            let hkdf_salts = [
+                [1u8; HKDF_SALT_SIZE],
+                [2u8; HKDF_SALT_SIZE],
+                [3u8; HKDF_SALT_SIZE],
+            ];
+            let key_material = KeyMaterial::derive(&empty_route, &initial_secret, &hkdf_salts);
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
                 SharedSecret::from(&hacky_secret_copy).as_bytes(),
@@ -175,13 +185,19 @@ mod deriving_key_material {
     #[cfg(test)]
     mod for_a_route_with_3_forward_hops {
         use super::*;
+        use crate::constants::HKDF_SALT_SIZE;
         use crate::test_utils::random_node;
 
         fn setup() -> (Vec<Node>, EphemeralSecret, KeyMaterial) {
             let route: Vec<Node> = vec![random_node(), random_node(), random_node()];
             let initial_secret = EphemeralSecret::new();
             let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
-            let key_material = KeyMaterial::derive(&route, &initial_secret);
+            let hkdf_salts = [
+                [1u8; HKDF_SALT_SIZE],
+                [2u8; HKDF_SALT_SIZE],
+                [3u8; HKDF_SALT_SIZE],
+            ];
+            let key_material = KeyMaterial::derive(&route, &initial_secret, &hkdf_salts);
             (route, hacky_secret_copy, key_material)
         }
 
@@ -201,7 +217,7 @@ mod deriving_key_material {
         }
 
         #[test]
-        fn it_generates_correct_routing_keys() {
+        fn it_generates_correct_routing_keys_salt() {
             let (route, initial_secret, key_material) = setup();
             // The accumulator is the key to our blinding factors working.
             // If the accumulator value isn't incremented correctly, we risk passing an
@@ -209,16 +225,38 @@ mod deriving_key_material {
             // Sphinx packet header. So this test ensures that the accumulator gets incremented
             // properly on each run through the loop.
             let mut expected_accumulator = initial_secret;
-            for (i, node) in route.iter().enumerate() {
+            let hkdf_salt = [[1u8; 32], [2u8; 32], [3u8; 32]];
+
+            for (i, (node, salt)) in route.iter().zip(hkdf_salt.iter()).enumerate() {
                 let expected_shared_key = expected_accumulator.diffie_hellman(&node.pub_key);
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key, None);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key, Some(&salt));
 
                 expected_accumulator = &expected_accumulator
                     * &Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key, None);
+                let expected_routing_keys = RoutingKeys::derive(expected_shared_key, Some(&salt));
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
         }
+        // #[test]
+        // fn it_generates_correct_routing_keys_no_salt() {
+        //     let (route, initial_secret, key_material) = setup();
+        //     // The accumulator is the key to our blinding factors working.
+        //     // If the accumulator value isn't incremented correctly, we risk passing an
+        //     // incorrectly blinded shared key through the mixnet in the (unencrypted)
+        //     // Sphinx packet header. So this test ensures that the accumulator gets incremented
+        //     // properly on each run through the loop.
+        //     let mut expected_accumulator = initial_secret;
+        //
+        //     for (i, node) in route.iter().enumerate() {
+        //         let expected_shared_key = expected_accumulator.diffie_hellman(&node.pub_key);
+        //         let expected_routing_keys = RoutingKeys::derive(expected_shared_key, None);
+        //
+        //         expected_accumulator = &expected_accumulator
+        //             * &Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
+        //         let expected_routing_keys = RoutingKeys::derive(expected_shared_key, None);
+        //         assert_eq!(expected_routing_keys, key_material.routing_keys[i])
+        //     }
+        // }
     }
 }
 

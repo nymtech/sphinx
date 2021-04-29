@@ -13,8 +13,8 @@
 // limitations under the License.
 
 use crate::constants::{
-    DELAY_LENGTH, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH,
-    NODE_META_INFO_SIZE, STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
+    DELAY_LENGTH, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, HKDF_SALT_SIZE,
+    NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE, STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
 };
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
@@ -25,6 +25,7 @@ use crate::header::routing::{
     EncapsulatedRoutingInformation, RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
     FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
+use crate::header::HKDFSalt;
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 use crate::{Error, ErrorKind, Result};
@@ -40,6 +41,7 @@ pub(super) struct RoutingInformation {
     // in paper nu
     node_address: NodeAddressBytes,
     delay: Delay,
+    hkdf_salt: HKDFSalt,
     // in paper gamma
     header_integrity_mac: HeaderIntegrityMac,
     // in paper also beta (!)
@@ -50,6 +52,7 @@ impl RoutingInformation {
     pub(super) fn new(
         node_address: NodeAddressBytes,
         delay: Delay,
+        hkdf_salt: HKDFSalt,
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
     ) -> Self {
         RoutingInformation {
@@ -57,6 +60,7 @@ impl RoutingInformation {
             version: Version::new(),
             node_address,
             delay,
+            hkdf_salt,
             header_integrity_mac: next_encapsulated_routing_information.integrity_mac,
             next_routing_information: next_encapsulated_routing_information
                 .enc_routing_information
@@ -69,6 +73,7 @@ impl RoutingInformation {
             .chain(self.version.to_bytes().iter().cloned())
             .chain(self.node_address.as_bytes().iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
+            .chain(self.hkdf_salt.iter().cloned())
             .chain(self.header_integrity_mac.into_inner().into_iter())
             .chain(self.next_routing_information.iter().cloned())
             .collect()
@@ -189,7 +194,12 @@ pub struct RawRoutingInformation {
 }
 
 pub enum ParsedRawRoutingInformation {
-    ForwardHop(NodeAddressBytes, Delay, EncapsulatedRoutingInformation),
+    ForwardHop(
+        NodeAddressBytes,
+        Delay,
+        HKDFSalt,
+        EncapsulatedRoutingInformation,
+    ),
     FinalHop(DestinationAddressBytes, SURBIdentifier),
 }
 
@@ -226,6 +236,10 @@ impl RawRoutingInformation {
         delay_bytes.copy_from_slice(&self.value[i..i + DELAY_LENGTH]);
         i += DELAY_LENGTH;
 
+        let mut next_hop_hkdf_salt: [u8; HKDF_SALT_SIZE] = Default::default();
+        next_hop_hkdf_salt.copy_from_slice(&self.value[i..i + HKDF_SALT_SIZE]);
+        i += HKDF_SALT_SIZE;
+
         // the next HEADER_INTEGRITY_MAC_SIZE bytes represent the integrity mac on the next hop
         let mut next_hop_integrity_mac: [u8; HEADER_INTEGRITY_MAC_SIZE] = Default::default();
         next_hop_integrity_mac.copy_from_slice(&self.value[i..i + HEADER_INTEGRITY_MAC_SIZE]);
@@ -244,6 +258,7 @@ impl RawRoutingInformation {
         ParsedRawRoutingInformation::ForwardHop(
             NodeAddressBytes::from_bytes(next_hop_address),
             Delay::from_bytes(delay_bytes),
+            next_hop_hkdf_salt,
             next_hop_encapsulated_routing_info,
         )
     }
@@ -290,6 +305,7 @@ mod preparing_header_layer {
         let delay = Delay::new_from_nanos(10);
         let previous_node_routing_keys = routing_keys_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
+        let hkdf_salt = [7u8; HKDF_SALT_SIZE];
 
         let version = Version::new();
         // calculate everything without using any object methods
@@ -298,6 +314,7 @@ mod preparing_header_layer {
             version.to_bytes().to_vec(),
             node_address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
+            hkdf_salt.to_vec(),
             inner_layer_routing.integrity_mac.as_bytes().to_vec(),
             inner_layer_routing
                 .enc_routing_information
@@ -328,9 +345,10 @@ mod preparing_header_layer {
         let mut expected_routing_mac = expected_routing_mac.into_bytes().to_vec();
         expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
 
-        let next_layer_routing = RoutingInformation::new(node_address, delay, inner_layer_routing)
-            .encrypt(previous_node_routing_keys.stream_cipher_key)
-            .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key);
+        let next_layer_routing =
+            RoutingInformation::new(node_address, delay, hkdf_salt, inner_layer_routing)
+                .encrypt(previous_node_routing_keys.stream_cipher_key)
+                .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key);
 
         assert_eq!(
             expected_encrypted_routing_info_vec,
@@ -359,6 +377,7 @@ mod encrypting_routing_information {
         let delay = Delay::new_from_nanos(15);
         let mac = header_integrity_mac_fixture();
         let next_routing = [8u8; TRUNCATED_ROUTING_INFO_SIZE];
+        let hkdf_salt = [7u8; HKDF_SALT_SIZE];
 
         let version = Version::new();
         let encryption_data = [
@@ -366,6 +385,7 @@ mod encrypting_routing_information {
             version.to_bytes().to_vec(),
             address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
+            hkdf_salt.to_vec(),
             mac.as_bytes().to_vec(),
             next_routing.to_vec(),
         ]
@@ -376,6 +396,7 @@ mod encrypting_routing_information {
             version,
             node_address: address,
             delay,
+            hkdf_salt,
             header_integrity_mac: mac,
             next_routing_information: next_routing,
         };
@@ -424,12 +445,14 @@ mod parse_decrypted_routing_information {
         let integrity_mac = header_integrity_mac_fixture();
         let next_routing_information = [1u8; ENCRYPTED_ROUTING_INFO_SIZE];
         let version = Version::new();
+        let hkdf_salt = [7u8; HKDF_SALT_SIZE];
 
         let data = [
             vec![flag],
             version.to_bytes().to_vec(),
             address_fixture.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
+            hkdf_salt.to_vec(),
             integrity_mac.as_bytes().to_vec(),
             next_routing_information.to_vec(),
         ]
@@ -441,6 +464,7 @@ mod parse_decrypted_routing_information {
             ParsedRawRoutingInformation::ForwardHop(
                 next_address,
                 _delay,
+                hkdf_salt,
                 encapsulated_routing_info,
             ) => {
                 assert_eq!(address_fixture, next_address);

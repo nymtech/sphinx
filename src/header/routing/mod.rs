@@ -19,6 +19,7 @@ use crate::header::keys::RoutingKeys;
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::destination::FinalRoutingInformation;
 use crate::header::routing::nodes::{EncryptedRoutingInformation, RoutingInformation};
+use crate::header::HKDFSalt;
 use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{Error, ErrorKind, Result};
 
@@ -78,6 +79,7 @@ impl EncapsulatedRoutingInformation {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
+        hkdf_salt: &[HKDFSalt],
         routing_keys: &[RoutingKeys],
         filler: Filler,
     ) -> Self {
@@ -96,6 +98,7 @@ impl EncapsulatedRoutingInformation {
             encapsulated_destination_routing_info,
             &delays,
             route,
+            hkdf_salt,
             routing_keys,
         )
     }
@@ -117,7 +120,8 @@ impl EncapsulatedRoutingInformation {
     fn for_forward_hops(
         encapsulated_destination_routing_info: Self,
         delays: &[Delay],
-        route: &[Node],               // [Mix0, Mix1, Mix2, ..., Mix_{v-1}, Mix_v]
+        route: &[Node], // [Mix0, Mix1, Mix2, ..., Mix_{v-1}, Mix_v]
+        hkdf_salt: &[HKDFSalt],
         routing_keys: &[RoutingKeys], // [Keys0, Keys1, Keys2, ..., Keys_{v-1}, Keys_v]
     ) -> Self {
         route
@@ -129,6 +133,7 @@ impl EncapsulatedRoutingInformation {
                 routing_keys.iter().take(routing_keys.len() - 1), // we don't want last element - it was already used to encrypt the destination
             )
             .zip(delays.iter().take(delays.len() - 1)) // no need for the delay for the final node
+            .zip(hkdf_salt.iter().skip(1))
             .rev() // we are working from the 'inside'
             // we should be getting here
             // [(Mix_v, Keys_{v-1}, Delay_{v-1}), (Mix_{v-1}, Keys_{v-2}, Delay_{v-2}), ..., (Mix2, Keys1, Delay1), (Mix1, Keys0, Delay0)]
@@ -137,10 +142,11 @@ impl EncapsulatedRoutingInformation {
                 // (encrypted with Keys_v)
                 encapsulated_destination_routing_info,
                 |next_hop_encapsulated_routing_information,
-                 ((current_node_address, previous_node_routing_keys), delay)| {
+                 (((current_node_address, previous_node_routing_keys), delay), salt)| {
                     RoutingInformation::new(
                         NodeAddressBytes::from_bytes(current_node_address),
                         delay.to_owned(),
+                        salt.to_owned(),
                         next_hop_encapsulated_routing_information,
                     )
                     .encrypt(previous_node_routing_keys.stream_cipher_key)
@@ -195,6 +201,7 @@ impl EncapsulatedRoutingInformation {
 #[cfg(test)]
 mod encapsulating_all_routing_information {
     use super::*;
+    use crate::constants::HKDF_SALT_SIZE;
     use crate::test_utils::{
         fixtures::{destination_fixture, filler_fixture, routing_keys_fixture},
         random_node,
@@ -212,8 +219,16 @@ mod encapsulating_all_routing_information {
         ];
         let keys = [routing_keys_fixture(), routing_keys_fixture()];
         let filler = filler_fixture(route.len() - 1);
+        let hkdf_salt = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &hkdf_salt,
+            &keys,
+            filler,
+        );
     }
 
     #[test]
@@ -232,8 +247,16 @@ mod encapsulating_all_routing_information {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
+        let hkdf_salt: [HKDFSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &hkdf_salt,
+            &keys,
+            filler,
+        );
     }
 
     #[test]
@@ -252,8 +275,16 @@ mod encapsulating_all_routing_information {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
+        let hkdf_salt: [HKDFSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &hkdf_salt,
+            &keys,
+            filler,
+        );
     }
 
     #[test]
@@ -268,14 +299,23 @@ mod encapsulating_all_routing_information {
         ];
         let keys = vec![];
         let filler = filler_fixture(route.len() - 1);
+        let hkdf_salt: [HKDFSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &hkdf_salt,
+            &keys,
+            filler,
+        );
     }
 }
 
 #[cfg(test)]
 mod encapsulating_forward_routing_information {
     use super::*;
+    use crate::constants::HKDF_SALT_SIZE;
     use crate::test_utils::{
         fixtures::{destination_fixture, filler_fixture, routing_keys_fixture},
         random_node,
@@ -286,15 +326,23 @@ mod encapsulating_forward_routing_information {
         // this is basically loop unwrapping, but considering the complex logic behind it, it's warranted
         let route = [random_node(), random_node(), random_node()];
         let destination = destination_fixture();
+
         let delay0 = Delay::new_from_nanos(10);
         let delay1 = Delay::new_from_nanos(20);
         let delay2 = Delay::new_from_nanos(30);
         let delays = [delay0.clone(), delay1.clone(), delay2].to_vec();
+
+        let hkdf_salt0 = [1u8; HKDF_SALT_SIZE];
+        let hkdf_salt1 = [2u8; HKDF_SALT_SIZE];
+        let hkdf_salt2 = [3u8; HKDF_SALT_SIZE];
+        let hkdf_salt = [hkdf_salt0.clone(), hkdf_salt1.clone(), hkdf_salt2.clone()];
+
         let routing_keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),
             routing_keys_fixture(),
         ];
+
         let filler = filler_fixture(route.len() - 1);
         let filler_copy = filler_fixture(route.len() - 1);
         assert_eq!(filler, filler_copy);
@@ -331,18 +379,25 @@ mod encapsulating_forward_routing_information {
             destination_routing_info,
             &delays,
             &route,
+            &hkdf_salt,
             &routing_keys,
         );
 
-        let layer_1_routing =
-            RoutingInformation::new(route[2].address, delay1, destination_routing_info_copy)
-                .encrypt(routing_keys[1].stream_cipher_key)
-                .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
+        // this is what the second mix should receive
+        let layer_1_routing = RoutingInformation::new(
+            route[2].address,
+            delay1,
+            hkdf_salt2,
+            destination_routing_info_copy,
+        )
+        .encrypt(routing_keys[1].stream_cipher_key)
+        .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
 
         // this is what first mix should receive
-        let layer_0_routing = RoutingInformation::new(route[1].address, delay0, layer_1_routing)
-            .encrypt(routing_keys[0].stream_cipher_key)
-            .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
+        let layer_0_routing =
+            RoutingInformation::new(route[1].address, delay0, hkdf_salt1, layer_1_routing)
+                .encrypt(routing_keys[0].stream_cipher_key)
+                .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 
         assert_eq!(
             routing_info

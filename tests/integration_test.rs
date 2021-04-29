@@ -24,6 +24,7 @@ use sphinx::SphinxPacket;
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
+    use sphinx::constants::HKDF_SALT_SIZE;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx::{
         constants::{
@@ -55,6 +56,11 @@ mod create_and_process_sphinx_packet {
         let route = [node1, node2, node3];
         let average_delay = Duration::from_secs_f64(1.0);
         let delays = delays::generate_from_average_duration(route.len(), average_delay);
+        let hkdf_salt = vec![
+            [1u8; HKDF_SALT_SIZE],
+            [2u8; HKDF_SALT_SIZE],
+            [3u8; HKDF_SALT_SIZE],
+        ];
         let destination = Destination::new(
             DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
             [4u8; IDENTIFIER_LENGTH],
@@ -62,7 +68,7 @@ mod create_and_process_sphinx_packet {
 
         let message = vec![13u8, 16];
         let sphinx_packet =
-            SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
+            SphinxPacket::new(message.clone(), &route, &destination, &delays, &hkdf_salt).unwrap();
 
         let next_sphinx_packet_1 = match sphinx_packet.process(&node1_sk).unwrap() {
             ProcessedPacket::ForwardHop(next_packet, next_hop_addr1, _delay1) => {
@@ -102,6 +108,7 @@ mod create_and_process_sphinx_packet {
 #[cfg(test)]
 mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
+    use sphinx::constants::HKDF_SALT_SIZE;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx::{
         constants::{
@@ -133,6 +140,11 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let route = [node1, node2, node3];
         let average_delay = Duration::from_secs_f64(1.0);
         let delays = delays::generate_from_average_duration(route.len(), average_delay);
+        let hkdf_salt = vec![
+            [1u8; HKDF_SALT_SIZE],
+            [2u8; HKDF_SALT_SIZE],
+            [3u8; HKDF_SALT_SIZE],
+        ];
         let destination = Destination::new(
             DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
             [4u8; IDENTIFIER_LENGTH],
@@ -140,7 +152,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
 
         let message = vec![13u8, 16];
         let sphinx_packet =
-            SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
+            SphinxPacket::new(message.clone(), &route, &destination, &delays, &hkdf_salt).unwrap();
 
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
@@ -203,13 +215,19 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let route = [node1, node2, node3];
         let average_delay = Duration::from_secs_f64(1.0);
         let delays = delays::generate_from_average_duration(route.len(), average_delay);
+        let hkdf_salt = vec![
+            [1u8; HKDF_SALT_SIZE],
+            [2u8; HKDF_SALT_SIZE],
+            [3u8; HKDF_SALT_SIZE],
+        ];
         let destination = Destination::new(
             DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
             [4u8; IDENTIFIER_LENGTH],
         );
 
         let message = vec![13u8, 16];
-        let sphinx_packet = SphinxPacket::new(message, &route, &destination, &delays).unwrap();
+        let sphinx_packet =
+            SphinxPacket::new(message, &route, &destination, &delays, &hkdf_salt).unwrap();
 
         let sphinx_packet_bytes = &sphinx_packet.to_bytes()[..300];
         SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
@@ -220,6 +238,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
 mod create_and_process_surb {
     use super::*;
     use crypto::EphemeralSecret;
+    use sphinx::constants::HKDF_SALT_SIZE;
     use sphinx::route::NodeAddressBytes;
     use sphinx::surb::{SURBMaterial, SURB};
     use sphinx::{
@@ -253,10 +272,19 @@ mod create_and_process_surb {
         let surb_initial_secret = EphemeralSecret::new();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
-
+        let surb_hkdf_salt = vec![
+            [1u8; HKDF_SALT_SIZE],
+            [2u8; HKDF_SALT_SIZE],
+            [3u8; HKDF_SALT_SIZE],
+        ];
         let pre_surb = SURB::new(
             surb_initial_secret,
-            SURBMaterial::new(surb_route, surb_delays.clone(), surb_destination),
+            SURBMaterial::new(
+                surb_route,
+                surb_delays.clone(),
+                surb_hkdf_salt.clone(),
+                surb_destination,
+            ),
         )
         .unwrap();
 
