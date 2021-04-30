@@ -334,3 +334,63 @@ mod create_and_process_surb {
         };
     }
 }
+
+#[cfg(test)]
+mod reusing_key {
+    use super::*;
+    use rand::Rng;
+    use sphinx::constants::NODE_ADDRESS_LENGTH;
+    use sphinx::crypto::EphemeralSecret;
+    use sphinx::route::NodeAddressBytes;
+    use sphinx::test_utils::fixtures::destination_fixture;
+    use std::time::Duration;
+
+    #[test]
+    fn reusing_the_same_shared_key_and_message_but_different_salt_gives_different_results() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+        let route = [node1, node2, node3];
+        let destination = destination_fixture();
+        let initial_secret = EphemeralSecret::new();
+        let average_delay = 1;
+        let delays =
+            delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
+        let hkdf_salt1 = rand::thread_rng().gen::<[u8; 32]>();
+        let hkdf_salt2 = rand::thread_rng().gen::<[u8; 32]>();
+        let hkdf_salt3 = rand::thread_rng().gen::<[u8; 32]>();
+        let hkdf_salts = [hkdf_salt1, hkdf_salt2, hkdf_salt3];
+
+        let message = vec![13u8, 16];
+        let sphinx_packet1 =
+            SphinxPacket::new(message.clone(), &route, &destination, &delays, &hkdf_salts).unwrap();
+
+        let new_hkdf_salt1 = rand::thread_rng().gen::<[u8; 32]>();
+        let new_hkdf_salt2 = rand::thread_rng().gen::<[u8; 32]>();
+        let new_hkdf_salt3 = rand::thread_rng().gen::<[u8; 32]>();
+        let new_hkdf_salts: [[u8; 32]; 3] = [new_hkdf_salt1, new_hkdf_salt2, new_hkdf_salt3];
+
+        let sphinx_packet2 = SphinxPacket::new(
+            message.clone(),
+            &route,
+            &destination,
+            &delays,
+            &new_hkdf_salts,
+        )
+        .unwrap();
+
+        assert_ne!(sphinx_packet1.to_bytes(), sphinx_packet2.to_bytes());
+    }
+}
