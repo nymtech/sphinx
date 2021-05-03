@@ -67,7 +67,7 @@ impl Payload {
         } else if payload_size < lioness::DIGEST_RESULT_SIZE {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
-                "specified payload_size is smaller lioness block size",
+                "specified payload_size is smaller than lioness block size",
             ));
         }
 

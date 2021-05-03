@@ -37,7 +37,6 @@ pub(super) struct FinalRoutingInformation {
     flag: RoutingFlag,
     version: Version,
     destination: DestinationAddressBytes,
-    // in paper delta
     identifier: SURBIdentifier, // in paper I
 }
 
