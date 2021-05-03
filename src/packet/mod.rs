@@ -56,20 +56,19 @@ impl SphinxPacket {
         HEADER_SIZE + self.payload.len()
     }
 
-    /// Processes the header with the provided derived keys.
-    /// It could be useful in the situation where sender is re-using initial secret
-    /// and we could cache processing results.
-    ///
-    /// However, unless you know exactly what you are doing, you should NEVER use this method!
-    /// Prefer normal [process] instead.
-    pub fn process_with_derived_keys(
+    /// Processes the packet using a previously derived shared key and a fresh salt.
+    /// This function can be used in the situation where sender is re-using initial secret
+    /// and the intermediate nodes cash the shared key derived using Diffie Hellman as a
+    /// master key, and using only the HKDF and the fresh salt derive an ephemeral key
+    /// to process the packet
+    pub fn process_with_previously_derived_keys(
         self,
-        new_blinded_secret: &Option<SharedSecret>,
-        routing_keys: &RoutingKeys,
+        shared_key: SharedSecret,
+        hkdf_salt: Option<&HKDFSalt>,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self
             .header
-            .process_with_derived_keys(new_blinded_secret, routing_keys)?;
+            .process_with_previously_derived_keys(shared_key, hkdf_salt)?;
         match unwrapped_header {
             ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key)?;

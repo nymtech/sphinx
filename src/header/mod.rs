@@ -86,17 +86,17 @@ impl SphinxHeader {
         )
     }
 
-    /// Processes the header with the provided derived keys.
-    /// It could be useful in the situation where sender is re-using initial secret
-    /// and we could cache processing results.
-    ///
-    /// However, unless you know exactly what you are doing, you should NEVER use this method!
-    /// Prefer normal [process] instead.
-    pub fn process_with_derived_keys(
+    /// Processes the header using a previously derived shared key and a fresh salt.
+    /// This function can be used in the situation where sender is re-using initial secret
+    /// and the intermediate nodes cash the shared key derived using Diffie Hellman as a
+    /// master key, and using only the HKDF and the fresh salt derive an ephemeral key
+    /// to process the packet
+    pub fn process_with_previously_derived_keys(
         self,
-        new_blinded_secret: &Option<SharedSecret>,
-        routing_keys: &RoutingKeys,
+        shared_key: SharedSecret,
+        hkdf_salt: Option<&HKDFSalt>,
     ) -> Result<ProcessedHeader> {
+        let routing_keys = keys::RoutingKeys::derive(shared_key, hkdf_salt);
         if !self.routing_info.integrity_mac.verify(
             routing_keys.header_integrity_hmac_key,
             self.routing_info.enc_routing_information.get_value_ref(),
@@ -110,8 +110,8 @@ impl SphinxHeader {
         let unwrapped_routing_information = self
             .routing_info
             .enc_routing_information
-            .unwrap(routing_keys.stream_cipher_key)
-            .unwrap();
+            .unwrap(routing_keys.stream_cipher_key)?;
+
         match unwrapped_routing_information {
             ParsedRawRoutingInformation::ForwardHop(
                 next_hop_address,
@@ -119,23 +119,20 @@ impl SphinxHeader {
                 new_hkdf_salt,
                 new_encapsulated_routing_info,
             ) => {
-                if let Some(new_blinded_secret) = new_blinded_secret {
-                    Ok(ProcessedHeader::ForwardHop(
-                        SphinxHeader {
-                            shared_secret: *new_blinded_secret,
-                            hkdf_salt: new_hkdf_salt,
-                            routing_info: new_encapsulated_routing_info,
-                        },
-                        next_hop_address,
-                        delay,
-                        routing_keys.payload_key,
-                    ))
-                } else {
-                    Err(Error::new(
-                        ErrorKind::InvalidHeader,
-                        "tried to process forward hop without blinded secret",
-                    ))
-                }
+                // blind the shared_secret in the header
+                let new_shared_secret =
+                    Self::blind_the_shared_secret(self.shared_secret, routing_keys.blinding_factor);
+
+                Ok(ProcessedHeader::ForwardHop(
+                    SphinxHeader {
+                        shared_secret: new_shared_secret,
+                        hkdf_salt: new_hkdf_salt,
+                        routing_info: new_encapsulated_routing_info,
+                    },
+                    next_hop_address,
+                    delay,
+                    routing_keys.payload_key,
+                ))
             }
             ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
                 Ok(ProcessedHeader::FinalHop(
@@ -150,13 +147,14 @@ impl SphinxHeader {
     /// Using the provided shared_secret and node's secret key, derive all routing keys for this hop.
     pub fn compute_routing_keys(
         shared_secret: &SharedSecret,
-        hkdf_salt: Option<&[u8; 32]>,
+        hkdf_salt: Option<&HKDFSalt>,
         node_secret_key: &PrivateKey,
     ) -> RoutingKeys {
         let shared_key = node_secret_key.diffie_hellman(shared_secret);
         keys::RoutingKeys::derive(shared_key, hkdf_salt)
     }
 
+    /// Processes the header using a freshly derived shared key (using Diffie Hellman)
     pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedHeader> {
         let routing_keys =
             Self::compute_routing_keys(&self.shared_secret, Some(&self.hkdf_salt), node_secret_key);
@@ -183,8 +181,6 @@ impl SphinxHeader {
                 new_hkdf_salt,
                 new_encapsulated_routing_info,
             ) => {
-                println!("{:?}", delay);
-                println!("{:?}", new_hkdf_salt);
                 // blind the shared_secret in the header
                 let new_shared_secret =
                     Self::blind_the_shared_secret(self.shared_secret, routing_keys.blinding_factor);
@@ -457,12 +453,9 @@ mod unwrapping_using_previously_derived_keys {
             _ => unreachable!(),
         };
 
-        let new_secret = normally_unwrapped.shared_secret;
-        let routing_keys =
-            SphinxHeader::compute_routing_keys(&initial_secret, Some(&hkdf_salt[0]), &node1_sk);
-
+        let shared_key = node1_sk.diffie_hellman(&sphinx_header.shared_secret);
         let derived_unwrapped = match sphinx_header
-            .process_with_derived_keys(&Some(new_secret), &routing_keys)
+            .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
             .unwrap()
         {
             ProcessedHeader::ForwardHop(new_header, ..) => new_header,
@@ -502,11 +495,9 @@ mod unwrapping_using_previously_derived_keys {
             _ => unreachable!(),
         };
 
-        let routing_keys =
-            SphinxHeader::compute_routing_keys(&initial_secret, Some(&hkdf_salt[0]), &node1_sk);
-
+        let shared_key = node1_sk.diffie_hellman(&sphinx_header.shared_secret);
         let derived_unwrapped = match sphinx_header
-            .process_with_derived_keys(&None, &routing_keys)
+            .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
             .unwrap()
         {
             ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
