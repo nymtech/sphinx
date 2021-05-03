@@ -60,10 +60,6 @@ impl SphinxHeader {
         hkdf_salt: &[HKDFSalt],
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
-        // let mut hkdf_salt: Vec<[u8; 32]> = Vec::new();
-        // for x in 0..route.len() {
-        //     hkdf_salt.push(rand::thread_rng().gen::<[u8; HKDF_SALT_SIZE]>());
-        // }
         let key_material = keys::KeyMaterial::derive(route, initial_secret, &hkdf_salt);
         let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
         let routing_info = routing::EncapsulatedRoutingInformation::new(
@@ -451,11 +447,7 @@ mod unwrapping_using_previously_derived_keys {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let hkdf_salt = [
-            [4u8; HKDF_SALT_SIZE],
-            [1u8; HKDF_SALT_SIZE],
-            [9u8; HKDF_SALT_SIZE],
-        ];
+        let hkdf_salt = [[4u8; HKDF_SALT_SIZE], [1u8; HKDF_SALT_SIZE]];
         let (sphinx_header, _) =
             SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
         let initial_secret = sphinx_header.shared_secret;

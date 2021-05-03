@@ -85,6 +85,7 @@ impl EncapsulatedRoutingInformation {
     ) -> Self {
         assert_eq!(route.len(), routing_keys.len());
         assert_eq!(delays.len(), route.len());
+        assert_eq!(hkdf_salt.len(), route.len());
 
         let final_keys = match routing_keys.last() {
             Some(k) => k,
