@@ -331,12 +331,12 @@ mod create_and_process_sphinx_packet_header {
             }
             _ => panic!(),
         };
-        // match new_header2.process(&node3_sk).unwrap() {
-        //     ProcessedHeader::FinalHop(final_destination, _, _) => {
-        //         assert_eq!(destination.address, final_destination);
-        //     }
-        //     _ => panic!(),
-        // };
+        match new_header2.process(&node3_sk).unwrap() {
+            ProcessedHeader::FinalHop(final_destination, _, _) => {
+                assert_eq!(destination.address, final_destination);
+            }
+            _ => panic!(),
+        };
     }
 }
 
