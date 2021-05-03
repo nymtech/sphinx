@@ -12,13 +12,15 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use arrayref::array_ref;
+use blake2::VarBlake2b;
+use chacha::ChaCha;
+// we might want to swap this one with a different implementation
+use lioness::Lioness;
+
 use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
 use crate::{Error, ErrorKind, Result};
-use arrayref::array_ref;
-use blake2::VarBlake2b;
-use chacha::ChaCha; // we might want to swap this one with a different implementation
-use lioness::Lioness;
 
 // payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
@@ -291,8 +293,9 @@ mod final_payload_setting {
 
 #[cfg(test)]
 mod test_encapsulating_payload {
-    use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
+
+    use super::*;
 
     #[test]
     fn can_be_encapsulated_without_encryption() {
@@ -344,9 +347,10 @@ mod test_encapsulating_payload {
 
 #[cfg(test)]
 mod test_unwrapping_payload {
-    use super::*;
     use crate::constants::{PAYLOAD_KEY_SIZE, SECURITY_PARAMETER};
     use crate::packet::builder::DEFAULT_PAYLOAD_SIZE;
+
+    use super::*;
 
     #[test]
     fn unwrapping_results_in_original_payload_plaintext() {
@@ -375,9 +379,10 @@ mod test_unwrapping_payload {
 
 #[cfg(test)]
 mod plaintext_recovery {
-    use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
     use crate::packet::builder::DEFAULT_PAYLOAD_SIZE;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_recover_plaintext_from_valid_payload() {

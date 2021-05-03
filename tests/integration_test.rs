@@ -23,7 +23,8 @@ use sphinx::SphinxPacket;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
-    use super::*;
+    use std::time::Duration;
+
     use sphinx::constants::HKDF_SALT_SIZE;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx::{
@@ -33,7 +34,8 @@ mod create_and_process_sphinx_packet {
         },
         ProcessedPacket,
     };
-    use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes_without_surb() {
@@ -107,7 +109,8 @@ mod create_and_process_sphinx_packet {
 
 #[cfg(test)]
 mod converting_sphinx_packet_to_and_from_bytes {
-    use super::*;
+    use std::time::Duration;
+
     use sphinx::constants::HKDF_SALT_SIZE;
     use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx::{
@@ -117,7 +120,8 @@ mod converting_sphinx_packet_to_and_from_bytes {
         },
         ProcessedPacket,
     };
-    use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_do_the_conversion_without_data_loss() {
@@ -236,7 +240,8 @@ mod converting_sphinx_packet_to_and_from_bytes {
 
 #[cfg(test)]
 mod create_and_process_surb {
-    use super::*;
+    use std::time::Duration;
+
     use crypto::EphemeralSecret;
     use sphinx::constants::HKDF_SALT_SIZE;
     use sphinx::route::NodeAddressBytes;
@@ -247,7 +252,8 @@ mod create_and_process_surb {
         test_utils::fixtures::destination_fixture,
         ProcessedPacket,
     };
-    use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
@@ -282,7 +288,7 @@ mod create_and_process_surb {
             SURBMaterial::new(
                 surb_route,
                 surb_delays.clone(),
-                surb_hkdf_salt.clone(),
+                surb_hkdf_salt,
                 surb_destination,
             ),
         )
@@ -337,34 +343,35 @@ mod create_and_process_surb {
 
 #[cfg(test)]
 mod reusing_key {
-    use super::*;
+    use std::time::Duration;
+
     use rand::Rng;
+
     use sphinx::constants::NODE_ADDRESS_LENGTH;
-    use sphinx::crypto::EphemeralSecret;
     use sphinx::route::NodeAddressBytes;
     use sphinx::test_utils::fixtures::destination_fixture;
-    use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn reusing_the_same_shared_key_and_message_but_different_salt_gives_different_results() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (_, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
         };
         let route = [node1, node2, node3];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -382,14 +389,8 @@ mod reusing_key {
         let new_hkdf_salt3 = rand::thread_rng().gen::<[u8; 32]>();
         let new_hkdf_salts: [[u8; 32]; 3] = [new_hkdf_salt1, new_hkdf_salt2, new_hkdf_salt3];
 
-        let sphinx_packet2 = SphinxPacket::new(
-            message.clone(),
-            &route,
-            &destination,
-            &delays,
-            &new_hkdf_salts,
-        )
-        .unwrap();
+        let sphinx_packet2 =
+            SphinxPacket::new(message, &route, &destination, &delays, &new_hkdf_salts).unwrap();
 
         assert_ne!(sphinx_packet1.to_bytes(), sphinx_packet2.to_bytes());
     }

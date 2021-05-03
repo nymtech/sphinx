@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use curve25519_dalek::scalar::Scalar;
+
+use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
+use keys::RoutingKeys;
+
 use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, HKDF_SALT_SIZE};
 use crate::crypto;
 use crate::header::delays::Delay;
@@ -21,10 +26,6 @@ use crate::header::routing::nodes::ParsedRawRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{Error, ErrorKind, Result};
-use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
-use curve25519_dalek::scalar::Scalar;
-use keys::RoutingKeys;
-use rand::Rng;
 
 pub mod delays;
 pub mod filler;
@@ -35,13 +36,13 @@ pub mod routing;
 // 32 represents size of a MontgomeryPoint on Curve25519
 pub const HEADER_SIZE: usize =
     32 + HKDF_SALT_SIZE + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTING_INFO_SIZE;
-pub type HKDFSalt = [u8; 32];
+pub type HkdfSalt = [u8; 32];
 
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
 pub struct SphinxHeader {
     pub shared_secret: SharedSecret,
-    pub hkdf_salt: HKDFSalt,
+    pub hkdf_salt: HkdfSalt,
     pub routing_info: EncapsulatedRoutingInformation,
 }
 
@@ -57,7 +58,7 @@ impl SphinxHeader {
         initial_secret: &EphemeralSecret,
         route: &[Node],
         delays: &[Delay],
-        hkdf_salt: &[HKDFSalt],
+        hkdf_salt: &[HkdfSalt],
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive(route, initial_secret, &hkdf_salt);
@@ -94,7 +95,7 @@ impl SphinxHeader {
     pub fn process_with_previously_derived_keys(
         self,
         shared_key: SharedSecret,
-        hkdf_salt: Option<&HKDFSalt>,
+        hkdf_salt: Option<&HkdfSalt>,
     ) -> Result<ProcessedHeader> {
         let routing_keys = keys::RoutingKeys::derive(shared_key, hkdf_salt);
         if !self.routing_info.integrity_mac.verify(
@@ -147,7 +148,7 @@ impl SphinxHeader {
     /// Using the provided shared_secret and node's secret key, derive all routing keys for this hop.
     pub fn compute_routing_keys(
         shared_secret: &SharedSecret,
-        hkdf_salt: Option<&HKDFSalt>,
+        hkdf_salt: Option<&HkdfSalt>,
         node_secret_key: &PrivateKey,
     ) -> RoutingKeys {
         let shared_key = node_secret_key.diffie_hellman(shared_secret);
@@ -271,9 +272,11 @@ impl SphinxHeader {
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
-    use super::*;
-    use crate::{constants::NODE_ADDRESS_LENGTH, test_utils::fixtures::destination_fixture};
     use std::time::Duration;
+
+    use crate::{constants::NODE_ADDRESS_LENGTH, test_utils::fixtures::destination_fixture};
+
+    use super::*;
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
@@ -342,7 +345,6 @@ mod create_and_process_sphinx_packet_header {
 
 #[cfg(test)]
 mod unwrap_routing_information {
-    use super::*;
     use crate::constants::{
         HEADER_INTEGRITY_MAC_SIZE, NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE,
         STREAM_CIPHER_OUTPUT_LENGTH,
@@ -351,6 +353,8 @@ mod unwrap_routing_information {
     use crate::header::routing::nodes::EncryptedRoutingInformation;
     use crate::header::routing::{ENCRYPTED_ROUTING_INFO_SIZE, FORWARD_HOP};
     use crate::utils;
+
+    use super::*;
 
     #[test]
     fn it_returns_correct_unwrapped_routing_information() {
@@ -384,7 +388,7 @@ mod unwrap_routing_information {
                 ParsedRawRoutingInformation::ForwardHop(
                     next_hop_address,
                     _delay,
-                    next_hkdf_salt,
+                    _next_hkdf_salt,
                     next_hop_encapsulated_routing_info,
                 ) => {
                     assert_eq!(
@@ -420,10 +424,12 @@ mod unwrap_routing_information {
 
 #[cfg(test)]
 mod unwrapping_using_previously_derived_keys {
-    use super::*;
+    use std::time::Duration;
+
     use crate::constants::NODE_ADDRESS_LENGTH;
     use crate::test_utils::fixtures::destination_fixture;
-    use std::time::Duration;
+
+    use super::*;
 
     #[test]
     fn produces_same_result_for_forward_hop() {
@@ -446,7 +452,6 @@ mod unwrapping_using_previously_derived_keys {
         let hkdf_salt = [[4u8; HKDF_SALT_SIZE], [1u8; HKDF_SALT_SIZE]];
         let (sphinx_header, _) =
             SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
-        let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
             ProcessedHeader::ForwardHop(new_header, ..) => new_header,
@@ -488,7 +493,6 @@ mod unwrapping_using_previously_derived_keys {
         let hkdf_salt = [[4u8; HKDF_SALT_SIZE]];
         let (sphinx_header, _) =
             SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
-        let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
             ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
@@ -512,8 +516,9 @@ mod unwrapping_using_previously_derived_keys {
 
 #[cfg(test)]
 mod converting_header_to_bytes {
-    use super::*;
     use crate::test_utils::fixtures::encapsulated_routing_information_fixture;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_convert_back_and_forth() {

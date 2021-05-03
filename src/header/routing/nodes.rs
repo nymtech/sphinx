@@ -12,6 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::fmt;
+
 use crate::constants::{
     DELAY_LENGTH, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, HKDF_SALT_SIZE,
     NODE_ADDRESS_LENGTH, NODE_META_INFO_SIZE, STREAM_CIPHER_OUTPUT_LENGTH, VERSION_LENGTH,
@@ -25,11 +27,10 @@ use crate::header::routing::{
     EncapsulatedRoutingInformation, RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
     FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
-use crate::header::HKDFSalt;
+use crate::header::HkdfSalt;
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 use crate::{Error, ErrorKind, Result};
-use std::fmt;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
@@ -41,7 +42,7 @@ pub(super) struct RoutingInformation {
     // in paper nu
     node_address: NodeAddressBytes,
     delay: Delay,
-    hkdf_salt: HKDFSalt,
+    hkdf_salt: HkdfSalt,
     // in paper gamma
     header_integrity_mac: HeaderIntegrityMac,
     // in paper also beta (!)
@@ -52,7 +53,7 @@ impl RoutingInformation {
     pub(super) fn new(
         node_address: NodeAddressBytes,
         delay: Delay,
-        hkdf_salt: HKDFSalt,
+        hkdf_salt: HkdfSalt,
         next_encapsulated_routing_information: EncapsulatedRoutingInformation,
     ) -> Self {
         RoutingInformation {
@@ -197,7 +198,7 @@ pub enum ParsedRawRoutingInformation {
     ForwardHop(
         NodeAddressBytes,
         Delay,
-        HKDFSalt,
+        HkdfSalt,
         EncapsulatedRoutingInformation,
     ),
     FinalHop(DestinationAddressBytes, SURBIdentifier),
@@ -289,7 +290,6 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 
 #[cfg(test)]
 mod preparing_header_layer {
-    use super::*;
     use crate::constants::HeaderIntegrityHmacAlgorithm;
     use crate::{
         constants::HEADER_INTEGRITY_MAC_SIZE,
@@ -297,6 +297,8 @@ mod preparing_header_layer {
             encapsulated_routing_information_fixture, node_address_fixture, routing_keys_fixture,
         },
     };
+
+    use super::*;
 
     #[test]
     fn it_returns_encrypted_truncated_address_and_flag_concatenated_with_inner_layer_and_mac_on_it()
@@ -363,11 +365,12 @@ mod preparing_header_layer {
 
 #[cfg(test)]
 mod encrypting_routing_information {
-    use super::*;
     use crate::{
         crypto::STREAM_CIPHER_KEY_SIZE,
         test_utils::fixtures::{header_integrity_mac_fixture, node_address_fixture},
     };
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_decrypt_it_to_recover_original_data() {
@@ -431,11 +434,12 @@ mod truncating_routing_information {
 
 #[cfg(test)]
 mod parse_decrypted_routing_information {
-    use super::*;
     use crate::{
         header::routing::ENCRYPTED_ROUTING_INFO_SIZE,
         test_utils::fixtures::{header_integrity_mac_fixture, node_address_fixture},
     };
+
+    use super::*;
 
     #[test]
     fn it_returns_next_hop_address_integrity_mac_enc_routing_info() {
@@ -464,7 +468,7 @@ mod parse_decrypted_routing_information {
             ParsedRawRoutingInformation::ForwardHop(
                 next_address,
                 _delay,
-                hkdf_salt,
+                _hkdf_salt,
                 encapsulated_routing_info,
             ) => {
                 assert_eq!(address_fixture, next_address);

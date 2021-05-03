@@ -19,7 +19,7 @@ use crate::header::keys::RoutingKeys;
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::destination::FinalRoutingInformation;
 use crate::header::routing::nodes::{EncryptedRoutingInformation, RoutingInformation};
-use crate::header::HKDFSalt;
+use crate::header::HkdfSalt;
 use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{Error, ErrorKind, Result};
 
@@ -79,7 +79,7 @@ impl EncapsulatedRoutingInformation {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
-        hkdf_salt: &[HKDFSalt],
+        hkdf_salt: &[HkdfSalt],
         routing_keys: &[RoutingKeys],
         filler: Filler,
     ) -> Self {
@@ -122,7 +122,7 @@ impl EncapsulatedRoutingInformation {
         encapsulated_destination_routing_info: Self,
         delays: &[Delay],
         route: &[Node], // [Mix0, Mix1, Mix2, ..., Mix_{v-1}, Mix_v]
-        hkdf_salt: &[HKDFSalt],
+        hkdf_salt: &[HkdfSalt],
         routing_keys: &[RoutingKeys], // [Keys0, Keys1, Keys2, ..., Keys_{v-1}, Keys_v]
     ) -> Self {
         route
@@ -248,7 +248,7 @@ mod encapsulating_all_routing_information {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
-        let hkdf_salt: [HKDFSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
+        let hkdf_salt: [HkdfSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
         EncapsulatedRoutingInformation::new(
             &route,
@@ -276,7 +276,7 @@ mod encapsulating_all_routing_information {
             routing_keys_fixture(),
         ];
         let filler = filler_fixture(route.len() - 1);
-        let hkdf_salt: [HKDFSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
+        let hkdf_salt: [HkdfSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
         EncapsulatedRoutingInformation::new(
             &route,
@@ -300,7 +300,7 @@ mod encapsulating_all_routing_information {
         ];
         let keys = vec![];
         let filler = filler_fixture(route.len() - 1);
-        let hkdf_salt: [HKDFSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
+        let hkdf_salt: [HkdfSalt; 2] = [[4u8; HKDF_SALT_SIZE], [4u8; HKDF_SALT_SIZE]];
 
         EncapsulatedRoutingInformation::new(
             &route,
@@ -336,7 +336,7 @@ mod encapsulating_forward_routing_information {
         let hkdf_salt0 = [1u8; HKDF_SALT_SIZE];
         let hkdf_salt1 = [2u8; HKDF_SALT_SIZE];
         let hkdf_salt2 = [3u8; HKDF_SALT_SIZE];
-        let hkdf_salt = [hkdf_salt0.clone(), hkdf_salt1.clone(), hkdf_salt2.clone()];
+        let hkdf_salt = [hkdf_salt0, hkdf_salt1, hkdf_salt2];
 
         let routing_keys = [
             routing_keys_fixture(),

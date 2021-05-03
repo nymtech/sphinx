@@ -20,7 +20,7 @@ use crate::constants::{
 };
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::crypto::{self, EphemeralSecret};
-use crate::header::HKDFSalt;
+use crate::header::HkdfSalt;
 use crate::route::Node;
 use crypto::SharedSecret;
 use curve25519_dalek::scalar::Scalar;
@@ -46,7 +46,7 @@ impl RoutingKeys {
     // or should this be renamed to 'new'?
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
-    pub fn derive(shared_key: crypto::SharedSecret, salt: Option<&HKDFSalt>) -> Self {
+    pub fn derive(shared_key: crypto::SharedSecret, salt: Option<&HkdfSalt>) -> Self {
         let hkdf = Hkdf::<Sha256>::new(salt.map(|a| &a[..]), shared_key.as_bytes());
 
         let mut i = 0;
@@ -111,7 +111,7 @@ impl KeyMaterial {
     pub fn derive(
         route: &[Node],
         initial_secret: &EphemeralSecret,
-        hkdf_salt: &[HKDFSalt],
+        hkdf_salt: &[HkdfSalt],
     ) -> Self {
         let initial_shared_secret = SharedSecret::from(initial_secret);
         let mut routing_keys = Vec::with_capacity(route.len());

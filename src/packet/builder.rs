@@ -1,4 +1,4 @@
-use crate::header::HKDFSalt;
+use crate::header::HkdfSalt;
 use crate::{
     crypto::EphemeralSecret,
     header::{delays::Delay, SphinxHeader},
@@ -35,7 +35,7 @@ impl<'a> SphinxPacketBuilder<'a> {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
-        hkdf_salt: &[HKDFSalt],
+        hkdf_salt: &[HkdfSalt],
     ) -> Result<SphinxPacket> {
         let (header, payload_keys) = match self.initial_secret.as_ref() {
             Some(initial_secret) => {

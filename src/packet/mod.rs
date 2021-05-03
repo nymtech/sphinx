@@ -1,6 +1,8 @@
+use builder::SphinxPacketBuilder;
+use header::{ProcessedHeader, SphinxHeader};
+
 use crate::crypto::keys::SharedSecret;
-use crate::header::keys::RoutingKeys;
-use crate::header::HKDFSalt;
+use crate::header::HkdfSalt;
 use crate::{
     crypto::PrivateKey,
     header::{self, delays::Delay, HEADER_SIZE},
@@ -8,8 +10,6 @@ use crate::{
     route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier},
     Error, ErrorKind, Result,
 };
-use builder::SphinxPacketBuilder;
-use header::{ProcessedHeader, SphinxHeader};
 
 pub mod builder;
 
@@ -42,7 +42,7 @@ impl SphinxPacket {
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
-        hkdf_salt: &[HKDFSalt],
+        hkdf_salt: &[HkdfSalt],
     ) -> Result<SphinxPacket> {
         SphinxPacketBuilder::default().build_packet(message, route, destination, delays, hkdf_salt)
     }
@@ -64,7 +64,7 @@ impl SphinxPacket {
     pub fn process_with_previously_derived_keys(
         self,
         shared_key: SharedSecret,
-        hkdf_salt: Option<&HKDFSalt>,
+        hkdf_salt: Option<&HkdfSalt>,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self
             .header

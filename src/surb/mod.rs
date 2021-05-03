@@ -1,7 +1,7 @@
 use crate::constants::{NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE};
 use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
-use crate::header::HKDFSalt;
+use crate::header::HkdfSalt;
 use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{crypto::EphemeralSecret, Error, ErrorKind, Result};
@@ -38,7 +38,7 @@ impl fmt::Debug for SURB {
 pub struct SURBMaterial {
     surb_route: Vec<Node>,
     surb_delays: Vec<Delay>,
-    surb_hkdf_salt: Vec<HKDFSalt>,
+    surb_hkdf_salt: Vec<HkdfSalt>,
     surb_destination: Destination,
 }
 
@@ -46,7 +46,7 @@ impl SURBMaterial {
     pub fn new(
         route: Vec<Node>,
         delays: Vec<Delay>,
-        hkdf_salt: Vec<HKDFSalt>,
+        hkdf_salt: Vec<HkdfSalt>,
         destination: Destination,
     ) -> Self {
         SURBMaterial {
