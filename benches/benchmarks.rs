@@ -15,7 +15,9 @@
 extern crate sphinx;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use sphinx::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
+use sphinx::constants::{
+    DESTINATION_ADDRESS_LENGTH, HKDF_SALT_SIZE, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
+};
 use sphinx::crypto::keygen;
 use sphinx::header::delays;
 use sphinx::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
@@ -51,6 +53,12 @@ fn bench_new_no_surb(c: &mut Criterion) {
         [4u8; IDENTIFIER_LENGTH],
     );
 
+    let hkdf_salt = [
+        [4u8; HKDF_SALT_SIZE],
+        [1u8; HKDF_SALT_SIZE],
+        [3u8; HKDF_SALT_SIZE],
+    ];
+
     let message = vec![13u8, 16];
 
     c.bench_function("sphinx creation", |b| {
@@ -60,6 +68,7 @@ fn bench_new_no_surb(c: &mut Criterion) {
                 black_box(&route),
                 black_box(&destination),
                 black_box(&delays),
+                black_box(&hkdf_salt),
             )
             .unwrap()
         })
@@ -89,9 +98,14 @@ fn bench_unwrap(c: &mut Criterion) {
         DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
         [4u8; IDENTIFIER_LENGTH],
     );
+    let hkdf_salt = [
+        [4u8; HKDF_SALT_SIZE],
+        [1u8; HKDF_SALT_SIZE],
+        [3u8; HKDF_SALT_SIZE],
+    ];
 
     let message = vec![13u8, 16];
-    let packet = SphinxPacket::new(message, &route, &destination, &delays).unwrap();
+    let packet = SphinxPacket::new(message, &route, &destination, &delays, &hkdf_salt).unwrap();
 
     // technically it's not benching only unwrapping, but also "make_packet_copy"
     // but it's relatively small
