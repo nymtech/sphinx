@@ -381,7 +381,7 @@ mod create_and_process_sphinx_packet_header_with_precomputed_keys {
     use std::time::Duration;
 
     #[test]
-    fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
+    fn it_returns_correct_routing_information_for_route_of_3_mixnodes() {
         let (node1_sk, node1_pk) = crypto::keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
@@ -422,29 +422,26 @@ mod create_and_process_sphinx_packet_header_with_precomputed_keys {
             &initial_shared_secret,
         );
 
-        let shared_key = node1_sk.diffie_hellman(&header.shared_secret);
-
-        let normally_unwrapped = match header.clone().process(&node1_sk).unwrap() {
+        let shared_key1 = node1_sk.diffie_hellman(&header.shared_secret);
+        let normally_unwrapped1 = match header.clone().process(&node1_sk).unwrap() {
             ProcessedHeader::ForwardHop(new_header, ..) => new_header,
             _ => unreachable!(),
         };
-
-        let derived_unwrapped = match header
-            .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
+        let derived_unwrapped1 = match header
+            .process_with_previously_derived_keys(shared_key1, Some(&hkdf_salt[0]))
             .unwrap()
         {
             ProcessedHeader::ForwardHop(new_header, ..) => new_header,
             _ => unreachable!(),
         };
-
         assert_eq!(
-            normally_unwrapped.shared_secret,
-            derived_unwrapped.shared_secret
+            normally_unwrapped1.shared_secret,
+            derived_unwrapped1.shared_secret
         );
         assert_eq!(
-            normally_unwrapped.routing_info.to_bytes(),
-            derived_unwrapped.routing_info.to_bytes()
-        )
+            normally_unwrapped1.routing_info.to_bytes(),
+            derived_unwrapped1.routing_info.to_bytes()
+        );
     }
 }
 
