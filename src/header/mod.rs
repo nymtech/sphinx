@@ -87,6 +87,32 @@ impl SphinxHeader {
         )
     }
 
+    /// Creates a new header with a set of previously precomputed keys and initial shared secret
+    pub fn new_with_precomputed_keys(
+        route: &[Node],
+        delays: &[Delay],
+        hkdf_salt: &[HkdfSalt],
+        destination: &Destination,
+        routing_keys: &[RoutingKeys],
+        initial_shared_secret: &SharedSecret,
+    ) -> Self {
+        let filler_string = Filler::new(&routing_keys[..route.len() - 1]);
+        let routing_info = routing::EncapsulatedRoutingInformation::new(
+            route,
+            destination,
+            &delays,
+            &hkdf_salt,
+            routing_keys,
+            filler_string,
+        );
+        // encapsulate header.routing information, compute MACs
+        SphinxHeader {
+            shared_secret: *initial_shared_secret,
+            hkdf_salt: hkdf_salt[0],
+            routing_info,
+        }
+    }
+
     /// Processes the header using a previously derived shared key and a fresh salt.
     /// This function can be used in the situation where sender is re-using initial secret
     /// and the intermediate nodes cash the shared key derived using Diffie Hellman as a
@@ -301,7 +327,7 @@ mod create_and_process_sphinx_packet_header {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        println!("{:?}", delays[0]);
+
         let hkdf_salt = [
             [4u8; HKDF_SALT_SIZE],
             [7u8; HKDF_SALT_SIZE],
@@ -340,6 +366,85 @@ mod create_and_process_sphinx_packet_header {
             }
             _ => panic!(),
         };
+    }
+}
+
+#[cfg(test)]
+mod create_and_process_sphinx_packet_header_with_precomputed_keys {
+    use crate::constants::{HKDF_SALT_SIZE, NODE_ADDRESS_LENGTH};
+    use crate::crypto;
+    use crate::crypto::EphemeralSecret;
+    use crate::crypto::SharedSecret;
+    use crate::header::{delays, keys, ProcessedHeader, SphinxHeader};
+    use crate::route::{Node, NodeAddressBytes};
+    use crate::test_utils::fixtures::destination_fixture;
+    use std::time::Duration;
+
+    #[test]
+    fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+        let route = [node1, node2, node3];
+        let destination = destination_fixture();
+        let initial_secret = EphemeralSecret::new();
+        let average_delay = 1;
+        let delays =
+            delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
+
+        let hkdf_salt = [
+            [4u8; HKDF_SALT_SIZE],
+            [7u8; HKDF_SALT_SIZE],
+            [9u8; HKDF_SALT_SIZE],
+        ];
+
+        let key_material = keys::KeyMaterial::derive(&route, &initial_secret, &hkdf_salt);
+        let initial_shared_secret = SharedSecret::from(&initial_secret);
+
+        let header = SphinxHeader::new_with_precomputed_keys(
+            &route,
+            &delays,
+            &hkdf_salt,
+            &destination,
+            &key_material.routing_keys,
+            &initial_shared_secret,
+        );
+
+        let shared_key = node1_sk.diffie_hellman(&header.shared_secret);
+
+        let normally_unwrapped = match header.clone().process(&node1_sk).unwrap() {
+            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            _ => unreachable!(),
+        };
+
+        let derived_unwrapped = match header
+            .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
+            .unwrap()
+        {
+            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            _ => unreachable!(),
+        };
+
+        assert_eq!(
+            normally_unwrapped.shared_secret,
+            derived_unwrapped.shared_secret
+        );
+        assert_eq!(
+            normally_unwrapped.routing_info.to_bytes(),
+            derived_unwrapped.routing_info.to_bytes()
+        )
     }
 }
 

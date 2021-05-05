@@ -2,6 +2,7 @@ use builder::SphinxPacketBuilder;
 use header::{ProcessedHeader, SphinxHeader};
 
 use crate::crypto::keys::SharedSecret;
+use crate::header::keys::RoutingKeys;
 use crate::header::HkdfSalt;
 use crate::{
     crypto::PrivateKey,
@@ -45,6 +46,26 @@ impl SphinxPacket {
         hkdf_salt: &[HkdfSalt],
     ) -> Result<SphinxPacket> {
         SphinxPacketBuilder::default().build_packet(message, route, destination, delays, hkdf_salt)
+    }
+
+    pub fn new_with_precomputed_keys(
+        message: Vec<u8>,
+        route: &[Node],
+        destination: &Destination,
+        delays: &[Delay],
+        hkdf_salt: &[HkdfSalt],
+        routing_keys: &[RoutingKeys],
+        initial_shared_secret: &SharedSecret,
+    ) -> Result<SphinxPacket> {
+        SphinxPacketBuilder::default().build_packet_with_precomputed_keys(
+            message,
+            route,
+            destination,
+            delays,
+            hkdf_salt,
+            routing_keys,
+            initial_shared_secret,
+        )
     }
 
     pub fn shared_secret(&self) -> SharedSecret {
