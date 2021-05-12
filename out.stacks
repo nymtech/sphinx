@@ -1,0 +1,60 @@
+
+
+              sphinx-df4d2a8f09692c9a`main
+              sphinx-df4d2a8f09692c9a`0x2
+                1
+
+              sphinx-df4d2a8f09692c9a`term::terminfo::parser::compiled::parse::h09263b82df704ad5+0x36d7
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::_from_path::h346aaf3de80499c2+0x140
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::from_name::h6446ef79b977e651+0x4f
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::from_env::h1f4643a1b09f2005+0xa3
+              sphinx-df4d2a8f09692c9a`term::stdout::h08c7cfe0077cf980+0x2c
+              sphinx-df4d2a8f09692c9a`test::console::run_tests_console::h1bb87038cada192f+0x27
+              sphinx-df4d2a8f09692c9a`test::test_main::h42b44b2222fe8144+0x123
+              sphinx-df4d2a8f09692c9a`test::test_main_static::h477428a5e7bd6347+0x6f
+              sphinx-df4d2a8f09692c9a`std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::hc7fed24226f13f2b+0x6
+              sphinx-df4d2a8f09692c9a`std::panicking::try::do_call::hf2b35caddf59127c+0x18
+              sphinx-df4d2a8f09692c9a`__rust_maybe_catch_panic+0x1b
+              sphinx-df4d2a8f09692c9a`std::rt::lang_start_internal::h8e563903bf99e7c1+0x21e
+              sphinx-df4d2a8f09692c9a`main+0x29
+              libdyld.dylib`start+0x1
+              sphinx-df4d2a8f09692c9a`0x2
+                1
+
+
+              libsystem_kernel.dylib`__open+0xa
+              sphinx-df4d2a8f09692c9a`std::sys::unix::fs::File::open_c::hf4aff7f3884de8ca+0x15c
+              sphinx-df4d2a8f09692c9a`std::fs::OpenOptions::_open::he7d599946f0c7942+0x99
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::_from_path::h346aaf3de80499c2+0x67
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::from_name::h6446ef79b977e651+0x4f
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::from_env::h1f4643a1b09f2005+0xa3
+              sphinx-df4d2a8f09692c9a`term::stdout::h08c7cfe0077cf980+0x2c
+              sphinx-df4d2a8f09692c9a`test::console::run_tests_console::h1bb87038cada192f+0x27
+              sphinx-df4d2a8f09692c9a`test::test_main::h42b44b2222fe8144+0x123
+              sphinx-df4d2a8f09692c9a`test::test_main_static::h477428a5e7bd6347+0x6f
+              sphinx-df4d2a8f09692c9a`std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::hc7fed24226f13f2b+0x6
+              sphinx-df4d2a8f09692c9a`std::panicking::try::do_call::hf2b35caddf59127c+0x18
+              sphinx-df4d2a8f09692c9a`__rust_maybe_catch_panic+0x1b
+              sphinx-df4d2a8f09692c9a`std::rt::lang_start_internal::h8e563903bf99e7c1+0x21e
+              sphinx-df4d2a8f09692c9a`main+0x29
+              libdyld.dylib`start+0x1
+              sphinx-df4d2a8f09692c9a`0x2
+                1
+
+
+              libsystem_kernel.dylib`stat$INODE64+0xa
+              sphinx-df4d2a8f09692c9a`term::terminfo::searcher::get_dbpath_for_term::h3bf1627c026aa3ae+0xd21
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::from_name::h6446ef79b977e651+0x17
+              sphinx-df4d2a8f09692c9a`term::terminfo::TermInfo::from_env::h1f4643a1b09f2005+0xa3
+              sphinx-df4d2a8f09692c9a`term::stdout::h08c7cfe0077cf980+0x2c
+              sphinx-df4d2a8f09692c9a`test::console::run_tests_console::h1bb87038cada192f+0x27
+              sphinx-df4d2a8f09692c9a`test::test_main::h42b44b2222fe8144+0x123
+              sphinx-df4d2a8f09692c9a`test::test_main_static::h477428a5e7bd6347+0x6f
+              sphinx-df4d2a8f09692c9a`std::rt::lang_start::_$u7b$$u7b$closure$u7d$$u7d$::hc7fed24226f13f2b+0x6
+              sphinx-df4d2a8f09692c9a`std::panicking::try::do_call::hf2b35caddf59127c+0x18
+              sphinx-df4d2a8f09692c9a`__rust_maybe_catch_panic+0x1b
+              sphinx-df4d2a8f09692c9a`std::rt::lang_start_internal::h8e563903bf99e7c1+0x21e
+              sphinx-df4d2a8f09692c9a`main+0x29
+              libdyld.dylib`start+0x1
+              sphinx-df4d2a8f09692c9a`0x2
+                1

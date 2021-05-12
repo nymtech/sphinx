@@ -1,8 +1,7 @@
 use builder::SphinxPacketBuilder;
 use header::{ProcessedHeader, SphinxHeader};
 
-use crate::crypto::keys::SharedSecret;
-use crate::header::keys::RoutingKeys;
+use crate::crypto::keys::SharedKey;
 use crate::header::HkdfSalt;
 use crate::{
     crypto::PrivateKey,
@@ -22,7 +21,7 @@ pub enum ProcessedPacket {
 }
 
 impl ProcessedPacket {
-    pub fn shared_secret(&self) -> Option<SharedSecret> {
+    pub fn shared_secret(&self) -> Option<SharedKey> {
         match self {
             ProcessedPacket::ForwardHop(packet, ..) => Some(packet.shared_secret()),
             ProcessedPacket::FinalHop(..) => None,
@@ -54,8 +53,8 @@ impl SphinxPacket {
         destination: &Destination,
         delays: &[Delay],
         hkdf_salt: &[HkdfSalt],
-        routing_keys: &[RoutingKeys],
-        initial_shared_secret: &SharedSecret,
+        shared_keys: &[SharedKey],
+        initial_shared_secret: &SharedKey,
     ) -> Result<SphinxPacket> {
         SphinxPacketBuilder::default().build_packet_with_precomputed_keys(
             message,
@@ -63,12 +62,12 @@ impl SphinxPacket {
             destination,
             delays,
             hkdf_salt,
-            routing_keys,
+            shared_keys,
             initial_shared_secret,
         )
     }
 
-    pub fn shared_secret(&self) -> SharedSecret {
+    pub fn shared_secret(&self) -> SharedKey {
         self.header.shared_secret
     }
 
@@ -84,7 +83,7 @@ impl SphinxPacket {
     /// to process the packet
     pub fn process_with_previously_derived_keys(
         self,
-        shared_key: SharedSecret,
+        shared_key: SharedKey,
         hkdf_salt: Option<&HkdfSalt>,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self

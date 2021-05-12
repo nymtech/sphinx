@@ -90,7 +90,7 @@ mod test_creating_pseudorandom_bytes {
     use crate::header::keys;
 
     use super::*;
-    use crypto::{EphemeralSecret, SharedSecret};
+    use crypto::{EphemeralSecret, SharedKey};
 
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
@@ -102,7 +102,7 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_3_times_security_parameter() {
-        let shared_keys = vec![SharedSecret::from(&EphemeralSecret::new())];
+        let shared_keys = vec![SharedKey::from(&EphemeralSecret::new())];
         let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::RoutingKeys::derive(key, None))
@@ -115,9 +115,9 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     fn with_3_key_it_generates_filler_of_length_3_times_3_times_security_parameter() {
         let shared_keys = vec![
-            SharedSecret::from(&EphemeralSecret::new()),
-            SharedSecret::from(&EphemeralSecret::new()),
-            SharedSecret::from(&EphemeralSecret::new()),
+            SharedKey::from(&EphemeralSecret::new()),
+            SharedKey::from(&EphemeralSecret::new()),
+            SharedKey::from(&EphemeralSecret::new()),
         ];
         let routing_keys: Vec<_> = shared_keys
             .iter()
@@ -132,7 +132,7 @@ mod test_creating_pseudorandom_bytes {
     fn panics_with_more_keys_than_the_maximum_path_length() {
         let shared_keys: Vec<_> = std::iter::repeat(())
             .take(constants::MAX_PATH_LENGTH + 1)
-            .map(|_| SharedSecret::from(&EphemeralSecret::new()))
+            .map(|_| SharedKey::from(&EphemeralSecret::new()))
             .collect();
         let routing_keys: Vec<_> = shared_keys
             .iter()

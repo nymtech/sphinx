@@ -1,5 +1,5 @@
-use crate::crypto::SharedSecret;
-use crate::header::keys::{PayloadKey, RoutingKeys};
+use crate::crypto::SharedKey;
+use crate::header::keys::RoutingKeys;
 use crate::header::HkdfSalt;
 use crate::{
     crypto::EphemeralSecret,
@@ -63,22 +63,18 @@ impl<'a> SphinxPacketBuilder<'a> {
         destination: &Destination,
         delays: &[Delay],
         hkdf_salt: &[HkdfSalt],
-        routing_keys: &[RoutingKeys],
-        initial_shared_secret: &SharedSecret,
+        shared_keys: &[SharedKey],
+        initial_shared_secret: &SharedKey,
     ) -> Result<SphinxPacket> {
-        let header = SphinxHeader::new_with_precomputed_keys(
+        let (header, payload_keys) = SphinxHeader::new_with_precomputed_keys(
             route,
             delays,
             hkdf_salt,
             destination,
-            routing_keys,
+            shared_keys,
             initial_shared_secret,
         );
 
-        let payload_keys: Vec<PayloadKey> = routing_keys
-            .iter()
-            .map(|routing_key| routing_key.payload_key)
-            .collect();
         let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
         Ok(SphinxPacket { header, payload })
     }

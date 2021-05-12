@@ -50,11 +50,12 @@ pub struct PublicKey(MontgomeryPoint);
 
 // type aliases for easier reasoning
 pub type EphemeralSecret = PrivateKey;
-pub type SharedSecret = PublicKey;
+pub type SharedKey = PublicKey;
+pub type SharedGroupElement = PublicKey;
 
 impl PrivateKey {
     /// Perform a key exchange with another public key
-    pub fn diffie_hellman(&self, remote_public_key: &PublicKey) -> SharedSecret {
+    pub fn diffie_hellman(&self, remote_public_key: &PublicKey) -> SharedKey {
         PublicKey(self.0 * remote_public_key.0)
     }
 

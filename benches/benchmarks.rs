@@ -18,7 +18,7 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use sphinx::constants::{
     DESTINATION_ADDRESS_LENGTH, HKDF_SALT_SIZE, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
 };
-use sphinx::crypto::{keygen, EphemeralSecret, SharedSecret};
+use sphinx::crypto::{keygen, EphemeralSecret, SharedKey};
 use sphinx::header::{delays, SphinxHeader};
 use sphinx::packet::builder::DEFAULT_PAYLOAD_SIZE;
 use sphinx::payload::Payload;
@@ -149,7 +149,7 @@ fn bench_unwrap_key_reuse(c: &mut Criterion) {
         [3u8; HKDF_SALT_SIZE],
     ];
     let initial_secret = EphemeralSecret::new();
-    let initial_shared_secret = SharedSecret::from(&initial_secret);
+    let initial_shared_secret = SharedKey::from(&initial_secret);
     let message = vec![13u8, 16];
     let (header, payload_keys) =
         SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);

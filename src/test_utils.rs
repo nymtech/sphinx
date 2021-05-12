@@ -21,8 +21,8 @@ use crate::{
 pub mod fixtures {
     use crate::{
         constants::{
-            BLINDING_FACTOR_SIZE, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE,
-            IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE,
+            DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH,
+            INTEGRITY_MAC_KEY_SIZE, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE,
         },
         crypto,
         header::{
@@ -61,7 +61,6 @@ pub mod fixtures {
             stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
             header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
             payload_key: [3u8; PAYLOAD_KEY_SIZE],
-            blinding_factor: [4u8; BLINDING_FACTOR_SIZE],
         }
     }
 
