@@ -330,7 +330,7 @@ mod create_and_process_sphinx_packet_header {
                 address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                 pub_key: node2_pk,
             };
-            let (_, node3_pk) = crypto::keygen();
+            let (node3_sk, node3_pk) = crypto::keygen();
             let node3 = Node {
                 address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                 pub_key: node3_pk,
@@ -362,6 +362,7 @@ mod create_and_process_sphinx_packet_header {
                 &initial_shared_secret,
             );
 
+            // The first mix processing
             let shared_key1 = node1_sk.diffie_hellman(&header.shared_secret);
             let normally_unwrapped1 = match header.clone().process(&node1_sk).unwrap() {
                 ProcessedHeader::ForwardHop(new_header, ..) => new_header,
@@ -383,6 +384,7 @@ mod create_and_process_sphinx_packet_header {
                 derived_unwrapped1.routing_info.to_bytes()
             );
 
+            // The second mix processing
             let shared_key2 = node2_sk.diffie_hellman(&derived_unwrapped1.shared_secret);
             let normally_unwrapped2 = match derived_unwrapped1.clone().process(&node2_sk).unwrap() {
                 ProcessedHeader::ForwardHop(new_header, ..) => new_header,
@@ -404,6 +406,22 @@ mod create_and_process_sphinx_packet_header {
                 normally_unwrapped2.routing_info.to_bytes(),
                 derived_unwrapped2.routing_info.to_bytes()
             );
+
+            // The last mix processing
+            let shared_key3 = node3_sk.diffie_hellman(&derived_unwrapped2.shared_secret);
+            let normally_unwrapped3 = match derived_unwrapped2.clone().process(&node3_sk).unwrap() {
+                ProcessedHeader::FinalHop(destination_address, ..) => destination_address,
+                _ => unreachable!(),
+            };
+
+            let derived_unwrapped3 = match derived_unwrapped2
+                .process_with_previously_derived_keys(shared_key3, Some(&hkdf_salt[2]))
+                .unwrap()
+            {
+                ProcessedHeader::FinalHop(destination_address, ..) => destination_address,
+                _ => unreachable!(),
+            };
+            assert_eq!(normally_unwrapped3, derived_unwrapped3);
         }
     }
 
