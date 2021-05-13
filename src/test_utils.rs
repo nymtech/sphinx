@@ -19,6 +19,8 @@ use crate::{
 };
 
 pub mod fixtures {
+    use crate::constants::HKDF_SALT_SIZE;
+    use crate::header::HkdfSalt;
     use crate::{
         constants::{
             DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH,
@@ -36,6 +38,7 @@ pub mod fixtures {
         },
         route::{Destination, DestinationAddressBytes, NodeAddressBytes, SURBIdentifier},
     };
+    use rand::Rng;
 
     pub fn destination_address_fixture() -> DestinationAddressBytes {
         DestinationAddressBytes::from_bytes([1u8; DESTINATION_ADDRESS_LENGTH])
@@ -81,6 +84,10 @@ pub mod fixtures {
             enc_routing_information: encrypted_routing_information_fixture(),
             integrity_mac: header_integrity_mac_fixture(),
         }
+    }
+
+    pub fn hkdf_salt_fixture() -> HkdfSalt {
+        rand::thread_rng().gen::<[u8; HKDF_SALT_SIZE]>()
     }
 }
 

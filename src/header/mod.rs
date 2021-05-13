@@ -315,7 +315,7 @@ mod create_and_process_sphinx_packet_header {
         use crate::crypto::SharedKey;
         use crate::header::{delays, keys, ProcessedHeader, SphinxHeader};
         use crate::route::{Node, NodeAddressBytes};
-        use crate::test_utils::fixtures::destination_fixture;
+        use crate::test_utils::fixtures::{destination_fixture, hkdf_salt_fixture};
         use std::time::Duration;
 
         #[test]
@@ -335,7 +335,7 @@ mod create_and_process_sphinx_packet_header {
                 address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                 pub_key: node3_pk,
             };
-            let route = [node1, node2, node3];
+            let route = [node1.clone(), node2.clone(), node3.clone()];
             let destination = destination_fixture();
             let initial_secret = EphemeralSecret::new();
             let average_delay = 1;
@@ -345,15 +345,15 @@ mod create_and_process_sphinx_packet_header {
             );
 
             let hkdf_salt = [
-                [4u8; HKDF_SALT_SIZE],
-                [7u8; HKDF_SALT_SIZE],
-                [9u8; HKDF_SALT_SIZE],
+                hkdf_salt_fixture(),
+                hkdf_salt_fixture(),
+                hkdf_salt_fixture(),
             ];
 
             let key_material = keys::KeyMaterial::derive_shared_keys(&route, &initial_secret);
             let initial_shared_secret = SharedKey::from(&initial_secret);
 
-            let (header, payload_keys) = SphinxHeader::new_with_precomputed_keys(
+            let (header, _) = SphinxHeader::new_with_precomputed_keys(
                 &route,
                 &delays,
                 &hkdf_salt,
@@ -364,64 +364,43 @@ mod create_and_process_sphinx_packet_header {
 
             // The first mix processing
             let shared_key1 = node1_sk.diffie_hellman(&header.shared_secret);
-            let normally_unwrapped1 = match header.clone().process(&node1_sk).unwrap() {
-                ProcessedHeader::ForwardHop(new_header, ..) => new_header,
-                _ => unreachable!(),
-            };
             let derived_unwrapped1 = match header
                 .process_with_previously_derived_keys(shared_key1, Some(&hkdf_salt[0]))
                 .unwrap()
             {
-                ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+                ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+                    assert_eq!(node2.address, next_hop_address);
+                    assert_eq!(delays[0].to_nanos(), delay.to_nanos());
+                    new_header
+                }
                 _ => unreachable!(),
             };
-            assert_eq!(
-                normally_unwrapped1.shared_secret,
-                derived_unwrapped1.shared_secret
-            );
-            assert_eq!(
-                normally_unwrapped1.routing_info.to_bytes(),
-                derived_unwrapped1.routing_info.to_bytes()
-            );
 
             // The second mix processing
             let shared_key2 = node2_sk.diffie_hellman(&derived_unwrapped1.shared_secret);
-            let normally_unwrapped2 = match derived_unwrapped1.clone().process(&node2_sk).unwrap() {
-                ProcessedHeader::ForwardHop(new_header, ..) => new_header,
-                _ => unreachable!(),
-            };
-
             let derived_unwrapped2 = match derived_unwrapped1
                 .process_with_previously_derived_keys(shared_key2, Some(&hkdf_salt[1]))
                 .unwrap()
             {
-                ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+                ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+                    assert_eq!(node3.address, next_hop_address);
+                    assert_eq!(delays[1].to_nanos(), delay.to_nanos());
+                    new_header
+                }
                 _ => unreachable!(),
             };
-            assert_eq!(
-                normally_unwrapped2.shared_secret,
-                derived_unwrapped2.shared_secret
-            );
-            assert_eq!(
-                normally_unwrapped2.routing_info.to_bytes(),
-                derived_unwrapped2.routing_info.to_bytes()
-            );
 
             // The last mix processing
             let shared_key3 = node3_sk.diffie_hellman(&derived_unwrapped2.shared_secret);
-            let normally_unwrapped3 = match derived_unwrapped2.clone().process(&node3_sk).unwrap() {
-                ProcessedHeader::FinalHop(destination_address, ..) => destination_address,
-                _ => unreachable!(),
-            };
-
-            let derived_unwrapped3 = match derived_unwrapped2
+            match derived_unwrapped2
                 .process_with_previously_derived_keys(shared_key3, Some(&hkdf_salt[2]))
                 .unwrap()
             {
-                ProcessedHeader::FinalHop(destination_address, ..) => destination_address,
+                ProcessedHeader::FinalHop(destination_address, ..) => {
+                    assert_eq!(destination.address, destination_address)
+                }
                 _ => unreachable!(),
             };
-            assert_eq!(normally_unwrapped3, derived_unwrapped3);
         }
     }
 
@@ -434,7 +413,7 @@ mod create_and_process_sphinx_packet_header {
         use crate::crypto::EphemeralSecret;
         use crate::header::{delays, ProcessedHeader, SphinxHeader};
         use crate::route::{Node, NodeAddressBytes};
-        use crate::test_utils::fixtures::destination_fixture;
+        use crate::test_utils::fixtures::{destination_fixture, hkdf_salt_fixture};
 
         #[test]
         fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
@@ -463,14 +442,14 @@ mod create_and_process_sphinx_packet_header {
             );
 
             let hkdf_salt = [
-                [4u8; HKDF_SALT_SIZE],
-                [7u8; HKDF_SALT_SIZE],
-                [9u8; HKDF_SALT_SIZE],
+                hkdf_salt_fixture(),
+                hkdf_salt_fixture(),
+                hkdf_salt_fixture(),
             ];
+
             let (sphinx_header, _) =
                 SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
 
-            //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
             let new_header = match sphinx_header.process(&node1_sk).unwrap() {
                 ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
                     assert_eq!(
@@ -506,7 +485,6 @@ mod create_and_process_sphinx_packet_header {
 
 #[cfg(test)]
 mod unwrap_routing_information {
-    use crate::constants::{NODE_META_INFO_SIZE, STREAM_CIPHER_OUTPUT_LENGTH};
 
     #[cfg(test)]
     mod with_previously_computed_keys {
@@ -515,7 +493,7 @@ mod unwrap_routing_information {
         use crate::crypto::EphemeralSecret;
         use crate::header::{delays, ProcessedHeader, SphinxHeader};
         use crate::route::{Node, NodeAddressBytes};
-        use crate::test_utils::fixtures::destination_fixture;
+        use crate::test_utils::fixtures::{destination_fixture, hkdf_salt_fixture};
         use std::time::Duration;
 
         #[test]
@@ -525,7 +503,7 @@ mod unwrap_routing_information {
                 address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
                 pub_key: node1_pk,
             };
-            let (_, node2_pk) = crypto::keygen();
+            let (node2_sk, node2_pk) = crypto::keygen();
             let node2 = Node {
                 address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                 pub_key: node2_pk,
@@ -538,18 +516,19 @@ mod unwrap_routing_information {
                 route.len(),
                 Duration::from_secs(average_delay),
             );
-            let hkdf_salt = [[4u8; HKDF_SALT_SIZE], [1u8; HKDF_SALT_SIZE]];
+            let hkdf_salt = [hkdf_salt_fixture(), hkdf_salt_fixture()];
             let (sphinx_header, _) =
                 SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
 
-            let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
+            // The first mix processing
+            let normally_unwrapped1 = match sphinx_header.clone().process(&node1_sk).unwrap() {
                 ProcessedHeader::ForwardHop(new_header, ..) => new_header,
                 _ => unreachable!(),
             };
 
-            let shared_key = node1_sk.diffie_hellman(&sphinx_header.shared_secret);
-            let derived_unwrapped = match sphinx_header
-                .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
+            let shared_key1 = node1_sk.diffie_hellman(&sphinx_header.shared_secret);
+            let derived_unwrapped1 = match sphinx_header
+                .process_with_previously_derived_keys(shared_key1, Some(&hkdf_salt[0]))
                 .unwrap()
             {
                 ProcessedHeader::ForwardHop(new_header, ..) => new_header,
@@ -557,13 +536,30 @@ mod unwrap_routing_information {
             };
 
             assert_eq!(
-                normally_unwrapped.shared_secret,
-                derived_unwrapped.shared_secret
+                normally_unwrapped1.shared_secret,
+                derived_unwrapped1.shared_secret
             );
             assert_eq!(
-                normally_unwrapped.routing_info.to_bytes(),
-                derived_unwrapped.routing_info.to_bytes()
-            )
+                normally_unwrapped1.routing_info.to_bytes(),
+                derived_unwrapped1.routing_info.to_bytes()
+            );
+
+            // The final (second) mix processing
+            let normally_unwrapped2 = match derived_unwrapped1.clone().process(&node2_sk).unwrap() {
+                ProcessedHeader::FinalHop(destination_address, ..) => destination_address,
+                _ => unreachable!(),
+            };
+
+            let shared_key2 = node2_sk.diffie_hellman(&derived_unwrapped1.shared_secret);
+            let derived_unwrapped2 = match derived_unwrapped1
+                .process_with_previously_derived_keys(shared_key2, Some(&hkdf_salt[1]))
+                .unwrap()
+            {
+                ProcessedHeader::FinalHop(destination_address, ..) => destination_address,
+                _ => unreachable!(),
+            };
+
+            assert_eq!(normally_unwrapped2, derived_unwrapped2,);
         }
 
         #[test]
