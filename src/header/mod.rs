@@ -61,6 +61,8 @@ impl SphinxHeader {
         hkdf_salt: &[HkdfSalt],
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
+        assert_eq!(route.len(), hkdf_salt.len());
+        assert_eq!(route.len(), delays.len());
         let key_material = keys::KeyMaterial::derive_shared_keys(route, initial_secret);
         let routing_keys = RoutingKeys::derive_routing_keys(&key_material.shared_keys, hkdf_salt);
         let filler_string = Filler::new(&routing_keys[..route.len() - 1]);
@@ -96,6 +98,9 @@ impl SphinxHeader {
         shared_keys: &[SharedKey],
         initial_shared_secret: &SharedKey,
     ) -> (Self, Vec<PayloadKey>) {
+        assert_eq!(route.len(), hkdf_salt.len());
+        assert_eq!(route.len(), shared_keys.len());
+        assert_eq!(route.len(), delays.len());
         let routing_keys = RoutingKeys::derive_routing_keys(&shared_keys, hkdf_salt);
         let filler_string = Filler::new(&routing_keys[..route.len() - 1]);
         let routing_info = routing::EncapsulatedRoutingInformation::new(
@@ -317,6 +322,95 @@ mod create_and_process_sphinx_packet_header {
         use crate::header::{delays, keys, ProcessedHeader, SphinxHeader};
         use crate::route::{Node, NodeAddressBytes};
         use crate::test_utils::fixtures::{destination_fixture, hkdf_salt_fixture};
+
+        #[test]
+        #[should_panic]
+        fn it_panics_if_route_len_and_hkdf_salt_len_do_not_match() {
+            let (_, node1_pk) = crypto::keygen();
+            let node1 = Node {
+                address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+                pub_key: node1_pk,
+            };
+            let (_, node2_pk) = crypto::keygen();
+            let node2 = Node {
+                address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+                pub_key: node2_pk,
+            };
+            let (_, node3_pk) = crypto::keygen();
+            let node3 = Node {
+                address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+                pub_key: node3_pk,
+            };
+            let route = [node1, node2, node3];
+            let destination = destination_fixture();
+            let initial_secret = EphemeralSecret::new();
+            let average_delay = 1;
+            let delays = delays::generate_from_average_duration(
+                route.len(),
+                Duration::from_secs(average_delay),
+            );
+
+            let hkdf_salt = [hkdf_salt_fixture(), hkdf_salt_fixture()];
+
+            let key_material = keys::KeyMaterial::derive_shared_keys(&route, &initial_secret);
+            let initial_shared_secret = SharedKey::from(&initial_secret);
+
+            let (_, _) = SphinxHeader::new_with_precomputed_keys(
+                &route,
+                &delays,
+                &hkdf_salt,
+                &destination,
+                &key_material.shared_keys,
+                &initial_shared_secret,
+            );
+        }
+
+        #[test]
+        #[should_panic]
+        fn it_panics_if_route_len_and_shared_keys_len_do_not_match() {
+            let (_, node1_pk) = crypto::keygen();
+            let node1 = Node {
+                address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+                pub_key: node1_pk,
+            };
+            let (_, node2_pk) = crypto::keygen();
+            let node2 = Node {
+                address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+                pub_key: node2_pk,
+            };
+            let (_, node3_pk) = crypto::keygen();
+            let node3 = Node {
+                address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+                pub_key: node3_pk,
+            };
+            let route = [node1, node2, node3];
+            let destination = destination_fixture();
+            let initial_secret = EphemeralSecret::new();
+            let average_delay = 1;
+            let delays = delays::generate_from_average_duration(
+                route.len(),
+                Duration::from_secs(average_delay),
+            );
+
+            let hkdf_salt = [
+                hkdf_salt_fixture(),
+                hkdf_salt_fixture(),
+                hkdf_salt_fixture(),
+            ];
+
+            let key_material = keys::KeyMaterial::derive_shared_keys(&route, &initial_secret);
+            let shared_keys = &key_material.shared_keys[0..2];
+            let initial_shared_secret = SharedKey::from(&initial_secret);
+
+            let (_, _) = SphinxHeader::new_with_precomputed_keys(
+                &route,
+                &delays,
+                &hkdf_salt,
+                &destination,
+                shared_keys,
+                &initial_shared_secret,
+            );
+        }
 
         #[test]
         fn it_returns_correct_routing_information_for_route_of_3_mixnodes() {
@@ -553,7 +647,7 @@ mod create_and_process_sphinx_packet_header {
             ];
 
             let shared_key = node1_sk.diffie_hellman(&sphinx_header.shared_secret);
-            let packet_unwrapped = match sphinx_header
+            match sphinx_header
                 .process_with_previously_derived_keys(shared_key, Some(&incorrect_hkdf_salt[0]))
                 .unwrap()
             {
@@ -615,7 +709,7 @@ mod create_and_process_sphinx_packet_header {
 
             let shared_key2 = node2_sk.diffie_hellman(&packet_unwrapped.shared_secret);
             // The second one processed with incorrect salt; should panic since mac doesn't match
-            let packet_unwrapped2 = match packet_unwrapped
+            match packet_unwrapped
                 .process_with_previously_derived_keys(shared_key2, Some(&incorrect_hkdf_salt[1]))
                 .unwrap()
             {
@@ -687,7 +781,7 @@ mod create_and_process_sphinx_packet_header {
 
             let shared_key3 = node3_sk.diffie_hellman(&packet_unwrapped2.shared_secret);
             // The final one processed with incorrect salt
-            let packet_unwrapped3 = match packet_unwrapped2
+            match packet_unwrapped2
                 .process_with_previously_derived_keys(shared_key3, Some(&incorrect_hkdf_salt[2]))
                 .unwrap()
             {
@@ -856,12 +950,12 @@ mod unwrap_routing_information {
 
 #[cfg(test)]
 mod converting_header_to_bytes {
-    use crate::test_utils::fixtures::encapsulated_routing_information_fixture;
-
-    use super::*;
     use crate::constants::HKDF_SALT_SIZE;
     use crate::crypto::EphemeralSecret;
     use crate::header::SphinxHeader;
+    use crate::test_utils::fixtures::encapsulated_routing_information_fixture;
+
+    use super::*;
 
     #[test]
     fn it_is_possible_to_convert_back_and_forth() {

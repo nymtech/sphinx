@@ -235,6 +235,8 @@ mod deriving_key_material {
 #[cfg(test)]
 mod key_derivation_function {
     use super::*;
+    use crate::constants::HKDF_SALT_SIZE;
+    use crate::test_utils::fixtures::hkdf_salt_fixture;
 
     #[test]
     fn it_expands_the_seed_key_to_expected_length() {
@@ -248,11 +250,31 @@ mod key_derivation_function {
     }
 
     #[test]
-    fn it_returns_the_same_output_for_two_equal_inputs() {
+    fn it_returns_the_same_output_for_two_equal_shared_keys_no_salt() {
         let initial_secret = EphemeralSecret::new();
         let shared_key = crypto::SharedKey::from(&initial_secret);
         let routing_keys1 = RoutingKeys::derive(shared_key, None);
         let routing_keys2 = RoutingKeys::derive(shared_key, None);
         assert_eq!(routing_keys1, routing_keys2);
+    }
+
+    #[test]
+    fn it_returns_the_same_output_for_two_equal_inputs() {
+        let initial_secret = EphemeralSecret::new();
+        let shared_key = crypto::SharedKey::from(&initial_secret);
+        let hkdf_salt = hkdf_salt_fixture();
+        let routing_keys1 = RoutingKeys::derive(shared_key, Some(&hkdf_salt));
+        let routing_keys2 = RoutingKeys::derive(shared_key, Some(&hkdf_salt));
+        assert_eq!(routing_keys1, routing_keys2);
+    }
+    #[test]
+    fn it_returns_different_output_for_two_equal_shared_keys_and_different_salt() {
+        let initial_secret = EphemeralSecret::new();
+        let shared_key = crypto::SharedKey::from(&initial_secret);
+        let hkdf_salt1 = [123u8; HKDF_SALT_SIZE];
+        let hkdf_salt2 = [98u8; HKDF_SALT_SIZE];
+        let routing_keys1 = RoutingKeys::derive(shared_key, Some(&hkdf_salt1));
+        let routing_keys2 = RoutingKeys::derive(shared_key, Some(&hkdf_salt2));
+        assert_ne!(routing_keys1, routing_keys2);
     }
 }
