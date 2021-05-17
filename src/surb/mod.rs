@@ -138,25 +138,17 @@ impl SURB {
             ));
         }
 
-        println!("Hello world1");
-
         let header_bytes = &bytes[..HEADER_SIZE];
-        println!("Hello world2");
         let first_hop_bytes = &bytes[HEADER_SIZE..HEADER_SIZE + NODE_ADDRESS_LENGTH];
-        println!("Hello world3");
         let payload_keys_bytes = &bytes[HEADER_SIZE + NODE_ADDRESS_LENGTH..];
         // make sure that bytes of valid length were sent
-        println!("Hello world4");
         if payload_keys_bytes.len() % PAYLOAD_KEY_SIZE != 0 {
             return Err(Error::new(
                 ErrorKind::InvalidSURB,
                 "bytes of invalid length provided",
             ));
         }
-
-        println!("Hello world5");
         let SURB_header = SphinxHeader::from_bytes(header_bytes)?;
-        println!("Hello world6");
         let first_hop_address = NodeAddressBytes::try_from_byte_slice(first_hop_bytes)?;
 
         let key_count = payload_keys_bytes.len() / PAYLOAD_KEY_SIZE;

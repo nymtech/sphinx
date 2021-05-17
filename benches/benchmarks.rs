@@ -30,6 +30,10 @@ fn make_packet_copy(packet: &SphinxPacket) -> SphinxPacket {
     SphinxPacket::from_bytes(&packet.to_bytes()).unwrap()
 }
 
+fn make_header_copy(header: &SphinxHeader) -> SphinxHeader {
+    SphinxHeader::from_bytes(&header.to_bytes()).unwrap()
+}
+
 // two of those can be run concurrently to perform credential verification
 fn bench_new_no_surb(c: &mut Criterion) {
     let (_, node1_pk) = keygen();
@@ -173,11 +177,100 @@ fn bench_unwrap_key_reuse(c: &mut Criterion) {
         })
     });
 }
+
+fn bench_unwrap_header(c: &mut Criterion) {
+    let (node1_sk, node1_pk) = keygen();
+    let node1 = Node::new(
+        NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+        node1_pk,
+    );
+    let (_, node2_pk) = keygen();
+    let node2 = Node::new(
+        NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+        node2_pk,
+    );
+    let (_, node3_pk) = keygen();
+    let node3 = Node::new(
+        NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+        node3_pk,
+    );
+
+    let route = [node1, node2, node3];
+    let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+    let destination = Destination::new(
+        DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+        [4u8; IDENTIFIER_LENGTH],
+    );
+    let hkdf_salt = [
+        [123u8; HKDF_SALT_SIZE],
+        [236u8; HKDF_SALT_SIZE],
+        [98u8; HKDF_SALT_SIZE],
+    ];
+
+    let initial_secret = EphemeralSecret::new();
+    let (sphinx_header, _) =
+        SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
+
+    c.bench_function("sphinx unwrap header", |b| {
+        b.iter(|| {
+            make_header_copy(&sphinx_header)
+                .process(black_box(&node1_sk))
+                .unwrap()
+        })
+    });
+}
+
+fn bench_unwrap_header_key_reuse(c: &mut Criterion) {
+    let (node1_sk, node1_pk) = keygen();
+    let node1 = Node::new(
+        NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+        node1_pk,
+    );
+    let (_, node2_pk) = keygen();
+    let node2 = Node::new(
+        NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+        node2_pk,
+    );
+    let (_, node3_pk) = keygen();
+    let node3 = Node::new(
+        NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+        node3_pk,
+    );
+
+    let route = [node1, node2, node3];
+    let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+    let destination = Destination::new(
+        DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+        [4u8; IDENTIFIER_LENGTH],
+    );
+    let hkdf_salt = [
+        [123u8; HKDF_SALT_SIZE],
+        [236u8; HKDF_SALT_SIZE],
+        [98u8; HKDF_SALT_SIZE],
+    ];
+
+    let initial_secret = EphemeralSecret::new();
+    let (sphinx_header, _) =
+        SphinxHeader::new(&initial_secret, &route, &delays, &hkdf_salt, &destination);
+
+    let shared_key = node1_sk.diffie_hellman(&sphinx_header.shared_secret);
+
+    c.bench_function("sphinx unwrap header with key reuse", |b| {
+        b.iter(|| {
+            make_header_copy(&sphinx_header)
+                .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
+                .unwrap()
+        })
+    });
+}
+
 criterion_group!(
     sphinx,
     bench_new_no_surb,
     bench_unwrap,
-    bench_unwrap_key_reuse
+    bench_unwrap_key_reuse,
+    bench_unwrap_header,
+    bench_unwrap_header_key_reuse,
 );
 
 criterion_main!(sphinx);
