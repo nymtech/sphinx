@@ -50,11 +50,13 @@ mod create_and_process_sphinx_packet {
                 NodeAddressBytes::from_bytes([11u8; NODE_ADDRESS_LENGTH]),
                 node1_pk,
             );
+
             let (node2_sk, node2_pk) = crypto::keygen();
             let node2 = Node::new(
                 NodeAddressBytes::from_bytes([22u8; NODE_ADDRESS_LENGTH]),
                 node2_pk,
             );
+
             let (node3_sk, node3_pk) = crypto::keygen();
             let node3 = Node::new(
                 NodeAddressBytes::from_bytes([33u8; NODE_ADDRESS_LENGTH]),
@@ -204,7 +206,6 @@ mod create_and_process_sphinx_packet {
                 NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                 node3_pk,
             );
-
             let route = [node1, node2, node3];
             let average_delay = Duration::from_secs_f64(1.0);
             let delays = delays::generate_from_average_duration(route.len(), average_delay);
