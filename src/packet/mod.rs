@@ -84,7 +84,7 @@ impl SphinxPacket {
     pub fn process_with_previously_derived_keys(
         self,
         shared_key: SharedKey,
-        hkdf_salt: Option<&HkdfSalt>,
+        hkdf_salt: &HkdfSalt,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self
             .header

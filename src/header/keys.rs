@@ -16,14 +16,12 @@ use std::fmt;
 use std::str;
 
 use curve25519_dalek::scalar::Scalar;
-use hkdf::Hkdf;
-use sha2::Sha256;
 
 use crate::constants::{
     BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
     ROUTING_KEYS_LENGTH,
 };
-use crate::crypto::{self, EphemeralSecret, PrivateKey};
+use crate::crypto::{self, EphemeralSecret};
 use crate::crypto::{SharedKey, STREAM_CIPHER_KEY_SIZE};
 use crate::header::HkdfSalt;
 use crate::route::Node;
@@ -46,13 +44,19 @@ impl RoutingKeys {
     // or should this be renamed to 'new'?
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
-    pub fn derive(shared_key: crypto::SharedKey, salt: Option<&HkdfSalt>) -> Self {
+    pub fn derive(shared_key: crypto::SharedKey, salt: &HkdfSalt) -> Self {
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
         let context_string: &str = match str::from_utf8(HKDF_INPUT_SEED) {
             Ok(v) => v,
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
-        blake3::derive_key(context_string, shared_key.as_bytes(), &mut output);
+
+        let mut salted_shared_key = [0; 64];
+        let (left, right) = salted_shared_key.split_at_mut(32);
+        left.copy_from_slice(&salt[..]);
+        right.copy_from_slice(&shared_key.as_bytes()[..]);
+
+        blake3::derive_key(context_string, &salted_shared_key, &mut output);
 
         let mut i = 0;
         let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
@@ -80,7 +84,7 @@ impl RoutingKeys {
     ) -> Vec<RoutingKeys> {
         let mut routing_keys: Vec<RoutingKeys> = Vec::with_capacity(shared_keys.len());
         for (key, salt) in shared_keys.iter().zip(hkdf_salt.iter()) {
-            let node_routing_keys = Self::derive(*key, Some(salt));
+            let node_routing_keys = Self::derive(*key, salt);
             routing_keys.push(node_routing_keys)
         }
         routing_keys
@@ -138,9 +142,7 @@ impl KeyMaterial {
     }
 
     pub fn compute_blinding_factor(shared_key: SharedKey) -> Scalar {
-        // let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
         let mut blinding_factor = [0u8; BLINDING_FACTOR_SIZE];
-        // hkdf.expand(HKDF_INPUT_SEED, &mut blinding_factor).unwrap();
         let context_string: &str = match str::from_utf8(HKDF_INPUT_SEED) {
             Ok(v) => v,
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
@@ -250,7 +252,7 @@ mod key_derivation_function {
     fn it_expands_the_seed_key_to_expected_length() {
         let initial_secret = EphemeralSecret::new();
         let shared_key = crypto::SharedKey::from(&initial_secret);
-        let routing_keys = RoutingKeys::derive(shared_key, None);
+        let routing_keys = RoutingKeys::derive(shared_key, &hkdf_salt_fixture());
         assert_eq!(
             crypto::STREAM_CIPHER_KEY_SIZE,
             routing_keys.stream_cipher_key.len()
@@ -258,31 +260,22 @@ mod key_derivation_function {
     }
 
     #[test]
-    fn it_returns_the_same_output_for_two_equal_shared_keys_no_salt() {
-        let initial_secret = EphemeralSecret::new();
-        let shared_key = crypto::SharedKey::from(&initial_secret);
-        let routing_keys1 = RoutingKeys::derive(shared_key, None);
-        let routing_keys2 = RoutingKeys::derive(shared_key, None);
-        assert_eq!(routing_keys1, routing_keys2);
-    }
-
-    #[test]
     fn it_returns_the_same_output_for_two_equal_inputs() {
         let initial_secret = EphemeralSecret::new();
         let shared_key = crypto::SharedKey::from(&initial_secret);
         let hkdf_salt = hkdf_salt_fixture();
-        let routing_keys1 = RoutingKeys::derive(shared_key, Some(&hkdf_salt));
-        let routing_keys2 = RoutingKeys::derive(shared_key, Some(&hkdf_salt));
+        let routing_keys1 = RoutingKeys::derive(shared_key, &hkdf_salt);
+        let routing_keys2 = RoutingKeys::derive(shared_key, &hkdf_salt);
         assert_eq!(routing_keys1, routing_keys2);
     }
-    // #[test]
-    // fn it_returns_different_output_for_two_equal_shared_keys_and_different_salt() {
-    //     let initial_secret = EphemeralSecret::new();
-    //     let shared_key = crypto::SharedKey::from(&initial_secret);
-    //     let hkdf_salt1 = [123u8; HKDF_SALT_SIZE];
-    //     let hkdf_salt2 = [98u8; HKDF_SALT_SIZE];
-    //     let routing_keys1 = RoutingKeys::derive(shared_key, Some(&hkdf_salt1));
-    //     let routing_keys2 = RoutingKeys::derive(shared_key, Some(&hkdf_salt2));
-    //     assert_ne!(routing_keys1, routing_keys2);
-    // }
+    #[test]
+    fn it_returns_different_output_for_two_equal_shared_keys_and_different_salt() {
+        let initial_secret = EphemeralSecret::new();
+        let shared_key = crypto::SharedKey::from(&initial_secret);
+        let hkdf_salt1 = [123u8; HKDF_SALT_SIZE];
+        let hkdf_salt2 = [98u8; HKDF_SALT_SIZE];
+        let routing_keys1 = RoutingKeys::derive(shared_key, &hkdf_salt1);
+        let routing_keys2 = RoutingKeys::derive(shared_key, &hkdf_salt2);
+        assert_ne!(routing_keys1, routing_keys2);
+    }
 }

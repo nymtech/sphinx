@@ -109,7 +109,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key1 = node1_sk.diffie_hellman(&initial_shared_secret);
             let new_sphinx_packet = match sphinx_packet
-                .process_with_previously_derived_keys(shared_key1, Some(&hkdf_salt[0]))
+                .process_with_previously_derived_keys(shared_key1, &hkdf_salt[0])
                 .unwrap()
             {
                 ProcessedPacket::ForwardHop(next_packet, next_hop_addr1, delay1) => {
@@ -125,7 +125,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key2 = node2_sk.diffie_hellman(&new_sphinx_packet.header.shared_secret);
             let new_sphinx_packet2 = match new_sphinx_packet
-                .process_with_previously_derived_keys(shared_key2, Some(&hkdf_salt[1]))
+                .process_with_previously_derived_keys(shared_key2, &hkdf_salt[1])
                 .unwrap()
             {
                 ProcessedPacket::ForwardHop(next_packet, next_hop_addr2, delay2) => {
@@ -141,7 +141,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key3 = node3_sk.diffie_hellman(&new_sphinx_packet2.header.shared_secret);
             let new_sphinx_packet3 = match new_sphinx_packet2
-                .process_with_previously_derived_keys(shared_key3, Some(&hkdf_salt[2]))
+                .process_with_previously_derived_keys(shared_key3, &hkdf_salt[2])
                 .unwrap()
             {
                 ProcessedPacket::ForwardHop(next_packet, next_hop_addr3, delay3) => {
@@ -157,7 +157,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key4 = node4_sk.diffie_hellman(&new_sphinx_packet3.header.shared_secret);
             let new_sphinx_packet4 = match new_sphinx_packet3
-                .process_with_previously_derived_keys(shared_key4, Some(&hkdf_salt[3]))
+                .process_with_previously_derived_keys(shared_key4, &hkdf_salt[3])
                 .unwrap()
             {
                 ProcessedPacket::ForwardHop(next_packet, next_hop_addr4, delay4) => {
@@ -173,7 +173,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key5 = node5_sk.diffie_hellman(&new_sphinx_packet4.header.shared_secret);
             match new_sphinx_packet4
-                .process_with_previously_derived_keys(shared_key5, Some(&hkdf_salt[4]))
+                .process_with_previously_derived_keys(shared_key5, &hkdf_salt[4])
                 .unwrap()
             {
                 ProcessedPacket::FinalHop(destination_addr, _, payload) => {
@@ -238,7 +238,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key1 = node1_sk.diffie_hellman(&initial_shared_secret);
             let new_sphinx_packet = match sphinx_packet
-                .process_with_previously_derived_keys(shared_key1, Some(&hkdf_salt[0]))
+                .process_with_previously_derived_keys(shared_key1, &hkdf_salt[0])
                 .unwrap()
             {
                 ProcessedPacket::ForwardHop(next_packet, next_hop_addr1, delay1) => {
@@ -254,7 +254,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key2 = node2_sk.diffie_hellman(&new_sphinx_packet.header.shared_secret);
             let new_sphinx_packet2 = match new_sphinx_packet
-                .process_with_previously_derived_keys(shared_key2, Some(&hkdf_salt[1]))
+                .process_with_previously_derived_keys(shared_key2, &hkdf_salt[1])
                 .unwrap()
             {
                 ProcessedPacket::ForwardHop(next_packet, next_hop_addr2, delay2) => {
@@ -270,7 +270,7 @@ mod create_and_process_sphinx_packet {
 
             let shared_key3 = node3_sk.diffie_hellman(&new_sphinx_packet2.header.shared_secret);
             match new_sphinx_packet2
-                .process_with_previously_derived_keys(shared_key3, Some(&hkdf_salt[2]))
+                .process_with_previously_derived_keys(shared_key3, &hkdf_salt[2])
                 .unwrap()
             {
                 ProcessedPacket::FinalHop(destination_addr, _, payload) => {

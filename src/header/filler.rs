@@ -90,6 +90,7 @@ mod test_creating_pseudorandom_bytes {
     use crate::header::keys;
 
     use super::*;
+    use crate::test_utils::fixtures::hkdf_salt_fixture;
     use crypto::{EphemeralSecret, SharedKey};
 
     #[test]
@@ -103,9 +104,10 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_3_times_security_parameter() {
         let shared_keys = vec![SharedKey::from(&EphemeralSecret::new())];
+        let salt = hkdf_salt_fixture();
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key, None))
+            .map(|&key| keys::RoutingKeys::derive(key, &salt))
             .collect();
         let filler_string = Filler::new(&routing_keys);
 
@@ -119,9 +121,15 @@ mod test_creating_pseudorandom_bytes {
             SharedKey::from(&EphemeralSecret::new()),
             SharedKey::from(&EphemeralSecret::new()),
         ];
+        let salts = [
+            hkdf_salt_fixture(),
+            hkdf_salt_fixture(),
+            hkdf_salt_fixture(),
+        ];
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key, None))
+            .zip(salts.iter())
+            .map(|(&key, salt)| keys::RoutingKeys::derive(key, salt))
             .collect();
         let filler_string = Filler::new(&routing_keys);
         assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
@@ -134,9 +142,14 @@ mod test_creating_pseudorandom_bytes {
             .take(constants::MAX_PATH_LENGTH + 1)
             .map(|_| SharedKey::from(&EphemeralSecret::new()))
             .collect();
+        let salts: Vec<_> = std::iter::repeat(())
+            .take(constants::MAX_PATH_LENGTH + 1)
+            .map(|_| hkdf_salt_fixture())
+            .collect();
         let routing_keys: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key, None))
+            .zip(salts.iter())
+            .map(|(&key, salt)| keys::RoutingKeys::derive(key, salt))
             .collect();
         Filler::new(&routing_keys);
     }
