@@ -171,7 +171,7 @@ fn bench_unwrap_key_reuse(c: &mut Criterion) {
             make_packet_copy(&packet)
                 .process_with_previously_derived_keys(
                     black_box(shared_key1),
-                    black_box(Some(&hkdf_salt[0])),
+                    black_box(&hkdf_salt[0]),
                 )
                 .unwrap()
         })
@@ -258,7 +258,7 @@ fn bench_unwrap_header_key_reuse(c: &mut Criterion) {
     c.bench_function("sphinx unwrap header with key reuse", |b| {
         b.iter(|| {
             make_header_copy(&sphinx_header)
-                .process_with_previously_derived_keys(shared_key, Some(&hkdf_salt[0]))
+                .process_with_previously_derived_keys(shared_key, &hkdf_salt[0])
                 .unwrap()
         })
     });
