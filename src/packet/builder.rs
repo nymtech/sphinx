@@ -1,5 +1,4 @@
 use crate::crypto::SharedKey;
-use crate::header::keys::RoutingKeys;
 use crate::header::HkdfSalt;
 use crate::{
     crypto::EphemeralSecret,

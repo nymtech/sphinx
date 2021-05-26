@@ -69,7 +69,6 @@ impl RoutingKeys {
 
         let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
         payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
-        i += PAYLOAD_KEY_SIZE;
 
         Self {
             stream_cipher_key,
