@@ -25,6 +25,7 @@ use crate::crypto::{self, EphemeralSecret};
 use crate::crypto::{SharedKey, STREAM_CIPHER_KEY_SIZE};
 use crate::header::HkdfSalt;
 use crate::route::Node;
+use crate::utils::bytes::xor;
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -51,11 +52,7 @@ impl RoutingKeys {
             Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
         };
 
-        let mut salted_shared_key = [0; 64];
-        let (left, right) = salted_shared_key.split_at_mut(32);
-        left.copy_from_slice(&salt[..]);
-        right.copy_from_slice(&shared_key.as_bytes()[..]);
-
+        let salted_shared_key = xor(salt, shared_key.as_bytes());
         blake3::derive_key(context_string, &salted_shared_key, &mut output);
 
         let mut i = 0;
