@@ -79,6 +79,35 @@ impl SphinxHeader {
         )
     }
 
+    pub fn new_with_precomputed_keys(
+        route: &[Node],
+        delays: &[Delay],
+        destination: &Destination,
+        routing_keys: &[RoutingKeys],
+        initial_shared_secret: &SharedSecret,
+    ) -> (Self, Vec<PayloadKey>) {
+        let filler_string = Filler::new(&routing_keys[..route.len() - 1]);
+        let routing_info = routing::EncapsulatedRoutingInformation::new(
+            route,
+            destination,
+            &delays,
+            &routing_keys,
+            filler_string,
+        );
+
+        // encapsulate header.routing information, compute MACs
+        (
+            SphinxHeader {
+                shared_secret: *initial_shared_secret,
+                routing_info,
+            },
+            routing_keys
+                .iter()
+                .map(|routing_key| routing_key.payload_key)
+                .collect(),
+        )
+    }
+
     /// Processes the header with the provided derived keys.
     /// It could be useful in the situation where sender is re-using initial secret
     /// and we could cache processing results.
@@ -250,6 +279,83 @@ mod create_and_process_sphinx_packet_header {
     use super::*;
     use crate::{constants::NODE_ADDRESS_LENGTH, test_utils::fixtures::destination_fixture};
     use std::time::Duration;
+
+    #[test]
+    fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes_with_precomputed_keys(
+    ) {
+        let (node1_sk, node1_pk) = crypto::keygen();
+        let node1 = Node {
+            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node1_pk,
+        };
+        let (node2_sk, node2_pk) = crypto::keygen();
+        let node2 = Node {
+            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node2_pk,
+        };
+        let (node3_sk, node3_pk) = crypto::keygen();
+        let node3 = Node {
+            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+            pub_key: node3_pk,
+        };
+        let route = [node1, node2, node3];
+        let destination = destination_fixture();
+        let initial_secret = EphemeralSecret::new();
+        let average_delay = 1;
+        let delays =
+            delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
+
+        let key_material = keys::KeyMaterial::derive(&route, &initial_secret);
+        let routing_keys = key_material.routing_keys;
+
+        let (sphinx_header, _) = SphinxHeader::new_with_precomputed_keys(
+            &route,
+            &delays,
+            &destination,
+            &routing_keys,
+            &key_material.initial_shared_secret,
+        );
+
+        let new_secret = SphinxHeader::blind_the_shared_secret(
+            sphinx_header.shared_secret,
+            routing_keys[0].blinding_factor,
+        );
+
+        let new_header = match sphinx_header
+            .process_with_derived_keys(&Some(new_secret), &routing_keys[0])
+            .unwrap()
+        {
+            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            _ => unreachable!(),
+        };
+
+        let new_secret2 = SphinxHeader::blind_the_shared_secret(
+            new_header.shared_secret,
+            routing_keys[1].blinding_factor,
+        );
+        let new_header2 = match new_header
+            .process_with_derived_keys(&Some(new_secret2), &routing_keys[1])
+            .unwrap()
+        {
+            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            _ => unreachable!(),
+        };
+
+        let new_secret3 = SphinxHeader::blind_the_shared_secret(
+            new_header2.shared_secret,
+            routing_keys[2].blinding_factor,
+        );
+
+        let new_header2 = match new_header2
+            .process_with_derived_keys(&Some(new_secret3), &routing_keys[2])
+            .unwrap()
+        {
+            ProcessedHeader::FinalHop(final_destination, _, _) => {
+                assert_eq!(destination.address, final_destination);
+            }
+            _ => panic!(),
+        };
+    }
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
