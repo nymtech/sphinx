@@ -41,7 +41,10 @@ pub const FLAG_LENGTH: usize = 1;
 pub const PAYLOAD_SIZE: usize = 1024;
 pub const VERSION_LENGTH: usize = 3; // since version is represented as 3 u8 values: major, minor and patch
                                      // we need the single byte to detect padding length
-
+pub const FIXEDNONCE: [u8; 32] = [
+    30, 84, 167, 175, 87, 239, 237, 174, 64, 121, 126, 161, 95, 115, 224, 107, 178, 133, 122, 30,
+    53, 122, 169, 193, 243, 212, 31, 218, 167, 110, 108, 170,
+];
 pub type HeaderIntegrityMacSize = U16;
 
 // TODO: to replace with Blake3

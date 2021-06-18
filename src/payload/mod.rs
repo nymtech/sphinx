@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::constants::SECURITY_PARAMETER;
+use crate::constants::{FIXEDNONCE, SECURITY_PARAMETER};
 use crate::header::keys::PayloadKey;
 use crate::{Error, ErrorKind, Result};
 use arrayref::array_ref;
@@ -102,11 +102,10 @@ impl Payload {
 
     /// Tries to add an additional layer of encryption onto self.
     fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
-            payload_enc_key,
-            0,
-            lioness::RAW_KEY_SIZE
-        ));
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(
+            array_ref!(payload_enc_key, 0, lioness::RAW_KEY_SIZE),
+            array_ref!(FIXEDNONCE, 0, lioness::LIONESS_NONCES_SIZE),
+        );
 
         if let Err(err) = lioness_cipher.encrypt(&mut self.0) {
             return Err(Error::new(
@@ -119,11 +118,10 @@ impl Payload {
 
     /// Tries to remove single layer of encryption from self.
     pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
-            payload_key,
-            0,
-            lioness::RAW_KEY_SIZE
-        ));
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(
+            array_ref!(payload_key, 0, lioness::RAW_KEY_SIZE),
+            array_ref!(FIXEDNONCE, 0, lioness::LIONESS_NONCES_SIZE),
+        );
         if let Err(err) = lioness_cipher.decrypt(&mut self.0) {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,

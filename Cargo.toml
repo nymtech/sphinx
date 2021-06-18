@@ -17,7 +17,8 @@ rand = {version = "0.7.3", features = ["wasm-bindgen"]}
 rand_distr = "0.2.2"
 sha2 = "0.9.1"
 hkdf = "0.9.0"
-lioness = "0.1.2"
+#lioness = "0.1.2"
+lioness = { git = "https://github.com/nymtech/lioness-rs", branch="iv_tests" }
 arrayref = "0.3.5"
 chacha = "0.3.0"
 blake2 = "0.8.1"
