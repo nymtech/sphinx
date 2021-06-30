@@ -262,7 +262,7 @@ impl SphinxHeader {
         })
     }
 
-    fn blind_the_shared_secret(
+    pub fn blind_the_shared_secret(
         shared_secret: SharedSecret,
         blinding_factor: BlindingFactor,
     ) -> SharedSecret {
