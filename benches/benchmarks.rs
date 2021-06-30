@@ -139,10 +139,19 @@ fn bench_unwrap_key_reuse(c: &mut Criterion) {
     let initial_secret = EphemeralSecret::new();
     let key_material = keys::KeyMaterial::derive(&route, &initial_secret);
     let routing_keys = key_material.routing_keys;
+    let initial_shared_secret = key_material.initial_shared_secret;
 
     let message = vec![13u8, 16];
 
-    let packet = SphinxPacket::new(message, &route, &destination, &delays).unwrap();
+    let packet = SphinxPacket::new_with_precomputed_keys(
+        message,
+        &route,
+        &destination,
+        &delays,
+        &routing_keys,
+        &initial_shared_secret,
+    )
+    .unwrap();
     let new_secret = SphinxHeader::blind_the_shared_secret(
         packet.header.shared_secret,
         routing_keys[0].blinding_factor,
@@ -195,7 +204,7 @@ fn bench_create_packet_key_reuse(c: &mut Criterion) {
 
     let message = vec![13u8, 16];
 
-    c.bench_function("sphinx creation with routinb key reuse", |b| {
+    c.bench_function("sphinx creation with routing key reuse", |b| {
         b.iter(|| {
             SphinxPacket::new_with_precomputed_keys(
                 black_box(message.clone()),
