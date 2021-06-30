@@ -13,6 +13,7 @@
 // limitations under the License.
 
 use std::fmt;
+use std::str;
 
 use crate::constants::{
     BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
@@ -46,11 +47,16 @@ impl RoutingKeys {
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
     pub fn derive(shared_key: crypto::SharedSecret) -> Self {
-        let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
+        // let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
 
         let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
-        hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
+        // hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
+        let context_string: &str = match str::from_utf8(HKDF_INPUT_SEED) {
+            Ok(v) => v,
+            Err(e) => panic!("Invalid UTF-8 sequence: {}", e),
+        };
+        blake3::derive_key(context_string, shared_key.as_bytes(), &mut output);
 
         let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
         stream_cipher_key.copy_from_slice(&output[i..i + crypto::STREAM_CIPHER_KEY_SIZE]);

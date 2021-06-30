@@ -22,6 +22,7 @@ lioness = { git = "https://github.com/nymtech/lioness-rs", branch="iv_tests" }
 arrayref = "0.3.5"
 chacha = "0.3.0"
 blake2 = "0.8.1"
+blake3 = "0.3.7"
 byteorder = "1.3.2"
 subtle = "2.3.0"
 
