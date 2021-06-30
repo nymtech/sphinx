@@ -45,6 +45,7 @@ pub const FIXEDNONCE: [u8; 32] = [
     30, 84, 167, 175, 87, 239, 237, 174, 64, 121, 126, 161, 95, 115, 224, 107, 178, 133, 122, 30,
     53, 122, 169, 193, 243, 212, 31, 218, 167, 110, 108, 170,
 ];
+pub const HKDF_SALT_SIZE: usize = 32;
 pub type HeaderIntegrityMacSize = U16;
 
 // TODO: to replace with Blake3

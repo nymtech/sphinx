@@ -308,6 +308,11 @@ mod create_and_process_sphinx_packet_header {
         let key_material = keys::KeyMaterial::derive(&route, &initial_secret);
         let routing_keys = key_material.routing_keys;
 
+        println!("{:?}", key_material.initial_shared_secret);
+        for r in routing_keys.iter() {
+            println!("{:?}", r);
+        }
+
         let (sphinx_header, _) = SphinxHeader::new_with_precomputed_keys(
             &route,
             &delays,

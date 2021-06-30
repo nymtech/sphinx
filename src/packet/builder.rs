@@ -1,3 +1,5 @@
+use crate::crypto::SharedSecret;
+use crate::header::keys::RoutingKeys;
 use crate::{
     crypto::EphemeralSecret,
     header::{delays::Delay, SphinxHeader},
@@ -41,6 +43,26 @@ impl<'a> SphinxPacketBuilder<'a> {
         };
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation
+        let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
+        Ok(SphinxPacket { header, payload })
+    }
+
+    pub fn build_packet_with_precomputed_keys(
+        &self,
+        message: Vec<u8>,
+        route: &[Node],
+        destination: &Destination,
+        delays: &[Delay],
+        routing_keys: &[RoutingKeys],
+        initial_shared_secret: &SharedSecret,
+    ) -> Result<SphinxPacket> {
+        let (header, payload_keys) = SphinxHeader::new_with_precomputed_keys(
+            route,
+            delays,
+            destination,
+            routing_keys,
+            initial_shared_secret,
+        );
         let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
         Ok(SphinxPacket { header, payload })
     }

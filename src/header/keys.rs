@@ -83,10 +83,11 @@ impl fmt::Debug for RoutingKeys {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(
             f,
-            "{:?} {:?} {:?}",
+            "{:?} {:?} {:?} {:?}",
             self.stream_cipher_key,
             self.header_integrity_hmac_key,
-            self.payload_key.to_vec()
+            self.payload_key.to_vec(),
+            self.blinding_factor
         )
     }
 }

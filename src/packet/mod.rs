@@ -54,6 +54,24 @@ impl SphinxPacket {
         HEADER_SIZE + self.payload.len()
     }
 
+    pub fn new_with_precomputed_keys(
+        message: Vec<u8>,
+        route: &[Node],
+        destination: &Destination,
+        delays: &[Delay],
+        routing_keys: &[RoutingKeys],
+        initial_shared_secret: &SharedSecret,
+    ) -> Result<SphinxPacket> {
+        SphinxPacketBuilder::default().build_packet_with_precomputed_keys(
+            message,
+            route,
+            destination,
+            delays,
+            routing_keys,
+            initial_shared_secret,
+        )
+    }
+
     /// Processes the header with the provided derived keys.
     /// It could be useful in the situation where sender is re-using initial secret
     /// and we could cache processing results.
