@@ -26,6 +26,7 @@ subtle = "2.3.0"
 
 [target."cfg(target_arch = \"wasm32\")".dependencies.getrandom]
 version = "0.2"
+optional = true
 features = ["js"]
 
 [dev-dependencies]
@@ -35,3 +36,8 @@ criterion = "0.3"
 [[bench]]
 name = "benchmarks"
 harness = false
+
+[features]
+# It seems that in some cases when buidling on x86, cargo can infer a false-positive cyclic dependency on `ahash` inside `js-sys`,
+# even if this crate is only imported in wasm32. As a current workaround, explicit `wasm` feature is introduced.
+wasm = ["getrandom/js"]
