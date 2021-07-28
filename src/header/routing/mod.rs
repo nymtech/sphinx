@@ -94,7 +94,7 @@ impl EncapsulatedRoutingInformation {
 
         Self::for_forward_hops(
             encapsulated_destination_routing_info,
-            &delays,
+            delays,
             route,
             routing_keys,
         )

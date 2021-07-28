@@ -27,7 +27,7 @@ pub struct HeaderIntegrityMac(GenericArray<u8, HeaderIntegrityMacSize>);
 impl HeaderIntegrityMac {
     pub(crate) fn compute(key: HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
         let routing_info_mac =
-            crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(&key, &header_data);
+            crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(&key, header_data);
 
         // NOTE: BE EXTREMELY CAREFUL HOW YOU MANAGE THOSE BYTES
         // YOU CAN'T TREAT THEM AS NORMAL ONES

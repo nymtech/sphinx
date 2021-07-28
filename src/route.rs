@@ -63,7 +63,7 @@ impl DestinationAddressBytes {
         }
 
         let mut address_bytes = [0; DESTINATION_ADDRESS_LENGTH];
-        address_bytes.copy_from_slice(&b[..]);
+        address_bytes.copy_from_slice(b);
 
         Ok(DestinationAddressBytes(address_bytes))
     }
@@ -127,7 +127,7 @@ impl NodeAddressBytes {
         }
 
         let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
-        address_bytes.copy_from_slice(&b[..]);
+        address_bytes.copy_from_slice(b);
 
         Ok(NodeAddressBytes(address_bytes))
     }
