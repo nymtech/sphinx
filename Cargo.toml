@@ -13,8 +13,8 @@ curve25519-dalek = "3.0.0"
 hmac = "0.11.0"
 digest = "0.9"
 log = "0.4"
-rand = "0.8.4"
-rand_distr = "0.4.1"
+rand = {version = "0.7.3", features = ["wasm-bindgen"]}
+rand_distr = "0.3"
 sha2 = "0.9.1"
 hkdf = "0.11.0"
 lioness = "0.1.2"
@@ -24,10 +24,6 @@ blake2 = "0.8.0" # cannot be updated due to outdated dependency inside lioness
 byteorder = "1.3.2"
 subtle = "2.3.0"
 
-[target."cfg(target_arch = \"wasm32\")".dependencies.getrandom]
-version = "0.2"
-optional = true
-features = ["js"]
 
 [dev-dependencies]
 mockall = "0.10.2"
@@ -37,7 +33,3 @@ criterion = "0.3"
 name = "benchmarks"
 harness = false
 
-[features]
-# It seems that in some cases when buidling on x86, cargo can infer a false-positive cyclic dependency on `ahash` inside `js-sys`,
-# even if this crate is only imported in wasm32. As a current workaround, explicit `wasm` feature is introduced.
-wasm = ["getrandom/js"]
