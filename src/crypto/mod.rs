@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use aes_ctr::stream_cipher::{NewStreamCipher, SyncStreamCipher};
-use aes_ctr::Aes128Ctr;
+use aes::cipher::{NewCipher, StreamCipher};
+use aes::Aes128Ctr;
 use digest::generic_array::{ArrayLength, GenericArray};
 use digest::{BlockInput, FixedOutput, Reset, Update};
 use hmac::{crypto_mac, Hmac, Mac, NewMac};
@@ -54,7 +54,7 @@ where
     D::OutputSize: ArrayLength<u8>,
 {
     let mut hmac =
-        Hmac::<D>::new_varkey(key).expect("HMAC should be able to take key of any size!");
+        Hmac::<D>::new_from_slice(key).expect("HMAC should be able to take key of any size!");
     hmac.update(data);
     hmac.finalize()
 }
