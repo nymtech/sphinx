@@ -22,7 +22,7 @@ use std::fmt::{self, Display, Formatter};
 pub struct DestinationAddressBytes([u8; DESTINATION_ADDRESS_LENGTH]);
 
 impl DestinationAddressBytes {
-    pub fn to_base58_string(&self) -> String {
+    pub fn as_base58_string(&self) -> String {
         bs58::encode(&self.0).into_string()
     }
 
@@ -63,25 +63,25 @@ impl DestinationAddressBytes {
         }
 
         let mut address_bytes = [0; DESTINATION_ADDRESS_LENGTH];
-        address_bytes.copy_from_slice(&b[..]);
+        address_bytes.copy_from_slice(b);
 
         Ok(DestinationAddressBytes(address_bytes))
     }
 
     /// View this `DestinationAddressBytes` as an array of bytes.
-    pub fn as_bytes(&self) -> &[u8; DESTINATION_ADDRESS_LENGTH] {
+    pub fn as_bytes_ref(&self) -> &[u8; DESTINATION_ADDRESS_LENGTH] {
         &self.0
     }
 
     /// Convert this `DestinationAddressBytes` to an array of bytes.
-    pub fn to_bytes(&self) -> [u8; DESTINATION_ADDRESS_LENGTH] {
+    pub fn as_bytes(&self) -> [u8; DESTINATION_ADDRESS_LENGTH] {
         self.0
     }
 }
 
 impl Display for DestinationAddressBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DestinationAddressBytes: {}", self.to_base58_string())
+        write!(f, "DestinationAddressBytes: {}", self.as_base58_string())
     }
 }
 
@@ -90,7 +90,7 @@ impl Display for DestinationAddressBytes {
 pub struct NodeAddressBytes([u8; NODE_ADDRESS_LENGTH]);
 
 impl NodeAddressBytes {
-    pub fn to_base58_string(&self) -> String {
+    pub fn as_base58_string(&self) -> String {
         bs58::encode(&self.0).into_string()
     }
 
@@ -127,7 +127,7 @@ impl NodeAddressBytes {
         }
 
         let mut address_bytes = [0; NODE_ADDRESS_LENGTH];
-        address_bytes.copy_from_slice(&b[..]);
+        address_bytes.copy_from_slice(b);
 
         Ok(NodeAddressBytes(address_bytes))
     }
@@ -137,19 +137,19 @@ impl NodeAddressBytes {
     }
 
     /// View this `NodeAddressBytes` as an array of bytes.
-    pub fn as_bytes(&self) -> &[u8; NODE_ADDRESS_LENGTH] {
+    pub fn as_bytes_ref(&self) -> &[u8; NODE_ADDRESS_LENGTH] {
         &self.0
     }
 
     /// Convert this `NodeAddressBytes` to an array of bytes.
-    pub fn to_bytes(&self) -> [u8; NODE_ADDRESS_LENGTH] {
+    pub fn as_bytes(&self) -> [u8; NODE_ADDRESS_LENGTH] {
         self.0
     }
 }
 
 impl Display for NodeAddressBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "NodeAddressBytes: {}", self.to_base58_string())
+        write!(f, "NodeAddressBytes: {}", self.as_base58_string())
     }
 }
 
@@ -192,7 +192,7 @@ mod address_encoding {
     #[test]
     fn it_is_possible_to_encode_and_decode_address() {
         let dummy_address = NodeAddressBytes([42u8; 32]);
-        let dummy_address_str = dummy_address.to_base58_string();
+        let dummy_address_str = dummy_address.as_base58_string();
         let recovered = NodeAddressBytes::try_from_base58_string(dummy_address_str).unwrap();
         assert_eq!(dummy_address, recovered)
     }

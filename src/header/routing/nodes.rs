@@ -67,7 +67,7 @@ impl RoutingInformation {
     fn concatenate_components(self) -> Vec<u8> {
         std::iter::once(self.flag)
             .chain(self.version.to_bytes().iter().cloned())
-            .chain(self.node_address.as_bytes().iter().cloned())
+            .chain(self.node_address.as_bytes_ref().iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
             .chain(self.header_integrity_mac.into_inner().into_iter())
             .chain(self.next_routing_information.iter().cloned())
@@ -296,7 +296,7 @@ mod preparing_header_layer {
         let concatenated_materials: Vec<u8> = [
             vec![FORWARD_HOP],
             version.to_bytes().to_vec(),
-            node_address.to_bytes().to_vec(),
+            node_address.as_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.as_bytes().to_vec(),
             inner_layer_routing
@@ -364,7 +364,7 @@ mod encrypting_routing_information {
         let encryption_data = [
             vec![flag],
             version.to_bytes().to_vec(),
-            address.to_bytes().to_vec(),
+            address.as_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             mac.as_bytes().to_vec(),
             next_routing.to_vec(),
@@ -428,7 +428,7 @@ mod parse_decrypted_routing_information {
         let data = [
             vec![flag],
             version.to_bytes().to_vec(),
-            address_fixture.to_bytes().to_vec(),
+            address_fixture.as_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             integrity_mac.as_bytes().to_vec(),
             next_routing_information.to_vec(),
