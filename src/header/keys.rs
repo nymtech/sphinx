@@ -142,8 +142,8 @@ impl KeyMaterial {
         }
 
         Self {
-            routing_keys,
             initial_shared_secret,
+            routing_keys,
         }
     }
 }

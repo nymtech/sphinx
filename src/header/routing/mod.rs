@@ -94,7 +94,7 @@ impl EncapsulatedRoutingInformation {
 
         Self::for_forward_hops(
             encapsulated_destination_routing_info,
-            &delays,
+            delays,
             route,
             routing_keys,
         )
@@ -123,7 +123,7 @@ impl EncapsulatedRoutingInformation {
         route
             .iter()
             .skip(1) // we don't want the first element as person creating the packet knows the address of the first hop
-            .map(|node| node.address.to_bytes()) // we only care about the address field
+            .map(|node| node.address.as_bytes()) // we only care about the address field
             .zip(
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 routing_keys.iter().take(routing_keys.len() - 1), // we don't want last element - it was already used to encrypt the destination

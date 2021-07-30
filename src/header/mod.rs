@@ -60,7 +60,7 @@ impl SphinxHeader {
         let routing_info = routing::EncapsulatedRoutingInformation::new(
             route,
             destination,
-            &delays,
+            delays,
             &key_material.routing_keys,
             filler_string,
         );
@@ -357,7 +357,7 @@ mod unwrap_routing_information {
                 ) => {
                     assert_eq!(
                         routing_info[1..1 + NODE_ADDRESS_LENGTH],
-                        next_hop_address.to_bytes()
+                        next_hop_address.as_bytes()
                     );
                     assert_eq!(
                         routing_info
