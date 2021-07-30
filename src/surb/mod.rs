@@ -114,7 +114,7 @@ impl SURB {
         self.SURB_header
             .to_bytes()
             .into_iter()
-            .chain(self.first_hop_address.to_bytes().iter().cloned())
+            .chain(self.first_hop_address.as_bytes().iter().cloned())
             .chain(self.payload_keys.iter().flat_map(|x| x.iter()).cloned())
             .collect()
     }
