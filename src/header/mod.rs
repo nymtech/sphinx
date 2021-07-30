@@ -60,7 +60,7 @@ impl SphinxHeader {
         let routing_info = routing::EncapsulatedRoutingInformation::new(
             route,
             destination,
-            &delays,
+            delays,
             &key_material.routing_keys,
             filler_string,
         );

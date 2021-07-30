@@ -105,7 +105,7 @@ impl SURB {
         // Note that Payload::encapsulate_message performs checks to verify whether the plaintext
         // is going to fit in the packet.
         let payload =
-            Payload::encapsulate_message(&plaintext_message, &self.payload_keys, payload_size)?;
+            Payload::encapsulate_message(plaintext_message, &self.payload_keys, payload_size)?;
 
         Ok((SphinxPacket { header, payload }, self.first_hop_address))
     }
