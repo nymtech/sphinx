@@ -42,7 +42,7 @@ pub struct SphinxHeader {
 }
 
 pub enum ProcessedHeader {
-    ForwardHop(SphinxHeader, NodeAddressBytes, Delay, PayloadKey),
+    ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, PayloadKey),
     FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
 }
 
@@ -113,10 +113,10 @@ impl SphinxHeader {
             ) => {
                 if let Some(new_blinded_secret) = new_blinded_secret {
                     Ok(ProcessedHeader::ForwardHop(
-                        SphinxHeader {
+                        Box::new(SphinxHeader {
                             shared_secret: *new_blinded_secret,
-                            routing_info: new_encapsulated_routing_info,
-                        },
+                            routing_info: *new_encapsulated_routing_info,
+                        }),
                         next_hop_address,
                         delay,
                         routing_keys.payload_key,
@@ -176,10 +176,10 @@ impl SphinxHeader {
                     Self::blind_the_shared_secret(self.shared_secret, routing_keys.blinding_factor);
 
                 Ok(ProcessedHeader::ForwardHop(
-                    SphinxHeader {
+                    Box::new(SphinxHeader {
                         shared_secret: new_shared_secret,
-                        routing_info: new_encapsulated_routing_info,
-                    },
+                        routing_info: *new_encapsulated_routing_info,
+                    }),
                     next_hop_address,
                     delay,
                     routing_keys.payload_key,

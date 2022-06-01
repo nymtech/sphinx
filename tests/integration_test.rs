@@ -212,7 +212,7 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let sphinx_packet = SphinxPacket::new(message, &route, &destination, &delays).unwrap();
 
         let sphinx_packet_bytes = &sphinx_packet.to_bytes()[..300];
-        SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
+        SphinxPacket::from_bytes(sphinx_packet_bytes).unwrap();
     }
 }
 
