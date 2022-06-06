@@ -1,8 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{    }\PYG{k}{struct} \PYG{n+nc}{SphinxHeader}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{        }\PYG{n}{additional\PYGZus{}data}\PYG{p}{,}
-\PYG{+w}{        }\PYG{n}{group\PYGZus{}element}\PYG{p}{,}
-\PYG{+w}{        }\PYG{n}{encrypted\PYGZus{}routing\PYGZus{}information}\PYG{p}{,}
-\PYG{+w}{        }\PYG{n}{integrity\PYGZus{}tag}\PYG{p}{,}
-\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
-\end{Verbatim}

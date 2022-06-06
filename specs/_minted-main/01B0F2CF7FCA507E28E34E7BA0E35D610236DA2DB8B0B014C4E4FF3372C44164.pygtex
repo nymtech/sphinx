@@ -1,6 +1,0 @@
-\begin{Verbatim}[commandchars=\\\{\}]
-\PYG{+w}{    }\PYG{k}{struct} \PYG{n+nc}{SphinxPacket}\PYG{+w}{ }\PYG{p}{\PYGZob{}}
-\PYG{+w}{        }\PYG{n}{header}\PYG{p}{,}
-\PYG{+w}{        }\PYG{n}{payload}\PYG{p}{,}
-\PYG{+w}{    }\PYG{p}{\PYGZcb{}}
-\end{Verbatim}
