@@ -1,0 +1,59 @@
+\section{Sphinx Packet Parameters \& Geometry}\label{sec:paramgeom}
+
+\subsection{Parameters}\label{sec:parameters}
+\begin{itemize}
+    \item SECURITY\_PARAMETER - the constant length of a security parameter in bytes. 
+    \item AD\_LENGTH - the constant amount of per-packet unencrypted additional data in bytes.
+    \item MAX\_PATH\_LENGTH - the maximum number of nodes that a Sphinx mix message will traverse before being delivered to its destination.
+    \item BLINDING\_FACTOR\_SIZE - 
+    \item GROUP\_ELEMENT\_SIZE - the size in bytes of a single group element.
+    \item STREAM\_CIPHER\_KEY\_SIZE - the length in bytes of the key used for the stream cipher.
+    \item STREAM\_CIPHER\_OUTPUT\_LENGTH - the length in bytes of the output of a stream cipher
+    \item INTEGRITY\_MAC\_KEY\_SIZE - the length in bytes of the key used for the HMAC.
+    \item PAYLOAD\_KEY\_SIZE - the length in bytes of the key used to encrypt/decrypt the payload.
+    \item ROUTING\_KEYS\_LENGTH - the length in bytes of the routing keys per node.
+    \item DESTINATION\_ADDRESS\_LENGTH - the length in bytes of the destination address.
+    \item NODE\_ADDRESS\_LENGTH - the length in bytes of the node address.
+    \item HEADER\_INTEGRITY\_MAC\_SIZE - the length in bytes of the integrity tag included in the header.
+    \item NODE\_META\_INFO\_SIZE - the length of the meta info containing all the information from sender to the relay node in bytes.
+    \item FINAL\_NODE\_META\_INFO\_LENGTH - the length of the meta info for the last relay node.
+    \item PAYLOAD\_SIZE - the length in bytes of the Sphinx payload. 
+\end{itemize}
+
+\subsection{Geometry}\label{sec:geometry}
+\begin{itemize}
+    \item ROUTING\_KEYS\_LENGTH - The total length of the routing information in bytes
+    \bigskip
+    
+        ROUTING\_KEYS\_LENGTH = 
+        STREAM\_CIPHER\_KEY\_SIZE + INTEGRITY\_MAC\_KEY\_SIZE + 
+         PAYLOAD\_KEY\_SIZE 
+        + BLINDING\_FACTOR\_SIZE
+    \item HEADER\_SIZE - The total size of the Sphinx header in bytes 
+    \bigskip
+    
+        HEADER\_SIZE = GROUP\_ELEMENT\_SIZE + HEADER\_INTEGRITY\_MAC\_SIZE + ENCRYPTED\_ROUTING\_INFO\_SIZE
+    \item PACKET\_LENGTH - The length of the Sphinx Packet in bytes
+    \bigskip 
+    
+        PACKET\_LENGTH = HEADER\_SIZE + PAYLOAD\_SIZE
+        
+    \item ENCRYPTED\_ROUTING\_INFO\_SIZE
+    \bigskip
+    
+    ENCRYPTED\_ROUTING\_INFO\_SIZE = (NODE\_META\_INFO\_SIZE + HEADER\_INTEGRITY\_MAC\_SIZE) * MAX\_PATH\_LENGTH;
+    
+    \item FILLER\_STEP\_SIZE\_INCREASE - the length by which we increase the filler padding for each hop
+    \bigskip
+    
+    FILLER\_STEP\_SIZE\_INCREASE = NODE\_META\_INFO\_SIZE + HEADER\_INTEGRITY\_MAC\_SIZE
+    
+    \item FINALPADDING - the length in bytes of a padding added in the innermost layer of Sphinx header encapsulation
+    \bigskip
+    
+    FINALPADDING = ENCRYPTED\_ROUTING\_INFO\_SIZE 
+                - (FILLER\_STEP\_SIZE\_INCREASE * (route\_len - 1)) - FINAL\_NODE\_META\_INFO\_LENGTH,
+                
+    \bigskip were route\_len is a length of the route selected for the given Sphinx packet
+    
+\end{itemize}

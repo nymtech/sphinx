@@ -1,0 +1,14 @@
+\section{Single Use-Reply Blocks}\label{sec:surb}
+
+A Single Use Reply Block (SURB) is a data structure derived by the originator of a Sphinx packet in order to facilitate anonymous replies. it can be used by the recipient to reply to the initial sender.
+
+
+When a SURB is created, a matching reply block decryption data is created, which is used to decrypt the reply message that is produced and delivered via the SURB. The creation of a SURB is similar to the creation of a SphinxHeader.
+
+\begin{minted}{rust}
+    struct SURB {
+        header: [u8; HEADER_SIZE],
+        first_hop: [u8; NODE_ADDRESS_LENGTH],
+        payload_keys: Vec<[u8; PAYLOAD_KEY_SIZE]>
+    }
+\end{minted}

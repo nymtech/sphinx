@@ -5,6 +5,10 @@
 \usepackage{lipsum}
 \DTMlangsetup[en-US]{showdayofmonth=false}
 \usepackage{minted}
+\usepackage{amscd,amsmath}
+%\let\Bbbk\relax % to solve the incompatible between amssymb & acmart(containing newtxmath)
+\usepackage{amssymb}
+\usepackage{amsfonts}
 
 \newcommand{\rfcId}{I-D}
 \newcommand{\rfcTitle}{Sphinx RFC Documentation}
@@ -86,7 +90,9 @@
 
 \input{sections/01Introduction}
 \input{sections/02CryptographicPrimitives}
+\input{sections/06SphinxPacketParameters}
 \input{sections/03SphinxPacketStructure}
-
-
+\input{sections/04SphinxPacketCreation}
+\input{sections/05SphinxPacketProcessing}
+\input{sections/07SingleUseReplyBlocks}
 \end{document}

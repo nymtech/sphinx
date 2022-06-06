@@ -1,10 +1,10 @@
-\section{Sphinx Packet Construction Overview}\label{sec:construction}
+\section{Sphinx Packet Structure}\label{sec:structure}
 
 A Sphinx Packet is composed of two segments: a header, containing routing instructions for the intermediate nodes, and a payload hiding the message content. The byte length of the Sphinx header is specified by parameter \textbf{HEADER\_LENGTH}, while the byte length of the Sphinx payload is defined by the parameter \textbf{PAYLOAD\_LENGTH}. The total size of a Sphinx packet is defined by \textbf{PACKET\_LENGTH}.
 \begin{minted}{rust}
     struct SphinxPacket {
-        header,
-        payload,
+        header : [u8; HEADER_SIZE],
+        payload: [u8; PAYLOAD_SIZE],
     }
 \end{minted}
 
@@ -16,27 +16,16 @@ The header of a Sphinx packet comprises of the following parts: an element of a 
 
 \begin{minted}{rust}
     struct SphinxHeader {
-        additional_data,
-        group_element,
-        encrypted_routing_information,
-        integrity_tag,
+        additional_data: [u8; AD_LENGTH],
+        group_element: [u8; GROUP_ELEMENT_SIZE],
+        encrypted_routing_information [u8; ENCRYPTED_ROUTING_INFO_SIZE],
+        integrity_tag: [u8; HEADER_INTEGRITY_MAC_SIZE],
     }
 \end{minted}
 
-The group element is used by each mix in the packet route to derive a \textbf{secret} that is shared with the original sender of the packet. A secure key derivation function \kdf with input \textbf{secret} is used to further extract an encryption key \hek, integrity key \ik, \blind and payload key \pk. Value \blind is used by a relay node to blind the \alp, to prevent packet linking while it traverses the route. The integrity key \ik is used to derive a hash-based message authentication code using \bet which is next compared against \tag to ensure no part of the header containing routing information has been modified.
-The key \hek is used to remove layer of symmetric encryption from \bet to extract the new routing instruction \bet and new \tag for the next relay. The payload key \pk is used to remove a layer of encryption from the payload part.
+The group element is used by each mix in the packet route to derive a \textbf{secret} that is shared with the original sender of the packet. A secure key derivation function \kdf with input \textbf{secret} is used to further extract an encryption key \hek, integrity key \ik, \blind and payload key \pk. Value \blind is used by a relay node to blind the \alp to prevent packet linking while it traverses the route. The integrity key \ik is used to derive a hash-based message authentication code using \bet which is next compared against \intag to ensure no part of the header containing routing information has been modified.
+The key \hek is used to remove layer of symmetric encryption from \bet to extract the new routing instruction \bet and new \intag for the next relay. The payload key \pk is used to remove a layer of encryption from the payload part.
 
-\section{Sphinx Packet Creation}\label{sec:create}
 
-To create a Sphinx packet, the sender specifies the message \msg, designated destination \dest and a sequence of relays \path %$R_0, R_1, \ldots R_n$
-through which the packet should be routed.  The sender generates an ephemeral private key \emphx and using the Diffie-Hellman protocol combines it with the public keys of the relays to derive a vector of all session secrets. The secrets are next used to encode the routing instructions by wrapping it in multiple layers of encryption using secure stream cipher \scph and calculating the correct message authentication codes using \hmac for each stage of the journey. The secrets are also used to layer encrypt the payload part of the packet. The payload, containing the message, is kept separate from the header and encrypted using a wide-block cipher \wbc.
 
-\begin{minted}{rust}
-    fn create_packet() -> SphinxPacket
-\end{minted}
 
-\section{Sphinx Packet Processing}\label{sec:process}
-
-\begin{minted}{rust}
-    fn process_packet(SphinxPacket) -> x
-\end{minted}

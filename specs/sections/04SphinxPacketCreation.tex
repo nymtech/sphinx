@@ -1,0 +1,133 @@
+\section{Sphinx Packet Creation}\label{sec:create}
+
+To create a Sphinx packet, the sender specifies the message \msg, designated destination \dest and a sequence of relays \path %$R_0, R_1, \ldots R_n$
+through which the packet should be routed.  The sender generates an ephemeral private key \emphx and using the Diffie-Hellman protocol combines it with the public keys of the relays to derive a vector of all session secrets. The secrets are next used to encode the routing instructions by wrapping it in multiple layers of encryption using secure stream cipher \scph and calculating the correct message authentication codes using \hmac for each stage of the journey. The secrets are also used to layer encrypt the payload part of the packet. The payload, containing the message, is kept separate from the header and encrypted using a wide-block cipher \wbc.
+
+\begin{minted}{rust}
+    fn create_packet(msg, route, dest) -> SphinxPacket {
+
+        let emph_key = EXP_KEYGEN();
+        let mut routing_keys = Vec::with_capacity(route.len());
+        
+        let mut accumulator = emph_key.clone();
+        for (i, node) in route.iter().enumerate() {
+            let shared_key = EXP( node.public_key, emph_key);
+            let node_routing_keys = KDF(shared_key);
+            if i != route.len() + 1 {
+                accumulator *= blinding_factor_scalar;
+            }
+            routing_keys.push(node_routing_keys);
+        }
+        
+        let payload_keys = key_material
+                .routing_keys
+                .iter()
+                .map(|routing_key| routing_key.payload_key)
+                .collect();
+        
+        let header = create_header(routing_keys, route, dest);
+        let payload = encapsulate_message(msg, dest, payload_keys);
+        Ok(SphinxPacket { header, payload })
+    }
+\end{minted}
+
+\subsection{Sphinx Header Creation}\label{sec:header_create}
+
+Creating a Sphinx header requires first creating the filler\_string, an encrypted padding sequence for each hop. This filler ensures that the total byte size of a Sphinx packet is the same at each hop within the network. 
+
+
+\begin{minted}{rust}
+    fn create_filler(routing_keys){
+        let filler_value = routing_keys
+                .iter()
+                .map(|node_routing_keys| node_routing_keys.stream_cipher_key)
+                .map(|cipher_key| {
+                    PRNG(&PRNG_KEY, &PRNG_IV)[:STREAM_CIPHER_OUTPUT_LENGTH]
+                }) 
+                .enumerate()
+                .map(|(i, pseudorandom_bytes)| (i + 1, pseudorandom_bytes)) 
+                .fold(
+                    Vec::new(),
+                    |filler_string_accumulator, (i, pseudorandom_bytes)| {
+                        filler_step(filler_string_accumulator, i, pseudorandom_bytes)
+                    },
+                );
+    }
+\end{minted}
+
+
+\begin{minted}{rust}
+    fn filler_step(filler_string_accumulator, i, pseudorandom_bytes) -> Vec<u8> {
+        assert_eq!(
+            pseudorandom_bytes.len(),
+            STREAM_CIPHER_OUTPUT_LENGTH
+        );
+        assert_eq!(
+            filler_string_accumulator.len(),
+            FILLER_STEP_SIZE_INCREASE * (i - 1)
+        );
+        
+        let zero_bytes = vec![0u8; FILLER_STEP_SIZE_INCREASE];
+        filler_string_accumulator.extend(&zero_bytes);
+
+        
+        xor_with(
+            &mut filler_string_accumulator,
+            &pseudorandom_bytes[pseudorandom_bytes.len() - i * FILLER_STEP_SIZE_INCREASE..],
+        );
+
+        filler_string_accumulator
+    }
+\end{minted}
+
+\noindent Next, the routing information for all the nodes is encapsulated. The routing information designated for each intermediate node is first encrypted and next combined with a HMAC for integrity protection. The innermost layer is constructed as a concatenation of the destination address \textbf{dest}, an identifier \textbf{I} used for SURBs, and a sequence of padding, which ensures the path length is not accidentally revealed. These are then encrypted by XORing with the output of a pseudo-random number generator seeded with shared key.  
+The result is merged with a filler string, the addition of which ensures the header packets remain constant in size as layers of encryption are added or removed. Once the final encrypted routing information is ready, an integrity tag is computed using HMAC, and the routing information is encrypted using a stream cipher, and concatenated with the integrity tag. The process is recursively repeated for each of the nodes in the route. 
+
+\begin{minted}{rust}
+    fn encapsulate_routing_information(route, dest, I, node_routing_info, routing_keys, filler) {
+        
+        assert_eq!(route.len(), routing_keys.len());
+        
+        let dest_info = dest || I || RANDBYTES(FINALPADDING);
+        let enc_dest_info = SENCRYPT( routing_keys.stream_cipher_key, dest_info);
+        let destination_routing_info = enc_dest_info || HMAC(routing_keys.last().integrity_key);
+        
+        route.iter()
+            .skip(1)
+            .map(|node| node.address)
+            .zip(
+                routing_keys.iter().take(routing_keys.len() - 1)
+            )
+            .zip(node_routing_info.iter().take(node_routing_info.len() - 1))
+            .rev()
+            .fold(destination_routing_info, | mut next_hop_routing_information,
+                 ((current_node_address, previous_node_routing_keys), node_routing_info)| 
+                 {
+                    let encrypted_routing_info =
+                    SENCRYPT(previous_node_routing_keys.stream_cipher_key, 
+                        current_node_address || node_routing_info 
+                        || next_hop_encapsulated_routing_information);
+                        
+                    let integrity_tag = 
+                        HMAC(previous_node_routing_keys.integrity_key, encrypted_routing_info);
+                    
+                    next_hop_routing_information = encrypted_routing_info || integrity_tag
+                },
+            )
+    }
+\end{minted}
+
+\subsection{Sphinx Payload Creation}\label{sec:payload_create}
+
+The Sphinx payload is computed separately from the header, using a wide-block cipher. Just as in the header, the payload encapsulation is performed in reverse order of the route using the payload keys computed during the initial key derivation. The inner most layer of the payload is a concatenation of the message msg, destination address dest, and a sequence of zero-byte padding of length SECURITY\_PARAMETER, which allows verification that the body was not modified in transit. 
+
+\begin{minted}{rust}
+    fn encapsulate_message(msg, dest, payload_keys) {
+        let payload = msg || dest || ZEROBYTES(SECURITY_PARAMETER); 
+        for payload_key in payload_keys.iter().rev() {
+            payload = WBC(payload_key, payload);
+        }
+    }
+\end{minted}
+
+The compute Sphinx header and Sphinx payload are then concatenated into a single Sphinx packet. 

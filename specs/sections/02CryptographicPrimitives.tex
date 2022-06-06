@@ -1,1 +1,8 @@
 \section{Cryptographic Primitives}\label{sec:cryptoprimitives}
+\begin{itemize}
+    \item KDF(SALT, IKM) - A secure key derivation function which takes an arbitrary length octet array salt SALT and an arbitrary length octet array initial key IKM, to produce an octet array of arbitrary length
+    \item EXP\_KEYGEN() - return a random group element of GROUP\_ELEMENT\_LENGTH bytes
+    \item PRNG(K, IV) - A pseudo-random generator (stream cipher) which takes a STREAM\_CIPHER\_KEY\_SIZE byte octet array key K and a STREAM\_CIPHER\_KEY\_SIZE byte octet array initialization vector IV to produce an octet array key stream of arbitrary length
+    \item WBC(K, MSG) - A wide-block cipher which takes a PAYLOAD\_KEY\_SIZE byte octet array key K and a byte array MSC and returns an encrypted byte array of length PAYLOAD\_SIZE.  
+    \item SEncrypt(K, M)/SDecrypt(K, M) - A stream cipher which takes STREAM\_CIPHER\_KEY\_SIZE byte octet array key K and a byte array message M, and produces the encrypted ciphertext or decrypted plaintext respectively.
+\end{itemize}

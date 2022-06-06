@@ -1,0 +1,63 @@
+\section{Sphinx Packet Processing}\label{sec:process}
+
+In order to process a SphinxPacket we first process the header part, and next the payload part. 
+Upon receiving a packet, the relay node extracts the group element from the header and combines it with its own secret key in order to derive the shared key. Next, the KDF is used to derive all routing keys from the shared secret. 
+
+\begin{minted}{rust}
+    fn process_packet(packet, node_secret_key) -> SphinxPacket {
+        let shared_key = EXP(packet.shared_secret, node_secret_key);
+        let routing_keys = KDF(shared_key);
+        
+        let new_header = process_header(packet.header, routing_keys);
+        let new_payload = process_payload(packet.payload, routing_keys.payload_keys);
+        
+        SphinxPacket{
+            new_header, 
+            new_payload,
+        }
+    }
+\end{minted}
+
+\subsection{Sphinx Header Processing}
+
+Using the integrity key and obtained encrypted routing information, the relay node computes and HMAC and compares it against the integrity tag encoded in the packet header. If the verification fails, the node MUST abort. Otherwise, the relay node first appends a zero byte padding at the end of the encrypted routing information and decrypts the padded block by XORing it with a pseudo-random stream of bytes generated using the shared secret. Finally, the relay node blinds the received group element using a blinding factor derived from the shared key to obtain a fresh group element. 
+
+\begin{minted}{rust}
+    fn process_header(header, routing_keys) -> SphinxHeader{
+        
+        if !(HMAC(routing_keys.integrity_key, header.encrypted_routing_information) 
+                == header.integrity_tag) {
+            return False;
+        }
+        
+        let padded_encrypted_routing_information = 
+            encrypted_routing_information || 
+            ZEROBYTES(NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE)
+        
+        let pseudorandom_bytes = PRNG(shared_key, STREAM_CIPHER_INIT_VECTOR); 
+        let new_encrypted_routing_information, new_integrity_tag = 
+        XOR(padded_encrypted_routing_information, pseudorandom_bytes) 
+        
+        let new_group_element = EXP(header.group_element, routing_keys.blinding_factor);
+        
+        SphinxHeader{
+            header.additional_data, 
+            new_group_element, 
+            new_encrypted_routing_information,
+            new_integrity_tag,
+        }
+    }
+\end{minted}
+
+\subsection{Sphinx Payload Processing}
+The relay node also performs wide-block cipher decryption to unwrap a single encryption layer from the payload. 
+
+\begin{minted}{rust}
+    fn process_payload(payload, payload_key) -> SphinxPayload{
+        
+        let unwrapped_payload = WBC(payload_key, payload);
+        SphinxPayload{
+            unwrapped_payload
+        }
+    }
+\end{minted}
