@@ -1,0 +1,92 @@
+%!TEX output_directory=setup/cache
+\documentclass[10pt]{article}
+\usepackage[USenglish]{babel}
+\usepackage[useregional]{datetime2}
+\usepackage{lipsum}
+\DTMlangsetup[en-US]{showdayofmonth=false}
+\usepackage{minted}
+
+\newcommand{\rfcId}{I-D}
+\newcommand{\rfcTitle}{Sphinx RFC Documentation}
+% \newcommand{\rfcAuthor}{Ania M. Piotrowska}
+\newcommand{\rfcAuthor}{Nym Technologies}
+\newcommand{\rfcDate}{\today}
+% \newcommand{\rfcInstitution}{Nym Technologies}
+
+% TABLE OF CONTENT
+\usepackage{tocloft}
+\renewcommand{\cftsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cftsubsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\cftsubsubsecleader}{\cftdotfill{\cftdotsep}}
+\renewcommand{\contentsname}{Table of Content}
+
+% MARGINS
+\usepackage{titlesec}
+\titlelabel{\thetitle.\quad}
+\usepackage{geometry}
+\geometry{
+	a4paper,
+	left=30mm,
+	top=30mm,
+	bottom=30mm,
+	right=30mm
+}
+\setlength{\leftskip}{17pt}
+
+% HEADER AND FOOTER
+\usepackage{lastpage}
+\usepackage{fancyhdr}
+\pagestyle{fancyplain}
+\fancyhead{}
+\fancyfoot{}
+\fancyhead[L]{RFC \rfcId}
+\fancyhead[C]{\rfcTitle}
+\fancyhead[R]{\rfcDate}
+\fancyfoot[L]{\rfcAuthor}
+\fancyfoot[C]{Standards Track}
+\fancyfoot[R]{[Page \thepage] \\}
+\renewcommand{\headrulewidth}{0pt}
+\renewcommand{\footrulewidth}{0pt}
+\setlength{\headheight}{13.6pt}
+\usepackage[cm]{sfmath}
+% FIRST PAGE
+\usepackage{multicol}
+
+% FONT
+\usepackage{inconsolata}
+\renewcommand{\familydefault}{\ttdefault}
+
+\usepackage{xspace}
+\usepackage{macros/macros}
+
+\begin{document}
+
+\begin{multicols}{2}
+	\begin{flushleft}
+% 		Internet Engineering Task Force \\
+% 		INTERNET-DRAFT \rfcId
+	\end{flushleft}
+\columnbreak
+	\begin{flushright}
+		\rfcAuthor \\
+% 		\rfcInstitution \\
+		\rfcDate
+	\end{flushright}
+\end{multicols}
+
+\vspace{1in} { \center \rfcTitle \\ } \vspace{1in}
+
+% \begin{abstract}
+% 	XXX
+% \end{abstract}
+% \pagebreak
+
+\tableofcontents
+\pagebreak
+
+\input{sections/01Introduction}
+\input{sections/02CryptographicPrimitives}
+\input{sections/03SphinxPacketStructure}
+
+
+\end{document}

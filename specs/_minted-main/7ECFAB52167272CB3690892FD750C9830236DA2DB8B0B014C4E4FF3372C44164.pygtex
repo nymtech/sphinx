@@ -1,0 +1,3 @@
+\begin{Verbatim}[commandchars=\\\{\}]
+\PYG{+w}{    }\PYG{k}{fn} \PYG{n+nf}{process\PYGZus{}packet}\PYG{p}{(}\PYG{n}{SphinxPacket}\PYG{p}{)}\PYG{+w}{ }\PYGZhy{}\PYGZgt{} \PYG{n+nc}{x}
+\end{Verbatim}
