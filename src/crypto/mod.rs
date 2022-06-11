@@ -12,8 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use aes::cipher::{NewCipher, StreamCipher};
-use aes::Aes128Ctr;
+use aes::cipher::{StreamCipher, KeyIvInit};
+use aes::Aes128;
 use digest::generic_array::{ArrayLength, GenericArray};
 use digest::{BlockInput, FixedOutput, Reset, Update};
 use hmac::{crypto_mac, Hmac, Mac, NewMac};
@@ -28,6 +28,9 @@ pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 
 // Type alias for ease of use so that it would not require explicit import of crypto_mac or Hmac
 pub type HmacOutput<D> = crypto_mac::Output<Hmac<D>>;
+
+// Type alias for Aes128 ctr mode
+pub type Aes128Ctr = ::ctr::Ctr64BE<Aes128>;
 
 pub fn generate_pseudorandom_bytes(
     // TODO: those should use proper generic arrays to begin with!!
