@@ -12,9 +12,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use aes::cipher::{NewCipher, StreamCipher};
-use aes::Aes128Ctr;
-use digest::generic_array::{ArrayLength, GenericArray};
+use aes::cipher::{KeyIvInit, StreamCipher};
+use digest::generic_array::ArrayLength;
 use digest::{BlockInput, FixedOutput, Reset, Update};
 use hmac::{crypto_mac, Hmac, Mac, NewMac};
 
@@ -29,6 +28,9 @@ pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 // Type alias for ease of use so that it would not require explicit import of crypto_mac or Hmac
 pub type HmacOutput<D> = crypto_mac::Output<Hmac<D>>;
 
+// Type alias for Aes128 ctr mode
+type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
+
 pub fn generate_pseudorandom_bytes(
     // TODO: those should use proper generic arrays to begin with!!
     // ^ will be done in next PR
@@ -36,11 +38,8 @@ pub fn generate_pseudorandom_bytes(
     iv: &[u8; STREAM_CIPHER_KEY_SIZE],
     length: usize,
 ) -> Vec<u8> {
-    let cipher_key = GenericArray::from_slice(&key[..]);
-    let cipher_nonce = GenericArray::from_slice(&iv[..]);
-
     // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
-    let mut cipher = Aes128Ctr::new(cipher_key, cipher_nonce);
+    let mut cipher = Aes128Ctr::new(key.into(), iv.into());
     let mut data = vec![0u8; length];
     cipher.apply_keystream(&mut data);
     data
