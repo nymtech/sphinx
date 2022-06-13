@@ -22,7 +22,7 @@ use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_I
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{Error, ErrorKind, Result};
 use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek_ng::scalar::Scalar;
 use keys::RoutingKeys;
 
 pub mod delays;

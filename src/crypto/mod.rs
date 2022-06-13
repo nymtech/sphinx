@@ -39,10 +39,10 @@ pub fn generate_pseudorandom_bytes(
     length: usize,
 ) -> Vec<u8> {
     // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
-    let mut cipher = Aes128Ctr::new(key.into(), iv.into());
-    let mut data = vec![0u8; length];
-    cipher.apply_keystream(&mut data);
-    data
+	let mut cipher = Aes128Ctr::new(key.into(), iv.into());
+	let mut data = vec![0u8; length];
+	cipher.apply_keystream(&mut data);
+	data
 }
 
 /// Compute keyed hmac

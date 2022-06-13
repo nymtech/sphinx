@@ -31,11 +31,11 @@ impl Filler {
             .iter()
             .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
             .map(|cipher_key| {
-                crypto::generate_pseudorandom_bytes(
-                    &cipher_key,
-                    &crypto::STREAM_CIPHER_INIT_VECTOR,
-                    constants::STREAM_CIPHER_OUTPUT_LENGTH,
-                )
+				crypto::generate_pseudorandom_bytes(
+					&cipher_key,
+					&crypto::STREAM_CIPHER_INIT_VECTOR,
+					constants::STREAM_CIPHER_OUTPUT_LENGTH,
+				)
             }) // the actual cipher key is only used to generate the pseudorandom bytes
             .enumerate() // we need to know index of each element to take correct slice of the PRNG output
             .map(|(i, pseudorandom_bytes)| (i + 1, pseudorandom_bytes)) // the zeroth step is the empty filler and we add on top of it

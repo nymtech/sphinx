@@ -19,7 +19,7 @@
 // to obtain g^{xyz} we compute `tmp = x*y*z` followed by g^tmp rather than
 // G1 = g^x, G2 = G1^y, G3 = G2^z
 
-use curve25519_dalek::{
+use curve25519_dalek_ng::{
     constants::ED25519_BASEPOINT_TABLE, montgomery::MontgomeryPoint, scalar::Scalar,
 };
 use rand::{rngs::OsRng, CryptoRng, RngCore};

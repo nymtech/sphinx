@@ -22,7 +22,7 @@ use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::crypto::{self, EphemeralSecret};
 use crate::route::Node;
 use crypto::SharedSecret;
-use curve25519_dalek::scalar::Scalar;
+use curve25519_dalek_ng::scalar::Scalar;
 use hkdf::Hkdf;
 use sha2::Sha256;
 
