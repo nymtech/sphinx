@@ -16,9 +16,12 @@ use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
 use crate::{Error, ErrorKind, Result};
 use arrayref::array_ref;
-use blake2::VarBlake2b;
+use blake2::{Blake2bMac, digest::consts::U32};
 use chacha::ChaCha; // we might want to swap this one with a different implementation
 use lioness::Lioness;
+
+// Type alias for Blake2bMac256 for compatibility with old lioness
+pub type Blake2bMac256 = Blake2bMac<U32>;
 
 // payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
@@ -102,7 +105,7 @@ impl Payload {
 
     /// Tries to add an additional layer of encryption onto self.
     fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
+        let lioness_cipher = Lioness::<Blake2bMac256, ChaCha>::new_raw(array_ref!(
             payload_enc_key,
             0,
             lioness::RAW_KEY_SIZE
@@ -119,7 +122,7 @@ impl Payload {
 
     /// Tries to remove single layer of encryption from self.
     pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
+        let lioness_cipher = Lioness::<Blake2bMac256, ChaCha>::new_raw(array_ref!(
             payload_key,
             0,
             lioness::RAW_KEY_SIZE
