@@ -16,12 +16,8 @@ use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
 use crate::{Error, ErrorKind, Result};
 use arrayref::array_ref;
-use blake2::{Blake2bMac, digest::consts::U32};
 use chacha::ChaCha; // we might want to swap this one with a different implementation
-use lioness::Lioness;
-
-// Type alias for Blake2bMac256 for compatibility with old lioness
-pub type Blake2bMac256 = Blake2bMac<U32>;
+use lioness::{Lioness,Blake2bMac256};
 
 // payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding

@@ -23,7 +23,6 @@ hkdf = "0.12.3"
 lioness = { git = "https://github.com/vnpmid/lioness-rs", rev = "6315f2e85096f4495fa38a78f592ef125cf27bf1" }
 arrayref = "0.3.6"
 chacha = "0.3.0"
-blake2 = "0.10.4"
 byteorder = "1.4.3"
 subtle = "2.4.1"
 
