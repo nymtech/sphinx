@@ -16,7 +16,25 @@ use crate::constants::SECURITY_PARAMETER;
 use crate::header::keys::PayloadKey;
 use crate::{Error, ErrorKind, Result};
 use arrayref::array_ref;
-use lioness::{Lioness,LionessBlake3,Blake2bMac256,ChaChaLioness};
+use lioness::{
+	Lioness,
+	//LionessBlake3,
+	Blake2bMac256,
+	//Blake3Hasher
+	ChaChaLioness,
+/*  LionessBlake3 test
+    fn encryption_is_reciprocal_to_decryption_for_block_chacha20_blake3_variant() {
+        let key = GenericArray::from(b"my-awesome-key-that-is-perfect-length-to-work-with-chacha20-and-blake3-lioness-cipher-after-adding-a-little-bit-of-extra-padding".to_owned()).as_slice().try_into().expect("slice with incorrect length");
+		let l = LionessBlake3::<Blake3Hasher,ChaChaLioness>::new_raw(&key);
+        let data = b"This is some test data of the same length as specified blockSize".to_owned();
+        let mut block = GenericArray::from(data);
+		l.encrypt(&mut block).unwrap();
+        assert_ne!(data.to_vec(), block.to_vec());
+		l.decrypt(&mut block).unwrap();
+        assert_eq!(data.to_vec(), block.to_vec());
+    }
+*/
+};
 
 // payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
