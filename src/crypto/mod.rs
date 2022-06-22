@@ -13,16 +13,6 @@
 // limitations under the License.
 
 use aes::cipher::{KeyIvInit, StreamCipher};
-/*
-use digest::{
-	Mac,
-	crypto_common::BlockSizeUser, CtOutput, Digest
-};
-use hmac::SimpleHmac;
-*/
-
-//Hmac not supported with black3
-//https://githubhot.com/repo/BLAKE3-team/BLAKE3/issues/223
 use digest::{
 	Mac,
 	CtOutput,
@@ -41,49 +31,21 @@ pub use keys::*;
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 
-// Type alias for ease of use so that it would not require explicit import of crypto_mac or Hmac
-/*
-pub type HmacOutput<D> = CtOutput<SimpleHmac<D>>;
-*/
-
-//Hmac not supported with black3
-//https://githubhot.com/repo/BLAKE3-team/BLAKE3/issues/223
 pub type HmacOutput<D> = CtOutput<CoreWrapper<HmacCore<D>>>;
 
-//&GenericArray<u8, <<D as CoreProxy>::Core as OutputSizeUser>::OutputSize>
-
-// Type alias for Aes128 ctr mode
-type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
+pub type Aes128Ctr = ctr::Ctr128BE<aes::Aes128>;
 
 pub fn generate_pseudorandom_bytes(
-    // TODO: those should use proper generic arrays to begin with!!
-    // ^ will be done in next PR
     key: &[u8; STREAM_CIPHER_KEY_SIZE],
     iv: &[u8; STREAM_CIPHER_KEY_SIZE],
     length: usize,
 ) -> Vec<u8> {
-    // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
     let mut cipher = Aes128Ctr::new(key.into(), iv.into());
 	let mut data = vec![0u8; length];
 	cipher.apply_keystream(&mut data);
 	data
 }
 
-/// Compute keyed hmac
-/*
-pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> HmacOutput<D>
-where
-    D: Digest + BlockSizeUser,
-{
-    let mut hmac = SimpleHmac::<D>::new_from_slice(key)
-        .expect("HMAC was instantiated with a key of an invalid size!");
-    hmac.update(data);
-    hmac.finalize()
-}
-*/
-
-//Hmac not supported with black3
-//https://githubhot.com/repo/BLAKE3-team/BLAKE3/issues/223
 pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> HmacOutput<D>
 where
     D: CoreProxy,
