@@ -32,6 +32,7 @@ pub const IDENTIFIER_LENGTH: usize = SECURITY_PARAMETER;
 pub const INTEGRITY_MAC_KEY_SIZE: usize = SECURITY_PARAMETER;
 pub const HEADER_INTEGRITY_MAC_SIZE: usize = SECURITY_PARAMETER;
 pub const PAYLOAD_KEY_SIZE: usize = 192; // must be 192 because of the Lioness implementation we're using
+pub const PAYLOAD_KEY_SIZE_BLAKE3: usize = 128;
 pub const DELAY_LENGTH: usize = 8; // how many bytes we will use to encode the delay
 pub const NODE_META_INFO_SIZE: usize =
     NODE_ADDRESS_LENGTH + FLAG_LENGTH + DELAY_LENGTH + VERSION_LENGTH; // the meta info is all the information from sender to the node like: where to forward the packet, what is the delay etc
