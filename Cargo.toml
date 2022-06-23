@@ -20,7 +20,7 @@ rand = "0.8.5"
 rand_distr = "0.4.3"
 sha2 = "0.10.2"
 hkdf = "0.12.3"
-lioness = { git = "https://github.com/vnpmid/lioness-rs", rev = "abd23a44a1fe61fc3b9432f2ab4ba3d97af55fd1" }
+lioness = { git = "https://github.com/vnpmid/lioness-rs", rev = "617fc3171d05543f997004913ad2b619320d64fc" }
 arrayref = "0.3.6"
 byteorder = "1.4.3"
 subtle = "2.4.1"

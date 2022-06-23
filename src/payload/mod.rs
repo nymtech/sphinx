@@ -17,15 +17,21 @@ use crate::header::keys::PayloadKey;
 use crate::{Error, ErrorKind, Result};
 use arrayref::array_ref;
 use lioness::{
-	Lioness,
-	//LionessBlake3,
-	Blake2bMac256,
-	//Blake3Hasher
-	ChaChaLioness,
-/*  LionessBlake3 test
+	LionessDefault,
+	//LionessBlake3Default,
+/*
+	pub const DIGEST_RESULT_SIZE: usize = 32;
+	pub const DIGEST_KEY_SIZE: usize = 64;
+	pub const BLAKE3_RESULT_SIZE: usize = 32;
+	pub const BLAKE3_KEY_SIZE: usize = 32;
+	pub const STREAM_CIPHER_KEY_SIZE: usize = 32;
+	pub const RAW_KEY_SIZE: usize = 2*STREAM_CIPHER_KEY_SIZE + 2*DIGEST_KEY_SIZE;
+	pub const RAW_BLAKE3_KEY_SIZE: usize = 2*STREAM_CIPHER_KEY_SIZE + 2*BLAKE3_KEY_SIZE;
+	
+	LionessBlake3Default test
     fn encryption_is_reciprocal_to_decryption_for_block_chacha20_blake3_variant() {
         let key = GenericArray::from(b"my-awesome-key-that-is-perfect-length-to-work-with-chacha20-and-blake3-lioness-cipher-after-adding-a-little-bit-of-extra-padding".to_owned()).as_slice().try_into().expect("slice with incorrect length");
-		let l = LionessBlake3::<Blake3Hasher,ChaChaLioness>::new_raw(&key);
+		let l = LionessBlakeDefault::new_raw(&key);
         let data = b"This is some test data of the same length as specified blockSize".to_owned();
         let mut block = GenericArray::from(data);
 		l.encrypt(&mut block).unwrap();
@@ -118,7 +124,7 @@ impl Payload {
 
     /// Tries to add an additional layer of encryption onto self.
     fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<Blake2bMac256, ChaChaLioness>::new_raw(array_ref!(
+        let lioness_cipher = LionessDefault::new_raw(array_ref!(
             payload_enc_key,
             0,
             lioness::RAW_KEY_SIZE
@@ -135,7 +141,7 @@ impl Payload {
 
     /// Tries to remove single layer of encryption from self.
     pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<Blake2bMac256, ChaChaLioness>::new_raw(array_ref!(
+        let lioness_cipher = LionessDefault::new_raw(array_ref!(
             payload_key,
             0,
             lioness::RAW_KEY_SIZE
