@@ -21,6 +21,8 @@ use crate::header::routing::destination::FinalRoutingInformation;
 use crate::header::routing::nodes::{EncryptedRoutingInformation, RoutingInformation};
 use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{Error, ErrorKind, Result};
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE - (NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE);
@@ -81,6 +83,17 @@ impl EncapsulatedRoutingInformation {
         routing_keys: &[RoutingKeys],
         filler: Filler,
     ) -> Self {
+        Self::new_with_rng(route, destination, delays, routing_keys, filler, &mut OsRng)
+    }
+
+    pub fn new_with_rng<R: RngCore + CryptoRng>(
+        route: &[Node],
+        destination: &Destination,
+        delays: &[Delay],
+        routing_keys: &[RoutingKeys],
+        filler: Filler,
+        rng: &mut R,
+    ) -> Self {
         assert_eq!(route.len(), routing_keys.len());
         assert_eq!(delays.len(), route.len());
 
@@ -90,7 +103,7 @@ impl EncapsulatedRoutingInformation {
         };
 
         let encapsulated_destination_routing_info =
-            Self::for_final_hop(destination, final_keys, filler, route.len());
+            Self::for_final_hop(destination, final_keys, filler, route.len(), rng);
 
         Self::for_forward_hops(
             encapsulated_destination_routing_info,
@@ -100,15 +113,16 @@ impl EncapsulatedRoutingInformation {
         )
     }
 
-    fn for_final_hop(
+    fn for_final_hop<R: RngCore + CryptoRng>(
         dest: &Destination,
         routing_keys: &RoutingKeys,
         filler: Filler,
         route_len: usize,
+        rng: &mut R,
     ) -> Self {
         // personal note: I like how this looks so much.
         FinalRoutingInformation::new(dest, route_len)
-            .add_padding(route_len) // add padding to obtain correct destination length
+            .add_padding(route_len, rng) // add padding to obtain correct destination length
             .encrypt(routing_keys.stream_cipher_key, route_len) // encrypt with the key of final node (in our case service provider)
             .combine_with_filler(filler, route_len) // add filler to get header of correct length
             .encapsulate_with_mac(routing_keys.header_integrity_hmac_key) // combine the previous data with a MAC on the header (also calculated with the SPs key)
@@ -304,6 +318,7 @@ mod encapsulating_forward_routing_information {
             &routing_keys.last().unwrap(),
             filler,
             route.len(),
+            &mut OsRng,
         );
 
         let destination_routing_info_copy = destination_routing_info.clone();

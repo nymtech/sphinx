@@ -23,7 +23,7 @@ use crate::header::routing::nodes::EncryptedRoutingInformation;
 use crate::header::routing::{RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP};
 use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
-use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 
 // this is going through the following transformations:
 /*
@@ -63,11 +63,15 @@ impl FinalRoutingInformation {
         ENCRYPTED_ROUTING_INFO_SIZE - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
     }
 
-    pub(super) fn add_padding(self, route_len: usize) -> PaddedFinalRoutingInformation {
+    pub(super) fn add_padding<R: RngCore + CryptoRng>(
+        self,
+        route_len: usize,
+        rng: &mut R,
+    ) -> PaddedFinalRoutingInformation {
         // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
         // attack on sphinx described by Kuhn et al.
         let padding = utils::bytes::random(
-            &mut OsRng,
+            rng,
             ENCRYPTED_ROUTING_INFO_SIZE
                 - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
                 - FINAL_NODE_META_INFO_LENGTH,
@@ -157,6 +161,7 @@ mod test_encapsulating_final_routing_information_and_mac {
             random_node,
         },
     };
+    use rand::rngs::OsRng;
 
     #[test]
     fn it_returns_mac_on_correct_data() {
@@ -174,6 +179,7 @@ mod test_encapsulating_final_routing_information_and_mac {
             &routing_keys.last().unwrap(),
             filler,
             route.len(),
+            &mut OsRng,
         );
 
         let expected_mac = HeaderIntegrityMac::compute(
@@ -191,6 +197,7 @@ mod test_encapsulating_final_routing_information_and_mac {
 mod test_encapsulating_final_routing_information {
     use super::*;
     use crate::test_utils::fixtures::{destination_fixture, filler_fixture, routing_keys_fixture};
+    use rand::rngs::OsRng;
 
     #[test]
     fn it_produces_result_of_length_filler_plus_padded_concatenated_destination_and_identifier_and_flag_for_route_of_length_5(
@@ -201,7 +208,7 @@ mod test_encapsulating_final_routing_information {
         let destination = destination_fixture();
 
         let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
+            .add_padding(route_len, &mut OsRng)
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
@@ -222,7 +229,7 @@ mod test_encapsulating_final_routing_information {
         let destination = destination_fixture();
 
         let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
+            .add_padding(route_len, &mut OsRng)
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
@@ -243,7 +250,7 @@ mod test_encapsulating_final_routing_information {
         let destination = destination_fixture();
 
         let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
+            .add_padding(route_len, &mut OsRng)
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
 
@@ -264,7 +271,7 @@ mod test_encapsulating_final_routing_information {
         let destination = destination_fixture();
 
         FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
+            .add_padding(route_len, &mut OsRng)
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);
     }

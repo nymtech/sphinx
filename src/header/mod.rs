@@ -24,6 +24,8 @@ use crate::{Error, ErrorKind, Result};
 use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
 use curve25519_dalek::scalar::Scalar;
 use keys::RoutingKeys;
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 
 pub mod delays;
 pub mod filler;
@@ -55,14 +57,25 @@ impl SphinxHeader {
         delays: &[Delay],
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
+        Self::new_with_rng(initial_secret, route, delays, destination, &mut OsRng)
+    }
+
+    pub fn new_with_rng<R: RngCore + CryptoRng>(
+        initial_secret: &EphemeralSecret,
+        route: &[Node],
+        delays: &[Delay],
+        destination: &Destination,
+        rng: &mut R,
+    ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
         let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
-        let routing_info = routing::EncapsulatedRoutingInformation::new(
+        let routing_info = routing::EncapsulatedRoutingInformation::new_with_rng(
             route,
             destination,
             delays,
             &key_material.routing_keys,
             filler_string,
+            rng,
         );
 
         // encapsulate header.routing information, compute MACs

@@ -5,6 +5,8 @@ use crate::{
     route::{Destination, Node},
     Result, SphinxPacket,
 };
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 
 pub const DEFAULT_PAYLOAD_SIZE: usize = 1024;
 
@@ -35,9 +37,28 @@ impl<'a> SphinxPacketBuilder<'a> {
         destination: &Destination,
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
+        self.build_packet_with_rng(message, route, destination, delays, &mut OsRng)
+    }
+
+    pub fn build_packet_with_rng<R: RngCore + CryptoRng>(
+        &self,
+        message: Vec<u8>,
+        route: &[Node],
+        destination: &Destination,
+        delays: &[Delay],
+        rng: &mut R,
+    ) -> Result<SphinxPacket> {
         let (header, payload_keys) = match self.initial_secret.as_ref() {
-            Some(initial_secret) => SphinxHeader::new(initial_secret, route, delays, destination),
-            None => SphinxHeader::new(&EphemeralSecret::new(), route, delays, destination),
+            Some(initial_secret) => {
+                SphinxHeader::new_with_rng(initial_secret, route, delays, destination, rng)
+            }
+            None => SphinxHeader::new_with_rng(
+                &EphemeralSecret::new_with_rng(rng),
+                route,
+                delays,
+                destination,
+                rng,
+            ),
         };
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation

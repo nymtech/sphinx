@@ -6,6 +6,8 @@ use crate::route::{Destination, Node, NodeAddressBytes};
 use crate::{crypto::EphemeralSecret, Error, ErrorKind, Result};
 use crate::{header, SphinxPacket};
 use header::{SphinxHeader, HEADER_SIZE};
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 use std::fmt;
 
 /// A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
@@ -13,7 +15,7 @@ use std::fmt;
 /// used to layer encrypt the payload.
 #[allow(non_snake_case)]
 pub struct SURB {
-    SURB_header: header::SphinxHeader,
+    SURB_header: SphinxHeader,
     first_hop_address: NodeAddressBytes,
     payload_keys: Vec<PayloadKey>,
 }
@@ -51,14 +53,27 @@ impl SURBMaterial {
 
     #[allow(non_snake_case)]
     pub fn construct_SURB(self) -> Result<SURB> {
-        let surb_initial_secret = EphemeralSecret::new();
-        SURB::new(surb_initial_secret, self)
+        Self::construct_SURB_with_rng(self, &mut OsRng)
+    }
+
+    #[allow(non_snake_case)]
+    pub fn construct_SURB_with_rng<R: RngCore + CryptoRng>(self, rng: &mut R) -> Result<SURB> {
+        let surb_initial_secret = EphemeralSecret::new_with_rng(rng);
+        SURB::new_with_rng(surb_initial_secret, self, rng)
     }
 }
 
 #[allow(non_snake_case)]
 impl SURB {
     pub fn new(surb_initial_secret: EphemeralSecret, surb_material: SURBMaterial) -> Result<Self> {
+        Self::new_with_rng(surb_initial_secret, surb_material, &mut OsRng)
+    }
+
+    pub fn new_with_rng<R: RngCore + CryptoRng>(
+        surb_initial_secret: EphemeralSecret,
+        surb_material: SURBMaterial,
+        rng: &mut R,
+    ) -> Result<Self> {
         let surb_route = surb_material.surb_route;
         let surb_delays = surb_material.surb_delays;
         let surb_destination = surb_material.surb_destination;
@@ -78,11 +93,12 @@ impl SURB {
 
         let first_hop = surb_route.first().unwrap();
 
-        let (header, payload_keys) = header::SphinxHeader::new(
+        let (header, payload_keys) = SphinxHeader::new_with_rng(
             &surb_initial_secret,
             &surb_route,
             &surb_delays,
             &surb_destination,
+            rng,
         );
 
         Ok(SURB {
@@ -168,21 +184,27 @@ mod prepare_and_use_process_surb {
     use crate::crypto;
     use crate::header::{delays, HEADER_SIZE};
     use crate::{packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_fixture};
+    use rand_chacha::rand_core::{RngCore, SeedableRng};
     use std::time::Duration;
 
     #[allow(non_snake_case)]
     fn SURB_fixture() -> SURB {
-        let (_, node1_pk) = crypto::keygen();
+        SURB_fixture_with_rng(&mut OsRng)
+    }
+
+    #[allow(non_snake_case)]
+    fn SURB_fixture_with_rng<R: RngCore + CryptoRng>(rng: &mut R) -> SURB {
+        let (_, node1_pk) = crypto::keygen_with_rng(rng);
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = crypto::keygen_with_rng(rng);
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = crypto::keygen_with_rng(rng);
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -190,13 +212,17 @@ mod prepare_and_use_process_surb {
 
         let surb_route = vec![node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = EphemeralSecret::new();
-        let surb_delays =
-            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+        let surb_initial_secret = EphemeralSecret::new_with_rng(rng);
+        let surb_delays = delays::generate_from_average_duration_with_rng(
+            surb_route.len(),
+            Duration::from_secs(3),
+            rng,
+        );
 
-        SURB::new(
+        SURB::new_with_rng(
             surb_initial_secret,
             SURBMaterial::new(surb_route, surb_delays, surb_destination),
+            rng,
         )
         .unwrap()
     }
@@ -276,5 +302,27 @@ mod prepare_and_use_process_surb {
             dummy_SURB.SURB_header.to_bytes(),
             dummy_SURB.SURB_header.to_bytes()
         );
+    }
+
+    #[test]
+    fn when_same_rng_then_surbs_identical() {
+        let mut rng1 = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        let mut rng2 = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+
+        let surb1 = SURB_fixture_with_rng(&mut rng1);
+        let surb2 = SURB_fixture_with_rng(&mut rng2);
+
+        assert_eq!(surb1.to_bytes(), surb2.to_bytes());
+    }
+
+    #[test]
+    fn when_different_rng_then_surbs_different() {
+        let mut rng1 = rand_chacha::ChaCha20Rng::seed_from_u64(0);
+        let mut rng2 = rand_chacha::ChaCha20Rng::seed_from_u64(1);
+
+        let surb1 = SURB_fixture_with_rng(&mut rng1);
+        let surb2 = SURB_fixture_with_rng(&mut rng2);
+
+        assert_ne!(surb1.to_bytes(), surb2.to_bytes());
     }
 }
