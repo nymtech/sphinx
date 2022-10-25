@@ -32,7 +32,7 @@ impl DestinationAddressBytes {
             Err(e) => {
                 return Err(Error::new(
                     ErrorKind::InvalidRouting,
-                    format!("failed to decode destination from b58 string: {:?}", e),
+                    format!("failed to decode destination from b58 string: {e:?}"),
                 ))
             }
         };
@@ -100,7 +100,7 @@ impl NodeAddressBytes {
             Err(e) => {
                 return Err(Error::new(
                     ErrorKind::InvalidRouting,
-                    format!("failed to decode node address from b58 string: {:?}", e),
+                    format!("failed to decode node address from b58 string: {e:?}"),
                 ))
             }
         };

@@ -111,7 +111,7 @@ impl Payload {
         if let Err(err) = lioness_cipher.encrypt(&mut self.0) {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
-                format!("error while encrypting payload - {}", err),
+                format!("error while encrypting payload - {err}"),
             ));
         };
         Ok(self)
@@ -127,7 +127,7 @@ impl Payload {
         if let Err(err) = lioness_cipher.decrypt(&mut self.0) {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
-                format!("error while unwrapping payload - {}", err),
+                format!("error while unwrapping payload - {err}"),
             ));
         };
         Ok(self)

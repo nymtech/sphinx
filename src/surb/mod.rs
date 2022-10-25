@@ -27,10 +27,10 @@ impl fmt::Debug for SURB {
         let formatted_keys = format!("{{ {} }}", formatted_keys_inner.join(", "));
 
         write!(
-            f,
-            "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {:?} }}",
-            self.SURB_header, self.first_hop_address, formatted_keys
-        )
+                    f,
+                    "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {formatted_keys:?} }}",
+        32 ~             self.SURB_header, self.first_hop_address
+                )
     }
 }
 
