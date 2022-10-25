@@ -19,7 +19,7 @@ use std::{borrow::Borrow, time::Duration};
 
 // TODO: once we get to proper refactoring, I think this should just be
 // a type alias to probably time::Duration
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Delay(u64);
 
 impl Delay {
