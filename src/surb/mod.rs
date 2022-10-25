@@ -28,8 +28,8 @@ impl fmt::Debug for SURB {
 
         write!(
             f,
-            "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {:?} }}",
-            self.SURB_header, self.first_hop_address, formatted_keys
+            "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {formatted_keys:?} }}",
+            self.SURB_header, self.first_hop_address
         )
     }
 }
