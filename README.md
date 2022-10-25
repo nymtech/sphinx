@@ -23,7 +23,7 @@ Unit + integration test coverage is currently well above 90%, please ensure that
 
 ### Benchmarks
 
-To run benchmarks, use: 
+To run benchmarks, use:
 
 ```
 cargo bench
@@ -40,3 +40,8 @@ test tests::bench_process ... bench:     157.322 us/iter
 
 * `1000000 / 386.348` = ~2588 packet creations per second
 * `1000000 / 157.322` = ~6356 packet unwrappings per second
+
+
+---
+This code has received partial funding from the Next Generation Internet POINTER programme of the European Commission, as part of the Horizon 2020 Research and Innovation Programme, under Grant Agreement Nº  871528.
+---
