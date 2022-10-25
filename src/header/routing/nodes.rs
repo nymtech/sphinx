@@ -206,7 +206,7 @@ impl RawRoutingInformation {
             FINAL_HOP => Ok(self.parse_as_final_hop()),
             _ => Err(Error::new(
                 ErrorKind::InvalidRouting,
-                format!("tried to parse unknown routing flag: {}", flag),
+                format!("tried to parse unknown routing flag: {flag}"),
             )),
         }
     }
