@@ -28,6 +28,12 @@ impl Delay {
         Delay(value)
     }
 
+    pub const fn new_from_millis(value: u64) -> Self {
+        const NANOS_PER_MILLI: u64 = 1_000_000;
+
+        Self::new_from_nanos(NANOS_PER_MILLI * value)
+    }
+
     pub fn to_nanos(&self) -> u64 {
         self.0
     }
