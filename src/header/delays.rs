@@ -19,7 +19,7 @@ use std::{borrow::Borrow, time::Duration};
 
 // TODO: once we get to proper refactoring, I think this should just be
 // a type alias to probably time::Duration
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Delay(u64);
 
 impl Delay {
@@ -65,7 +65,7 @@ where
 {
     type Output = Delay;
     fn add(self, rhs: T) -> Self::Output {
-        Delay(self.0 + rhs.borrow().0)
+        *self + rhs
     }
 }
 
@@ -75,7 +75,7 @@ where
 {
     type Output = Delay;
     fn add(self, rhs: T) -> Self::Output {
-        &self + rhs
+        Delay(self.0 + rhs.borrow().0)
     }
 }
 
