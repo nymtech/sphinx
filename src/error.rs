@@ -57,6 +57,9 @@ pub enum ErrorKind {
 
     /// Error originating routing information related functionality.
     InvalidRouting,
+
+    /// Another type of error that could not be contained within any of the previous categories.
+    Other,
 }
 
 impl ErrorKind {
@@ -67,6 +70,7 @@ impl ErrorKind {
             ErrorKind::InvalidPayload => "payload processing failure",
             ErrorKind::InvalidSURB => "SURB processing failure",
             ErrorKind::InvalidRouting => "routing information processing failure",
+            ErrorKind::Other => "another failure",
         }
     }
 }
