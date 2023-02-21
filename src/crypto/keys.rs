@@ -44,6 +44,9 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
 // derive zeroize::Zeroize on drop here
 pub struct PrivateKey(Scalar);
 
+// Because the lint below was renamed in nightly but not in stable, making this problematic in CI
+// which tests both, for a brief period we allow renamed lints.
+#[allow(renamed_and_removed_lints)] // TODO: remove this in next version
 #[allow(clippy::derive_hash_xor_eq)] // TODO: we must be careful about that one if anything changes in the future
 #[derive(Copy, Clone, Debug, Hash)]
 pub struct PublicKey(MontgomeryPoint);
