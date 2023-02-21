@@ -15,7 +15,9 @@
 extern crate sphinx_packet;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use sphinx_packet::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
+use sphinx_packet::constants::{
+    DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
+};
 use sphinx_packet::crypto::keygen;
 use sphinx_packet::header::delays;
 use sphinx_packet::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
