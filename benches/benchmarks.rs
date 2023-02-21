@@ -12,14 +12,14 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate sphinx;
+extern crate sphinx_packet;
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use sphinx::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
-use sphinx::crypto::keygen;
-use sphinx::header::delays;
-use sphinx::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
-use sphinx::SphinxPacket;
+use sphinx_packet::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
+use sphinx_packet::crypto::keygen;
+use sphinx_packet::header::delays;
+use sphinx_packet::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
+use sphinx_packet::SphinxPacket;
 use std::time::Duration;
 
 fn make_packet_copy(packet: &SphinxPacket) -> SphinxPacket {
