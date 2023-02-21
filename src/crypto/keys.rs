@@ -44,7 +44,7 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
 // derive zeroize::Zeroize on drop here
 pub struct PrivateKey(Scalar);
 
-#[allow(clippy::derive_hash_xor_eq)] // TODO: we must be careful about that one if anything changes in the future
+#[allow(clippy::derived_hash_with_manual_eq)] // TODO: we must be careful about that one if anything changes in the future
 #[derive(Copy, Clone, Debug, Hash)]
 pub struct PublicKey(MontgomeryPoint);
 
