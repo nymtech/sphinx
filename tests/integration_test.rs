@@ -12,20 +12,20 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-extern crate sphinx;
+extern crate sphinx_packet;
 
-use sphinx::crypto;
-use sphinx::header::delays;
-use sphinx::route::{Destination, Node};
-use sphinx::SphinxPacket;
+use sphinx_packet::crypto;
+use sphinx_packet::header::delays;
+use sphinx_packet::route::{Destination, Node};
+use sphinx_packet::SphinxPacket;
 
 // const PAYLOAD_SIZE: usize = 1024;
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
-    use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx::{
+    use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
+    use sphinx_packet::{
         constants::{
             DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
             SECURITY_PARAMETER,
@@ -102,8 +102,8 @@ mod create_and_process_sphinx_packet {
 #[cfg(test)]
 mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
-    use sphinx::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx::{
+    use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
+    use sphinx_packet::{
         constants::{
             DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
             SECURITY_PARAMETER,
@@ -220,9 +220,9 @@ mod converting_sphinx_packet_to_and_from_bytes {
 mod create_and_process_surb {
     use super::*;
     use crypto::EphemeralSecret;
-    use sphinx::route::NodeAddressBytes;
-    use sphinx::surb::{SURBMaterial, SURB};
-    use sphinx::{
+    use sphinx_packet::route::NodeAddressBytes;
+    use sphinx_packet::surb::{SURBMaterial, SURB};
+    use sphinx_packet::{
         constants::{NODE_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
         packet::builder::DEFAULT_PAYLOAD_SIZE,
         test_utils::fixtures::destination_fixture,
