@@ -32,6 +32,7 @@ subtle = "2.3.0"
 [dev-dependencies]
 mockall = "0.10.2"
 criterion = "0.3"
+hex = "0.4.3"
 
 [[bench]]
 name = "benchmarks"

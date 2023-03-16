@@ -62,15 +62,21 @@ where
 #[cfg(test)]
 mod generating_pseudorandom_bytes {
     use super::*;
+    use std::convert::TryInto;
 
-    // TODO: 10,000 is the wrong number, @aniap what is correct here?
     #[test]
-    fn it_generates_output_of_size_10000() {
-        let key: [u8; STREAM_CIPHER_KEY_SIZE] =
-            [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
-        let iv: [u8; STREAM_CIPHER_KEY_SIZE] = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    fn it_generates_data_as_expected_by_aes128ctr() {
+        // using test vectors from: https://nvlpubs.nist.gov/nistpubs/Legacy/SP/nistspecialpublication800-38a.pdf
+        let key = hex::decode("2b7e151628aed2a6abf7158809cf4f3c")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let iv = hex::decode("f0f1f2f3f4f5f6f7f8f9fafbfcfdfeff")
+            .unwrap()
+            .try_into()
+            .unwrap();
+        let expected_output = hex::decode("ec8cdf7398607cb0f2d21675ea9ea1e4").unwrap();
 
-        let rand_bytes = generate_pseudorandom_bytes(&key, &iv, 10000);
-        assert_eq!(10000, rand_bytes.len());
+        assert_eq!(expected_output, generate_pseudorandom_bytes(&key, &iv, 16))
     }
 }
