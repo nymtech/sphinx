@@ -26,6 +26,13 @@ impl ProcessedPacket {
             ProcessedPacket::FinalHop(..) => None,
         }
     }
+
+    pub fn replay_tag(&self) -> ReplayTag {
+        match self {
+            ProcessedPacket::ForwardHop(_, _, _, replay_tag) => *replay_tag,
+            ProcessedPacket::FinalHop(_, _, _, replay_tag) => *replay_tag,
+        }
+    }
 }
 
 pub struct SphinxPacket {
