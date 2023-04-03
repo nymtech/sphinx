@@ -16,13 +16,12 @@ use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::crypto;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
-use crate::header::keys::{BlindingFactor, PayloadKey};
+use crate::header::keys::PayloadKey;
 use crate::header::routing::nodes::ParsedRawRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{Error, ErrorKind, Result};
 use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
-use curve25519_dalek::scalar::Scalar;
 use keys::RoutingKeys;
 
 pub mod delays;
@@ -172,8 +171,9 @@ impl SphinxHeader {
                 new_encapsulated_routing_info,
             ) => {
                 // blind the shared_secret in the header
-                let new_shared_secret =
-                    Self::blind_the_shared_secret(self.shared_secret, routing_keys.blinding_factor);
+                let new_shared_secret = routing_keys
+                    .blinding_factor
+                    .diffie_hellman(&self.shared_secret);
 
                 Ok(ProcessedHeader::ForwardHop(
                     Box::new(SphinxHeader {
@@ -219,7 +219,7 @@ impl SphinxHeader {
         let mut shared_secret_bytes = [0u8; 32];
         // first 32 bytes represent the shared secret
         shared_secret_bytes.copy_from_slice(&bytes[..32]);
-        let shared_secret = SharedSecret::from(shared_secret_bytes);
+        let shared_secret = SharedSecret::try_from_bytes(shared_secret_bytes)?;
 
         // the rest are for the encapsulated routing info
         let encapsulated_routing_info_bytes = bytes[32..HEADER_SIZE].to_vec();
@@ -231,17 +231,6 @@ impl SphinxHeader {
             shared_secret,
             routing_info,
         })
-    }
-
-    fn blind_the_shared_secret(
-        shared_secret: SharedSecret,
-        blinding_factor: BlindingFactor,
-    ) -> SharedSecret {
-        // TODO BEFORE PR: clamping, reduction, etc.
-        let blinding_factor = Scalar::from_bytes_mod_order(blinding_factor);
-        let blinder: EphemeralSecret = blinding_factor.into();
-        // shared_secret * blinding_factor
-        blinder.diffie_hellman(&shared_secret)
     }
 }
 

@@ -22,7 +22,6 @@ use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::crypto::{self, EphemeralSecret};
 use crate::route::Node;
 use crypto::SharedSecret;
-use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
 use sha2::Sha256;
 
@@ -33,12 +32,12 @@ pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 pub type BlindingFactor = [u8; BLINDING_FACTOR_SIZE];
 
-#[derive(Clone)]
+// #[derive(Clone)]
 pub struct RoutingKeys {
     pub stream_cipher_key: StreamCipherKey,
     pub header_integrity_hmac_key: HeaderIntegrityMacKey,
     pub payload_key: PayloadKey,
-    pub blinding_factor: BlindingFactor,
+    pub blinding_factor: EphemeralSecret,
 }
 
 impl RoutingKeys {
@@ -64,17 +63,14 @@ impl RoutingKeys {
         payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
         i += PAYLOAD_KEY_SIZE;
 
-        // TODO: we later treat blinding factor as a Scalar, the question is, should it be clamped
-        // and/or go through montgomery reduction? We kinda need somebody with good ECC knowledge
-        // to answer this question (and other related ones).
-        let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
-        blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
+        let mut blinding_factor_bytes: [u8; BLINDING_FACTOR_SIZE] = Default::default();
+        blinding_factor_bytes.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
 
         Self {
             stream_cipher_key,
             header_integrity_hmac_key,
             payload_key,
-            blinding_factor,
+            blinding_factor: EphemeralSecret::from_scalar_bytes(blinding_factor_bytes),
         }
     }
 }
@@ -120,22 +116,7 @@ impl KeyMaterial {
 
             // it's not the last iteration
             if i != route.len() + 1 {
-                // TODO: do we need to make the reduction here or could we get away with clamping or even nothing at all?
-                // considering (I *think*) proper reductions will happen during scalar multiplication, i.e. g^x?
-                // So far it *seems* to produce correct result, but could it be the case it introduces
-                // some vulnerabilities? Need some ECC expert here.
-
-                // performs montgomery reduction
-                let blinding_factor_scalar =
-                    &Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor);
-                // alternatives:
-
-                // 'only' clamps the scalar
-                // let blinding_factor_scalar = crypto::clamp_scalar_bytes(node_routing_keys.blinding_factor);
-
-                // 'only' makes it 255 bit long
-                // let blinding_factor_scalar = Scalar::from_bits(node_routing_keys.blinding_factor);
-                accumulator *= blinding_factor_scalar;
+                accumulator *= &node_routing_keys.blinding_factor;
             }
 
             routing_keys.push(node_routing_keys);
@@ -212,8 +193,8 @@ mod deriving_key_material {
                 let expected_shared_key = expected_accumulator.diffie_hellman(&node.pub_key);
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
 
-                expected_accumulator = &expected_accumulator
-                    * &Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
+                expected_accumulator =
+                    &expected_accumulator * &expected_routing_keys.blinding_factor;
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }

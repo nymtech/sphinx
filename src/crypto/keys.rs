@@ -19,6 +19,9 @@
 // to obtain g^{xyz} we compute `tmp = x*y*z` followed by g^tmp rather than
 // G1 = g^x, G2 = G1^y, G3 = G2^z
 
+use crate::error::Result;
+use crate::{Error, ErrorKind};
+use curve25519_dalek::traits::IsIdentity;
 use curve25519_dalek::{
     constants::ED25519_BASEPOINT_TABLE, montgomery::MontgomeryPoint, scalar::Scalar,
 };
@@ -68,6 +71,7 @@ impl PrivateKey {
 
     // honestly, this method shouldn't really exist, but right now we have no decent
     // rng propagation in the library
+    #[allow(clippy::new_without_default)]
     pub fn new() -> Self {
         let mut rng = OsRng;
         Self::new_with_rng(&mut rng)
@@ -82,39 +86,34 @@ impl PrivateKey {
     pub fn to_bytes(&self) -> [u8; PRIVATE_KEY_SIZE] {
         self.0.to_bytes()
     }
-}
 
-impl Default for PrivateKey {
-    fn default() -> Self {
-        PrivateKey::new()
+    /// Sets provided scalar value as the `PrivateKey`.
+    /// It does not perform any validity checks nor value clamping.
+    pub fn unchecked_from_scalar(scalar: Scalar) -> Self {
+        PrivateKey(scalar)
+    }
+
+    pub fn from_scalar_bytes(bytes: [u8; PRIVATE_KEY_SIZE]) -> Self {
+        PrivateKey(clamp_scalar_bytes(bytes))
     }
 }
 
 // TODO: is this 'safe' ?
-impl<'a, 'b> std::ops::Mul<&'b Scalar> for &'a EphemeralSecret {
+impl<'a, 'b> std::ops::Mul<&'b EphemeralSecret> for &'a EphemeralSecret {
     type Output = EphemeralSecret;
-    fn mul(self, rhs: &'b Scalar) -> EphemeralSecret {
-        PrivateKey(self.0 * rhs)
+    fn mul(self, rhs: &'b EphemeralSecret) -> EphemeralSecret {
+        PrivateKey(self.0 * rhs.0)
     }
 }
 
-impl<'b> std::ops::MulAssign<&'b Scalar> for EphemeralSecret {
-    fn mul_assign(&mut self, _rhs: &'b Scalar) {
-        self.0.mul_assign(_rhs)
-    }
-}
-
-impl From<Scalar> for EphemeralSecret {
-    fn from(scalar: Scalar) -> EphemeralSecret {
-        // TODO: should we ensure it's a valid scalar by performing
-        // montgomery reduction and/or clamping?
-        PrivateKey(scalar)
+impl<'b> std::ops::MulAssign<&'b EphemeralSecret> for EphemeralSecret {
+    fn mul_assign(&mut self, _rhs: &'b EphemeralSecret) {
+        self.0.mul_assign(_rhs.0)
     }
 }
 
 impl From<[u8; PRIVATE_KEY_SIZE]> for PrivateKey {
     fn from(bytes: [u8; 32]) -> PrivateKey {
-        // TODO: do we have to clamp it here?
         PrivateKey(clamp_scalar_bytes(bytes))
     }
 }
@@ -123,6 +122,18 @@ impl PublicKey {
     pub fn as_bytes(&self) -> &[u8; PUBLIC_KEY_SIZE] {
         self.0.as_bytes()
     }
+
+    pub fn try_from_bytes(bytes: [u8; PUBLIC_KEY_SIZE]) -> Result<Self> {
+        let recovered = MontgomeryPoint(bytes);
+        if recovered.is_identity() {
+            Err(Error::new(
+                ErrorKind::Other,
+                "the provided public key is at infinity",
+            ))
+        } else {
+            Ok(PublicKey(recovered))
+        }
+    }
 }
 
 impl<'a> From<&'a PrivateKey> for PublicKey {
@@ -130,12 +141,6 @@ impl<'a> From<&'a PrivateKey> for PublicKey {
         // multiplication in edwards using the precomputed ed25519 basepoint table is over 3x quicker
         // than multiplication inside montgomery using the curve generator
         PublicKey((&ED25519_BASEPOINT_TABLE * &private_key.0).to_montgomery())
-    }
-}
-
-impl From<[u8; PUBLIC_KEY_SIZE]> for PublicKey {
-    fn from(bytes: [u8; PUBLIC_KEY_SIZE]) -> PublicKey {
-        PublicKey(MontgomeryPoint(bytes))
     }
 }
 
