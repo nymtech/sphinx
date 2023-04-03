@@ -16,7 +16,7 @@ use std::fmt;
 
 use crate::constants::{
     BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
-    ROUTING_KEYS_LENGTH,
+    ROUTING_KEYS_LENGTH, REPLAY_TAG_SIZE,
 };
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::crypto::{self, EphemeralSecret};
@@ -32,6 +32,7 @@ pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 // we will lose length assertions but won't need to copy all that data every single function call
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 pub type BlindingFactor = [u8; BLINDING_FACTOR_SIZE];
+pub type ReplayTag = [u8; REPLAY_TAG_SIZE];
 
 #[derive(Clone)]
 pub struct RoutingKeys {
@@ -39,6 +40,7 @@ pub struct RoutingKeys {
     pub header_integrity_hmac_key: HeaderIntegrityMacKey,
     pub payload_key: PayloadKey,
     pub blinding_factor: BlindingFactor,
+    pub replay_tag: ReplayTag,
 }
 
 impl RoutingKeys {
@@ -69,12 +71,17 @@ impl RoutingKeys {
         // to answer this question (and other related ones).
         let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
         blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
+        i += BLINDING_FACTOR_SIZE;
+
+        let mut replay_tag: [u8; REPLAY_TAG_SIZE] = Default::default();
+        replay_tag.copy_from_slice(&output[i..i + REPLAY_TAG_SIZE]);
 
         Self {
             stream_cipher_key,
             header_integrity_hmac_key,
             payload_key,
             blinding_factor,
+            replay_tag,
         }
     }
 }

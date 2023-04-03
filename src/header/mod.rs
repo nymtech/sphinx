@@ -23,7 +23,7 @@ use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes,
 use crate::{Error, ErrorKind, Result};
 use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
 use curve25519_dalek::scalar::Scalar;
-use keys::RoutingKeys;
+use keys::{RoutingKeys, ReplayTag};
 
 pub mod delays;
 pub mod filler;
@@ -42,8 +42,8 @@ pub struct SphinxHeader {
 }
 
 pub enum ProcessedHeader {
-    ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, PayloadKey),
-    FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
+    ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, PayloadKey, ReplayTag),
+    FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey, ReplayTag),
 }
 
 impl SphinxHeader {
@@ -120,6 +120,7 @@ impl SphinxHeader {
                         next_hop_address,
                         delay,
                         routing_keys.payload_key,
+                        routing_keys.replay_tag,
                     ))
                 } else {
                     Err(Error::new(
@@ -133,6 +134,7 @@ impl SphinxHeader {
                     destination_address,
                     identifier,
                     routing_keys.payload_key,
+                    routing_keys.replay_tag,
                 ))
             }
         }
@@ -183,6 +185,7 @@ impl SphinxHeader {
                     next_hop_address,
                     delay,
                     routing_keys.payload_key,
+                    routing_keys.replay_tag,
                 ))
             }
             ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
@@ -190,6 +193,7 @@ impl SphinxHeader {
                     destination_address,
                     identifier,
                     routing_keys.payload_key,
+                    routing_keys.replay_tag,
                 ))
             }
         }
