@@ -23,7 +23,7 @@ pub mod fixtures {
     use crate::{
         constants::{
             BLINDING_FACTOR_SIZE, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE,
-            IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE,
+            IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE, REPLAY_TAG_SIZE,
         },
         crypto,
         header::{
@@ -63,6 +63,7 @@ pub mod fixtures {
             header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
             payload_key: [3u8; PAYLOAD_KEY_SIZE],
             blinding_factor: [4u8; BLINDING_FACTOR_SIZE],
+            replay_tag:[5u8; REPLAY_TAG_SIZE],
         }
     }
 

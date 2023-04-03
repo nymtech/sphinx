@@ -282,7 +282,7 @@ mod create_and_process_sphinx_packet_header {
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header.process(&node1_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _, _) => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
@@ -294,7 +294,7 @@ mod create_and_process_sphinx_packet_header {
         };
 
         let new_header2 = match new_header.process(&node2_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _, _) => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
@@ -305,7 +305,7 @@ mod create_and_process_sphinx_packet_header {
             _ => panic!(),
         };
         match new_header2.process(&node3_sk).unwrap() {
-            ProcessedHeader::FinalHop(final_destination, _, _) => {
+            ProcessedHeader::FinalHop(final_destination, _, _, _) => {
                 assert_eq!(destination.address, final_destination);
             }
             _ => panic!(),
@@ -461,7 +461,7 @@ mod unwrapping_using_previously_derived_keys {
         let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
-            ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
+            ProcessedHeader::FinalHop(destination, surb_id, keys, replay_tag) => (destination, surb_id, keys, replay_tag),
             _ => unreachable!(),
         };
 
@@ -471,13 +471,14 @@ mod unwrapping_using_previously_derived_keys {
             .process_with_derived_keys(&None, &routing_keys)
             .unwrap()
         {
-            ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
+            ProcessedHeader::FinalHop(destination, surb_id, keys, replay_tag) => (destination, surb_id, keys, replay_tag),
             _ => unreachable!(),
         };
 
         assert_eq!(normally_unwrapped.0, derived_unwrapped.0);
         assert_eq!(normally_unwrapped.1, derived_unwrapped.1);
-        assert_eq!(normally_unwrapped.2.to_vec(), derived_unwrapped.2.to_vec())
+        assert_eq!(normally_unwrapped.2.to_vec(), derived_unwrapped.2.to_vec());
+        assert_eq!(normally_unwrapped.3.to_vec(), derived_unwrapped.3.to_vec());
     }
 }
 
