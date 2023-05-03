@@ -18,14 +18,116 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use sphinx_packet::constants::{
     DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
 };
-use sphinx_packet::crypto::keygen;
-use sphinx_packet::header::delays;
+use sphinx_packet::crypto::{keygen, EphemeralSecret};
+use sphinx_packet::header::{delays, SphinxHeader};
 use sphinx_packet::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
 use sphinx_packet::SphinxPacket;
 use std::time::Duration;
+use sphinx_packet::payload::Payload;
+
+struct PayloadBenchCase {
+    payload_size: usize,
+}
+
+fn make_header_copy(header: &SphinxHeader) -> SphinxHeader {
+    SphinxHeader::from_bytes(&header.to_bytes()).unwrap()
+}
+
+fn make_payload_copy(payload: Payload) -> Payload {
+    Payload::from_bytes(&payload.into_bytes()).unwrap()
+}
 
 fn make_packet_copy(packet: &SphinxPacket) -> SphinxPacket {
     SphinxPacket::from_bytes(&packet.to_bytes()).unwrap()
+}
+
+fn bench_sphinx_header(c: &mut Criterion){
+    let (node1_sk, node1_pk) = keygen();
+    let node1 = Node::new(
+        NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+        node1_pk,
+    );
+    let (_, node2_pk) = keygen();
+    let node2 = Node::new(
+        NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+        node2_pk,
+    );
+    let (_, node3_pk) = keygen();
+    let node3 = Node::new(
+        NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+        node3_pk,
+    );
+
+    let route = [node1, node2, node3];
+    let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+    let destination = Destination::new(
+        DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+        [4u8; IDENTIFIER_LENGTH],
+    );
+
+
+    c.bench_function("Sphinx Header Creation", |b| {
+        b.iter(|| {
+            SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination)
+        })
+    });
+
+    let (header, _) = SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination);
+
+    c.bench_function("Sphinx Header Processing", |b| {
+        b.iter(|| {
+            make_header_copy(&header).process(&node1_sk).unwrap()
+        })
+    });
+
+}
+
+fn bench_sphinx_payload(c: &mut Criterion){
+    let case = PayloadBenchCase {
+        payload_size: 1000,
+    };
+
+    let (node1_sk, node1_pk) = keygen();
+    let node1 = Node::new(
+        NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
+        node1_pk,
+    );
+    let (_, node2_pk) = keygen();
+    let node2 = Node::new(
+        NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
+        node2_pk,
+    );
+    let (_, node3_pk) = keygen();
+    let node3 = Node::new(
+        NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
+        node3_pk,
+    );
+
+    let route = [node1, node2, node3];
+    let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+    let destination = Destination::new(
+        DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+        [4u8; IDENTIFIER_LENGTH],
+    );
+
+    let (_, payload_keys) = SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination);
+    let message = vec![1u8, 16];
+
+    c.bench_function("Sphinx Payload Creation", |b| {
+        b.iter(|| {
+            Payload::encapsulate_message(message.as_ref(), &payload_keys, case.payload_size).unwrap()
+        })
+    });
+
+    let payload =
+        Payload::encapsulate_message(message.as_ref(), &payload_keys, case.payload_size).unwrap();
+
+    let payload_key = payload_keys.first().unwrap();
+    c.bench_function("Sphinx Payload Processing", |b| {
+        b.iter(|| {
+            payload.clone().unwrap(&payload_key)
+        })
+    });
 }
 
 // two of those can be run concurrently to perform credential verification
@@ -106,6 +208,6 @@ fn bench_unwrap(c: &mut Criterion) {
     });
 }
 
-criterion_group!(sphinx, bench_new_no_surb, bench_unwrap);
-
+// criterion_group!(sphinx, bench_new_no_surb, bench_unwrap);
+criterion_group!(sphinx, bench_sphinx_header, bench_sphinx_payload);
 criterion_main!(sphinx);

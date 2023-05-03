@@ -26,7 +26,7 @@ pub const PAYLOAD_OVERHEAD_SIZE: usize = SECURITY_PARAMETER + 1;
 
 // TODO: question: is padding to some pre-defined length a sphinx-specific thing or rather
 // something for our particular use case?
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 #[cfg_attr(test, derive(PartialEq))]
 pub struct Payload(Vec<u8>);
 
