@@ -157,7 +157,7 @@ fn bench_new_no_surb(c: &mut Criterion) {
 
     let message = vec![13u8, 16];
 
-    c.bench_function("sphinx creation", |b| {
+    c.bench_function("Sphinx Packet Creation - no SURBs", |b| {
         b.iter(|| {
             SphinxPacket::new(
                 black_box(message.clone()),
@@ -199,7 +199,7 @@ fn bench_unwrap(c: &mut Criterion) {
 
     // technically it's not benching only unwrapping, but also "make_packet_copy"
     // but it's relatively small
-    c.bench_function("sphinx unwrap", |b| {
+    c.bench_function("Sphinx Packet Processing", |b| {
         b.iter(|| {
             make_packet_copy(&packet)
                 .process(black_box(&node1_sk))
