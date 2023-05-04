@@ -24,9 +24,14 @@ use sphinx_packet::route::{Destination, DestinationAddressBytes, Node, NodeAddre
 use sphinx_packet::SphinxPacket;
 use std::time::Duration;
 use sphinx_packet::payload::Payload;
+use sphinx_packet::test_utils::random_node;
 
+struct HeaderBenchCase{
+    nr_of_hops : usize,
+}
 struct PayloadBenchCase {
     payload_size: usize,
+    nr_of_hops : usize,
 }
 
 fn make_header_copy(header: &SphinxHeader) -> SphinxHeader {
@@ -41,7 +46,37 @@ fn make_packet_copy(packet: &SphinxPacket) -> SphinxPacket {
     SphinxPacket::from_bytes(&packet.to_bytes()).unwrap()
 }
 
-fn bench_sphinx_header(c: &mut Criterion){
+fn bench_sphinx_header_creation(c: &mut Criterion){
+    let case = HeaderBenchCase {
+        nr_of_hops: 3,
+    };
+    let mut route: Vec<Node> = Vec::with_capacity(case.nr_of_hops as usize);
+    for _i in 0..case.nr_of_hops {
+        route.push(random_node());
+    }
+
+    let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+    let destination = Destination::new(
+        DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+        [4u8; IDENTIFIER_LENGTH],
+    );
+
+
+    c.bench_function(&format!(
+        "[Sphinx Header] Creation_NrHops_{}",
+        case.nr_of_hops
+    ), |b| {
+        b.iter(|| {
+            SphinxHeader::new(black_box(&EphemeralSecret::new()),
+                              black_box(&route),
+                              black_box(&delays),
+                              black_box(&destination))
+        })
+    });
+
+}
+
+fn bench_sphinx_header_processing(c: &mut Criterion){
     let (node1_sk, node1_pk) = keygen();
     let node1 = Node::new(
         NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
@@ -65,48 +100,26 @@ fn bench_sphinx_header(c: &mut Criterion){
         [4u8; IDENTIFIER_LENGTH],
     );
 
-
-    c.bench_function("Sphinx Header Creation", |b| {
-        b.iter(|| {
-            SphinxHeader::new(black_box(&EphemeralSecret::new()),
-                              black_box(&route),
-                              black_box(&delays),
-                              black_box(&destination))
-        })
-    });
-
     let (header, _) = SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination);
 
-    c.bench_function("Sphinx Header Processing", |b| {
+    c.bench_function("[Sphinx Header] Processing", |b| {
         b.iter(|| {
             make_header_copy(&header).process(black_box(&node1_sk)).unwrap()
         })
     });
-
 }
 
 fn bench_sphinx_payload(c: &mut Criterion){
     let case = PayloadBenchCase {
         payload_size: 1000,
+        nr_of_hops : 3,
     };
 
-    let (_, node1_pk) = keygen();
-    let node1 = Node::new(
-        NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
-        node1_pk,
-    );
-    let (_, node2_pk) = keygen();
-    let node2 = Node::new(
-        NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
-        node2_pk,
-    );
-    let (_, node3_pk) = keygen();
-    let node3 = Node::new(
-        NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
-        node3_pk,
-    );
+    let mut route: Vec<Node> = Vec::with_capacity(case.nr_of_hops as usize);
+    for _i in 0..case.nr_of_hops {
+        route.push(random_node());
+    }
 
-    let route = [node1, node2, node3];
     let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
     let destination = Destination::new(
         DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
@@ -116,7 +129,12 @@ fn bench_sphinx_payload(c: &mut Criterion){
     let (_, payload_keys) = SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination);
     let message = vec![1u8, case.payload_size as u8];
 
-    c.bench_function("Sphinx Payload Creation", |b| {
+    c.bench_function(&format!(
+        "[Sphinx Payload] Creation_PayloadSize_{}_NrHops_{}",
+        case.payload_size,
+        case.nr_of_hops
+    ),
+     |b| {
         b.iter(|| {
             Payload::encapsulate_message(black_box(message.as_ref()),
                                          black_box(&payload_keys),
@@ -128,7 +146,11 @@ fn bench_sphinx_payload(c: &mut Criterion){
         Payload::encapsulate_message(message.as_ref(), &payload_keys, case.payload_size).unwrap();
 
     let payload_key = payload_keys.first().unwrap();
-    c.bench_function("Sphinx Payload Processing", |b| {
+    c.bench_function(&format!(
+        "[Sphinx Payload] Processing_PayloadSize_{}_NrHops_{}",
+        case.payload_size,
+        case.nr_of_hops
+    ), |b| {
         b.iter(|| {
             payload.clone().unwrap(black_box(&payload_key))
         })
@@ -139,6 +161,7 @@ fn bench_sphinx_payload(c: &mut Criterion){
 fn bench_new_no_surb(c: &mut Criterion) {
     let case = PayloadBenchCase {
         payload_size: 1000,
+        nr_of_hops : 3,
     };
 
     let (_, node1_pk) = keygen();
@@ -166,7 +189,11 @@ fn bench_new_no_surb(c: &mut Criterion) {
 
     let message = vec![1u8, case.payload_size as u8];
 
-    c.bench_function("Sphinx Packet Creation - no SURBs", |b| {
+    c.bench_function(&format!(
+        "[Sphinx Packet] Creation_PayloadSize_{}_NrHops_{}",
+        case.payload_size,
+        case.nr_of_hops
+    ), |b| {
         b.iter(|| {
             SphinxPacket::new(
                 black_box(message.clone()),
@@ -182,6 +209,7 @@ fn bench_new_no_surb(c: &mut Criterion) {
 fn bench_unwrap(c: &mut Criterion) {
     let case = PayloadBenchCase {
         payload_size: 1000,
+        nr_of_hops : 3,
     };
 
     let (node1_sk, node1_pk) = keygen();
@@ -212,7 +240,11 @@ fn bench_unwrap(c: &mut Criterion) {
 
     // technically it's not benching only unwrapping, but also "make_packet_copy"
     // but it's relatively small
-    c.bench_function("Sphinx Packet Processing", |b| {
+    c.bench_function(&format!(
+        "[Sphinx Packet] Processing_PayloadSize_{}_NrHops_{}",
+        case.payload_size,
+        case.nr_of_hops
+    ), |b| {
         b.iter(|| {
             make_packet_copy(&packet)
                 .process(black_box(&node1_sk))
@@ -222,5 +254,7 @@ fn bench_unwrap(c: &mut Criterion) {
 }
 
 // criterion_group!(sphinx, bench_new_no_surb, bench_unwrap);
-criterion_group!(sphinx, bench_sphinx_header, bench_sphinx_payload, bench_new_no_surb, bench_unwrap);
-criterion_main!(sphinx);
+criterion_group!(sphinx_header, bench_sphinx_header_creation, bench_sphinx_header_processing);
+criterion_group!(sphinx_payload, bench_sphinx_payload);
+criterion_group!(sphinx_packet, bench_new_no_surb, bench_unwrap);
+criterion_main!(sphinx_header, sphinx_payload, sphinx_packet);
