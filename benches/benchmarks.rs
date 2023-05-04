@@ -19,12 +19,19 @@ use sphinx_packet::constants::{
     DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
 };
 use sphinx_packet::crypto::{keygen, EphemeralSecret};
-use sphinx_packet::header::{delays, SphinxHeader};
+use sphinx_packet::header::{delays, SphinxHeader, HEADER_SIZE};
 use sphinx_packet::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
+use sphinx_packet::payload::{PAYLOAD_OVERHEAD_SIZE};
 use sphinx_packet::SphinxPacket;
 use std::time::Duration;
 use sphinx_packet::payload::Payload;
 use sphinx_packet::test_utils::random_node;
+
+
+const REGULAR_PACKET_SIZE: usize = PAYLOAD_OVERHEAD_SIZE + 2 * 1024;
+const EXTENDED_PACKET_SIZE_8: usize = PAYLOAD_OVERHEAD_SIZE + 8 * 1024;
+const EXTENDED_PACKET_SIZE_16: usize = PAYLOAD_OVERHEAD_SIZE + 16 * 1024;
+const EXTENDED_PACKET_SIZE_32: usize = PAYLOAD_OVERHEAD_SIZE + 32 * 1024;
 
 struct HeaderBenchCase{
     nr_of_hops : usize,
@@ -111,7 +118,7 @@ fn bench_sphinx_header_processing(c: &mut Criterion){
 
 fn bench_sphinx_payload(c: &mut Criterion){
     let case = PayloadBenchCase {
-        payload_size: 1000,
+        payload_size: REGULAR_PACKET_SIZE,
         nr_of_hops : 3,
     };
 
@@ -160,7 +167,7 @@ fn bench_sphinx_payload(c: &mut Criterion){
 // two of those can be run concurrently to perform credential verification
 fn bench_new_no_surb(c: &mut Criterion) {
     let case = PayloadBenchCase {
-        payload_size: 1000,
+        payload_size: REGULAR_PACKET_SIZE,
         nr_of_hops : 3,
     };
 
@@ -208,7 +215,7 @@ fn bench_new_no_surb(c: &mut Criterion) {
 
 fn bench_unwrap(c: &mut Criterion) {
     let case = PayloadBenchCase {
-        payload_size: 1000,
+        payload_size: REGULAR_PACKET_SIZE,
         nr_of_hops : 3,
     };
 
