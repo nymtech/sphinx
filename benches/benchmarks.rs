@@ -54,6 +54,10 @@ fn make_packet_copy(packet: &SphinxPacket) -> SphinxPacket {
 }
 
 fn bench_sphinx_header_creation(c: &mut Criterion){
+    let mut group = c.benchmark_group("benchmark-sphinx-header");
+    // group.sample_size(200);
+    group.measurement_time(Duration::from_secs(1000));
+
     let case = HeaderBenchCase {
         nr_of_hops: 3,
     };
@@ -69,7 +73,7 @@ fn bench_sphinx_header_creation(c: &mut Criterion){
     );
 
 
-    c.bench_function(&format!(
+    group.bench_function(&format!(
         "[Sphinx Header] Creation_NrHops_{}",
         case.nr_of_hops
     ), |b| {
@@ -84,6 +88,10 @@ fn bench_sphinx_header_creation(c: &mut Criterion){
 }
 
 fn bench_sphinx_header_processing(c: &mut Criterion){
+    let mut group = c.benchmark_group("benchmark-sphinx-header");
+    // group.sample_size(200);
+    group.measurement_time(Duration::from_secs(1000));
+
     let (node1_sk, node1_pk) = keygen();
     let node1 = Node::new(
         NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
@@ -109,7 +117,7 @@ fn bench_sphinx_header_processing(c: &mut Criterion){
 
     let (header, _) = SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination);
 
-    c.bench_function("[Sphinx Header] Processing", |b| {
+    group.bench_function("[Sphinx Header] Processing", |b| {
         b.iter(|| {
             make_header_copy(&header).process(black_box(&node1_sk)).unwrap()
         })
@@ -117,6 +125,10 @@ fn bench_sphinx_header_processing(c: &mut Criterion){
 }
 
 fn bench_sphinx_payload(c: &mut Criterion){
+    let mut group = c.benchmark_group("benchmark-sphinx-payload");
+    // group.sample_size(200);
+    group.measurement_time(Duration::from_secs(1000));
+
     let case = PayloadBenchCase {
         payload_size: REGULAR_PACKET_SIZE,
         nr_of_hops : 3,
@@ -136,7 +148,7 @@ fn bench_sphinx_payload(c: &mut Criterion){
     let (_, payload_keys) = SphinxHeader::new(&EphemeralSecret::new(), &route, &delays, &destination);
     let message = vec![1u8, case.payload_size as u8];
 
-    c.bench_function(&format!(
+    group.bench_function(&format!(
         "[Sphinx Payload] Creation_PayloadSize_{}_NrHops_{}",
         case.payload_size,
         case.nr_of_hops
@@ -153,7 +165,7 @@ fn bench_sphinx_payload(c: &mut Criterion){
         Payload::encapsulate_message(message.as_ref(), &payload_keys, case.payload_size).unwrap();
 
     let payload_key = payload_keys.first().unwrap();
-    c.bench_function(&format!(
+    group.bench_function(&format!(
         "[Sphinx Payload] Processing_PayloadSize_{}_NrHops_{}",
         case.payload_size,
         case.nr_of_hops
@@ -166,6 +178,10 @@ fn bench_sphinx_payload(c: &mut Criterion){
 
 // two of those can be run concurrently to perform credential verification
 fn bench_new_no_surb(c: &mut Criterion) {
+    let mut group = c.benchmark_group("benchmark-sphinx-packet");
+    // group.sample_size(200);
+    group.measurement_time(Duration::from_secs(1000));
+
     let case = PayloadBenchCase {
         payload_size: REGULAR_PACKET_SIZE,
         nr_of_hops : 3,
@@ -196,7 +212,7 @@ fn bench_new_no_surb(c: &mut Criterion) {
 
     let message = vec![1u8, case.payload_size as u8];
 
-    c.bench_function(&format!(
+    group.bench_function(&format!(
         "[Sphinx Packet] Creation_PayloadSize_{}_NrHops_{}",
         case.payload_size,
         case.nr_of_hops
@@ -214,6 +230,10 @@ fn bench_new_no_surb(c: &mut Criterion) {
 }
 
 fn bench_unwrap(c: &mut Criterion) {
+    let mut group = c.benchmark_group("benchmark-sphinx-packet");
+    // group.sample_size(200);
+    group.measurement_time(Duration::from_secs(1000));
+
     let case = PayloadBenchCase {
         payload_size: REGULAR_PACKET_SIZE,
         nr_of_hops : 3,
@@ -247,7 +267,7 @@ fn bench_unwrap(c: &mut Criterion) {
 
     // technically it's not benching only unwrapping, but also "make_packet_copy"
     // but it's relatively small
-    c.bench_function(&format!(
+    group.bench_function(&format!(
         "[Sphinx Packet] Processing_PayloadSize_{}_NrHops_{}",
         case.payload_size,
         case.nr_of_hops
