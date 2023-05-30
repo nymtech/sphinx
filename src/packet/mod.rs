@@ -31,6 +31,13 @@ impl ProcessedPacket {
             ProcessedPacket::FinalHop(..) => None,
         }
     }
+
+    pub fn routing_keys(&self) -> RoutingKeys {
+        match self {
+            ProcessedPacket::ForwardHop(_, _, _, routing_keys) => routing_keys.clone(),
+            ProcessedPacket::FinalHop(_, _, _, routing_keys) => routing_keys.clone(),
+        }
+    }
 }
 
 pub struct SphinxPacket {
