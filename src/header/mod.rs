@@ -42,8 +42,8 @@ pub struct SphinxHeader {
 }
 
 pub enum ProcessedHeader {
-    ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, PayloadKey),
-    FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
+    ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, RoutingKeys),
+    FinalHop(DestinationAddressBytes, SURBIdentifier, RoutingKeys),
 }
 
 impl SphinxHeader {
@@ -88,7 +88,7 @@ impl SphinxHeader {
     pub fn process_with_derived_keys(
         self,
         new_blinded_secret: &Option<SharedSecret>,
-        routing_keys: &RoutingKeys,
+        routing_keys: RoutingKeys,
     ) -> Result<ProcessedHeader> {
         if !self.routing_info.integrity_mac.verify(
             routing_keys.header_integrity_hmac_key,
@@ -119,7 +119,7 @@ impl SphinxHeader {
                         }),
                         next_hop_address,
                         delay,
-                        routing_keys.payload_key,
+                        routing_keys,
                     ))
                 } else {
                     Err(Error::new(
@@ -128,13 +128,9 @@ impl SphinxHeader {
                     ))
                 }
             }
-            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
-                Ok(ProcessedHeader::FinalHop(
-                    destination_address,
-                    identifier,
-                    routing_keys.payload_key,
-                ))
-            }
+            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => Ok(
+                ProcessedHeader::FinalHop(destination_address, identifier, routing_keys),
+            ),
         }
     }
 
@@ -182,16 +178,12 @@ impl SphinxHeader {
                     }),
                     next_hop_address,
                     delay,
-                    routing_keys.payload_key,
+                    routing_keys,
                 ))
             }
-            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
-                Ok(ProcessedHeader::FinalHop(
-                    destination_address,
-                    identifier,
-                    routing_keys.payload_key,
-                ))
-            }
+            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => Ok(
+                ProcessedHeader::FinalHop(destination_address, identifier, routing_keys),
+            ),
         }
     }
 
@@ -423,7 +415,7 @@ mod unwrapping_using_previously_derived_keys {
         let routing_keys = SphinxHeader::compute_routing_keys(&initial_secret, &node1_sk);
 
         let derived_unwrapped = match sphinx_header
-            .process_with_derived_keys(&Some(new_secret), &routing_keys)
+            .process_with_derived_keys(&Some(new_secret), routing_keys)
             .unwrap()
         {
             ProcessedHeader::ForwardHop(new_header, ..) => new_header,
@@ -464,7 +456,7 @@ mod unwrapping_using_previously_derived_keys {
         let routing_keys = SphinxHeader::compute_routing_keys(&initial_secret, &node1_sk);
 
         let derived_unwrapped = match sphinx_header
-            .process_with_derived_keys(&None, &routing_keys)
+            .process_with_derived_keys(&None, routing_keys)
             .unwrap()
         {
             ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),

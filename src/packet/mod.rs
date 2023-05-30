@@ -15,8 +15,13 @@ pub mod builder;
 pub enum ProcessedPacket {
     // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
     // should follow clippy recommendation and box it
-    ForwardHop(Box<SphinxPacket>, NodeAddressBytes, Delay),
-    FinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
+    ForwardHop(Box<SphinxPacket>, NodeAddressBytes, Delay, RoutingKeys),
+    FinalHop(
+        DestinationAddressBytes,
+        SURBIdentifier,
+        Payload,
+        RoutingKeys,
+    ),
 }
 
 impl ProcessedPacket {
@@ -63,14 +68,14 @@ impl SphinxPacket {
     pub fn process_with_derived_keys(
         self,
         new_blinded_secret: &Option<SharedSecret>,
-        routing_keys: &RoutingKeys,
+        routing_keys: RoutingKeys,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self
             .header
             .process_with_derived_keys(new_blinded_secret, routing_keys)?;
         match unwrapped_header {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, routing_key) => {
+                let new_payload = self.payload.unwrap(&routing_key.payload_key)?;
                 let new_packet = SphinxPacket {
                     header: *new_header,
                     payload: new_payload,
@@ -79,14 +84,16 @@ impl SphinxPacket {
                     Box::new(new_packet),
                     next_hop_address,
                     delay,
+                    routing_key,
                 ))
             }
-            ProcessedHeader::FinalHop(destination, identifier, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
+            ProcessedHeader::FinalHop(destination, identifier, routing_key) => {
+                let new_payload = self.payload.unwrap(&routing_key.payload_key)?;
                 Ok(ProcessedPacket::FinalHop(
                     destination,
                     identifier,
                     new_payload,
+                    routing_key,
                 ))
             }
         }
@@ -96,8 +103,8 @@ impl SphinxPacket {
     pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedPacket> {
         let unwrapped_header = self.header.process(node_secret_key)?;
         match unwrapped_header {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
+            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, routing_key) => {
+                let new_payload = self.payload.unwrap(&routing_key.payload_key)?;
                 let new_packet = SphinxPacket {
                     header: *new_header,
                     payload: new_payload,
@@ -106,14 +113,16 @@ impl SphinxPacket {
                     Box::new(new_packet),
                     next_hop_address,
                     delay,
+                    routing_key,
                 ))
             }
-            ProcessedHeader::FinalHop(destination, identifier, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
+            ProcessedHeader::FinalHop(destination, identifier, routing_key) => {
+                let new_payload = self.payload.unwrap(&routing_key.payload_key)?;
                 Ok(ProcessedPacket::FinalHop(
                     destination,
                     identifier,
                     new_payload,
+                    routing_key,
                 ))
             }
         }
