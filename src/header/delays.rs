@@ -14,6 +14,8 @@
 
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
+use rand::rngs::OsRng;
+use rand::{CryptoRng, RngCore};
 use rand_distr::{Distribution, Exp};
 use std::{borrow::Borrow, time::Duration};
 
@@ -111,11 +113,19 @@ pub fn generate_from_nanos(number: usize, average_delay: u64) -> Vec<Delay> {
 }
 
 pub fn generate_from_average_duration(number: usize, average_delay: Duration) -> Vec<Delay> {
+    generate_from_average_duration_with_rng(number, average_delay, &mut OsRng)
+}
+
+pub fn generate_from_average_duration_with_rng<R: RngCore + CryptoRng>(
+    number: usize,
+    average_delay: Duration,
+    rng: &mut R,
+) -> Vec<Delay> {
     let exp = Exp::new(1.0 / average_delay.as_nanos() as f64).unwrap();
 
     std::iter::repeat(())
         .take(number)
-        .map(|_| Delay::new_from_nanos(exp.sample(&mut rand::thread_rng()).round() as u64))
+        .map(|_| Delay::new_from_nanos(exp.sample(rng).round() as u64))
         .collect()
 }
 

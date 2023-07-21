@@ -69,8 +69,7 @@ impl PrivateKey {
     // honestly, this method shouldn't really exist, but right now we have no decent
     // rng propagation in the library
     pub fn new() -> Self {
-        let mut rng = OsRng;
-        Self::new_with_rng(&mut rng)
+        Self::new_with_rng(&mut OsRng)
     }
 
     pub fn new_with_rng<R: RngCore + CryptoRng>(rng: &mut R) -> Self {
@@ -148,7 +147,11 @@ impl PartialEq for PublicKey {
 impl Eq for PublicKey {}
 
 pub fn keygen() -> (PrivateKey, PublicKey) {
-    let private_key = PrivateKey::new();
+    keygen_with_rng(&mut OsRng)
+}
+
+pub fn keygen_with_rng<R: RngCore + CryptoRng>(rng: &mut R) -> (PrivateKey, PublicKey) {
+    let private_key = PrivateKey::new_with_rng(rng);
     let public_key = PublicKey::from(&private_key);
     (private_key, public_key)
 }
