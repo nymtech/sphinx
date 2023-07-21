@@ -19,7 +19,7 @@ use crate::{constants, utils};
 
 pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub struct Filler {
     value: Vec<u8>,
 }

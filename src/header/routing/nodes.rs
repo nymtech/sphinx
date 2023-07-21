@@ -189,7 +189,7 @@ pub struct RawRoutingInformation {
 }
 
 pub enum ParsedRawRoutingInformation {
-    ForwardHop(NodeAddressBytes, Delay, EncapsulatedRoutingInformation),
+    ForwardHop(NodeAddressBytes, Delay, Box<EncapsulatedRoutingInformation>),
     FinalHop(DestinationAddressBytes, SURBIdentifier),
 }
 
@@ -244,7 +244,7 @@ impl RawRoutingInformation {
         ParsedRawRoutingInformation::ForwardHop(
             NodeAddressBytes::from_bytes(next_hop_address),
             Delay::from_bytes(delay_bytes),
-            next_hop_encapsulated_routing_info,
+            Box::new(next_hop_encapsulated_routing_info),
         )
     }
 

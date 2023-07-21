@@ -21,13 +21,19 @@ use std::{borrow::Borrow, time::Duration};
 
 // TODO: once we get to proper refactoring, I think this should just be
 // a type alias to probably time::Duration
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Delay(u64);
 
 impl Delay {
     // Be more explicit about what kind of value we are expecting
     pub const fn new_from_nanos(value: u64) -> Self {
         Delay(value)
+    }
+
+    pub const fn new_from_millis(value: u64) -> Self {
+        const NANOS_PER_MILLI: u64 = 1_000_000;
+
+        Self::new_from_nanos(NANOS_PER_MILLI * value)
     }
 
     pub fn to_nanos(&self) -> u64 {
@@ -67,7 +73,7 @@ where
 {
     type Output = Delay;
     fn add(self, rhs: T) -> Self::Output {
-        Delay(self.0 + rhs.borrow().0)
+        *self + rhs
     }
 }
 
@@ -77,7 +83,7 @@ where
 {
     type Output = Delay;
     fn add(self, rhs: T) -> Self::Output {
-        &self + rhs
+        Delay(self.0 + rhs.borrow().0)
     }
 }
 

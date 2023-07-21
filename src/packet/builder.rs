@@ -30,9 +30,9 @@ impl<'a> SphinxPacketBuilder<'a> {
         self
     }
 
-    pub fn build_packet(
+    pub fn build_packet<M: AsRef<[u8]>>(
         &self,
-        message: Vec<u8>,
+        message: M,
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
@@ -62,7 +62,8 @@ impl<'a> SphinxPacketBuilder<'a> {
         };
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation
-        let payload = Payload::encapsulate_message(&message, &payload_keys, self.payload_size)?;
+        let payload =
+            Payload::encapsulate_message(message.as_ref(), &payload_keys, self.payload_size)?;
         Ok(SphinxPacket { header, payload })
     }
 }

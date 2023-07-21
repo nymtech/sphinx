@@ -1,8 +1,12 @@
 [package]
-name = "sphinx"
+name = "sphinx-packet"
 version = "0.1.0"
 authors = ["Ania Piotrowska <ania@nymtech.net>", "Dave Hrycyszyn <futurechimp@users.noreply.github.com>", "Jędrzej Stuczyński <andrew@nymtech.net>"]
 edition = "2018"
+license = "Apache-2.0"
+description = "A Sphinx packet implementation in Rust"
+repository = "https://github.com/nymtech/sphinx"
+readme = "README.md"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

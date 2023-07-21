@@ -31,15 +31,12 @@ cargo bench
 
 Rust benchmarks run the operation multiple times to give a consistent output and report back in the number of nanoseconds (billionths of a second) per iteration. `1000000000 / result` gives you the number of operations per second.
 
-For later reference, on Dave's laptop (our test reference machine :)) output is as follows.
+For later reference, on Dave's i7 Dell XPS-13 (2018) laptop (our test reference machine :)) output is as follows.
 
 ```
-     Running target/release/deps/benchmarks-8ed6fdf75be394ab
-
-running 2 tests
-test tests::bench_new     ... bench:     386,348 ns/iter (+/- 14,901)
-test tests::bench_process ... bench:     157,322 ns/iter (+/- 2,068)
+test tests::bench_new     ... bench:     386.348 us/iter
+test tests::bench_process ... bench:     157.322 us/iter
 ```
 
-* `1000000000 / 386348` = 2588 packet creations per second
-* `1000000000 / 157322` = 6356 packet unwrappings per second
+* `1000000 / 386.348` = ~2588 packet creations per second
+* `1000000 / 157.322` = ~6356 packet unwrappings per second

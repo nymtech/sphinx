@@ -176,7 +176,7 @@ mod test_encapsulating_final_routing_information_and_mac {
         let destination = destination_fixture();
         let final_routing_info = EncapsulatedRoutingInformation::for_final_hop(
             &destination,
-            &routing_keys.last().unwrap(),
+            routing_keys.last().unwrap(),
             filler,
             route.len(),
             &mut OsRng,
@@ -184,7 +184,7 @@ mod test_encapsulating_final_routing_information_and_mac {
 
         let expected_mac = HeaderIntegrityMac::compute(
             routing_keys.last().unwrap().header_integrity_hmac_key,
-            &final_routing_info.enc_routing_information.get_value_ref(),
+            final_routing_info.enc_routing_information.get_value_ref(),
         );
         assert_eq!(
             expected_mac.into_inner(),

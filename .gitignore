@@ -11,3 +11,6 @@ Cargo.lock
 
 .idea
 coverage
+out.svg
+perf.data
+perf.data.old

@@ -15,7 +15,7 @@ pub mod builder;
 pub enum ProcessedPacket {
     // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
     // should follow clippy recommendation and box it
-    ForwardHop(SphinxPacket, NodeAddressBytes, Delay),
+    ForwardHop(Box<SphinxPacket>, NodeAddressBytes, Delay),
     FinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
 }
 
@@ -72,11 +72,11 @@ impl SphinxPacket {
             ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key)?;
                 let new_packet = SphinxPacket {
-                    header: new_header,
+                    header: *new_header,
                     payload: new_payload,
                 };
                 Ok(ProcessedPacket::ForwardHop(
-                    new_packet,
+                    Box::new(new_packet),
                     next_hop_address,
                     delay,
                 ))
@@ -99,11 +99,11 @@ impl SphinxPacket {
             ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
                 let new_payload = self.payload.unwrap(&payload_key)?;
                 let new_packet = SphinxPacket {
-                    header: new_header,
+                    header: *new_header,
                     payload: new_payload,
                 };
                 Ok(ProcessedPacket::ForwardHop(
-                    new_packet,
+                    Box::new(new_packet),
                     next_hop_address,
                     delay,
                 ))

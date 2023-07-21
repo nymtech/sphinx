@@ -315,7 +315,7 @@ mod encapsulating_forward_routing_information {
 
         let destination_routing_info = EncapsulatedRoutingInformation::for_final_hop(
             &destination,
-            &routing_keys.last().unwrap(),
+            routing_keys.last().unwrap(),
             filler,
             route.len(),
             &mut OsRng,
