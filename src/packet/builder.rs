@@ -40,9 +40,9 @@ impl<'a> SphinxPacketBuilder<'a> {
         self.build_packet_with_rng(message, route, destination, delays, &mut OsRng)
     }
 
-    pub fn build_packet_with_rng<R: RngCore + CryptoRng>(
+    pub fn build_packet_with_rng<R: RngCore + CryptoRng, M: AsRef<[u8]>>(
         &self,
-        message: Vec<u8>,
+        message: M,
         route: &[Node],
         destination: &Destination,
         delays: &[Delay],
