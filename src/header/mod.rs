@@ -40,6 +40,7 @@ pub struct SphinxHeader {
     pub routing_info: EncapsulatedRoutingInformation,
 }
 
+#[derive(Clone)]
 pub enum ProcessedHeader {
     ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, PayloadKey),
     FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
