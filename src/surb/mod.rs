@@ -12,6 +12,7 @@ use std::fmt;
 /// the address of the first hop in the route of the SURB, and the key material
 /// used to layer encrypt the payload.
 #[allow(non_snake_case)]
+#[derive(Clone)]
 pub struct SURB {
     SURB_header: header::SphinxHeader,
     first_hop_address: NodeAddressBytes,
