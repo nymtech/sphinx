@@ -111,31 +111,19 @@ impl KeyMaterial {
         let initial_shared_secret = SharedSecret::from(initial_secret);
         let mut routing_keys = Vec::with_capacity(route.len());
 
-        let mut accumulator = initial_secret.clone();
+        let mut blinding_factors = vec![initial_secret.clone()];
         for (i, node) in route.iter().enumerate() {
-            // pub^{a * b * ...}
-            let shared_key = accumulator.diffie_hellman(&node.pub_key);
-            // let shared_key = Self::compute_shared_key(node.pub_key, &accumulator);
+            let shared_key = blinding_factors
+                .iter()
+                .fold(node.pub_key, |acc, blinding_factor| {
+                    PublicKey::from(blinding_factor.diffie_hellman(&acc).to_bytes())
+                });
             let node_routing_keys = RoutingKeys::derive(shared_key);
 
             // it's not the last iteration
             if i != route.len() + 1 {
-                // TODO: do we need to make the reduction here or could we get away with clamping or even nothing at all?
-                // considering (I *think*) proper reductions will happen during scalar multiplication, i.e. g^x?
-                // So far it *seems* to produce correct result, but could it be the case it introduces
-                // some vulnerabilities? Need some ECC expert here.
-
-                // performs montgomery reduction
-                let blinding_factor_scalar =
-                    &Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor);
-                // alternatives:
-
-                // 'only' clamps the scalar
-                // let blinding_factor_scalar = crypto::clamp_scalar_bytes(node_routing_keys.blinding_factor);
-
-                // 'only' makes it 255 bit long
-                // let blinding_factor_scalar = Scalar::from_bits(node_routing_keys.blinding_factor);
-                accumulator *= blinding_factor_scalar;
+                let next_blinding_factor = StaticSecret::from(node_routing_keys.blinding_factor);
+                blinding_factors.push(next_blinding_factor);
             }
 
             routing_keys.push(node_routing_keys);
