@@ -3,10 +3,11 @@ use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
 use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
-use crate::{crypto::EphemeralSecret, Error, ErrorKind, Result};
 use crate::{header, SphinxPacket};
+use crate::{Error, ErrorKind, Result};
 use header::{SphinxHeader, HEADER_SIZE};
 use std::fmt;
+use x25519_dalek::StaticSecret;
 
 /// A Single Use Reply Block (SURB) must have a pre-aggregated Sphinx header,
 /// the address of the first hop in the route of the SURB, and the key material
@@ -51,14 +52,14 @@ impl SURBMaterial {
 
     #[allow(non_snake_case)]
     pub fn construct_SURB(self) -> Result<SURB> {
-        let surb_initial_secret = EphemeralSecret::new();
+        let surb_initial_secret = StaticSecret::random();
         SURB::new(surb_initial_secret, self)
     }
 }
 
 #[allow(non_snake_case)]
 impl SURB {
-    pub fn new(surb_initial_secret: EphemeralSecret, surb_material: SURBMaterial) -> Result<Self> {
+    pub fn new(surb_initial_secret: StaticSecret, surb_material: SURBMaterial) -> Result<Self> {
         let surb_route = surb_material.surb_route;
         let surb_delays = surb_material.surb_delays;
         let surb_destination = surb_material.surb_destination;

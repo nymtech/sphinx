@@ -1,16 +1,16 @@
 use crate::{
-    crypto::EphemeralSecret,
     header::{delays::Delay, SphinxHeader},
     payload::Payload,
     route::{Destination, Node},
     Result, SphinxPacket,
 };
+use x25519_dalek::StaticSecret;
 
 pub const DEFAULT_PAYLOAD_SIZE: usize = 1024;
 
 pub struct SphinxPacketBuilder<'a> {
     payload_size: usize,
-    initial_secret: Option<&'a EphemeralSecret>,
+    initial_secret: Option<&'a StaticSecret>,
 }
 
 impl<'a> SphinxPacketBuilder<'a> {
@@ -23,7 +23,7 @@ impl<'a> SphinxPacketBuilder<'a> {
         self
     }
 
-    pub fn with_initial_secret(mut self, initial_secret: &'a EphemeralSecret) -> Self {
+    pub fn with_initial_secret(mut self, initial_secret: &'a StaticSecret) -> Self {
         self.initial_secret = Some(initial_secret);
         self
     }
@@ -37,7 +37,7 @@ impl<'a> SphinxPacketBuilder<'a> {
     ) -> Result<SphinxPacket> {
         let (header, payload_keys) = match self.initial_secret.as_ref() {
             Some(initial_secret) => SphinxHeader::new(initial_secret, route, delays, destination),
-            None => SphinxHeader::new(&EphemeralSecret::new(), route, delays, destination),
+            None => SphinxHeader::new(&StaticSecret::random(), route, delays, destination),
         };
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation

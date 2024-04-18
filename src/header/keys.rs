@@ -18,13 +18,12 @@ use crate::constants::{
     BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
     ROUTING_KEYS_LENGTH,
 };
+use crate::crypto;
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
-use crate::crypto::{self, EphemeralSecret};
 use crate::route::Node;
-use crypto::SharedSecret;
-use curve25519_dalek::scalar::Scalar;
 use hkdf::Hkdf;
 use sha2::Sha256;
+use x25519_dalek::{PublicKey, StaticSecret};
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
@@ -45,7 +44,7 @@ impl RoutingKeys {
     // or should this be renamed to 'new'?
     // Given that everything here except RoutingKeys lives in the `crypto` module, I think
     // that this one could potentially move most of its functionality there quite profitably.
-    pub fn derive(shared_key: crypto::SharedSecret) -> Self {
+    pub fn derive(shared_key: PublicKey) -> Self {
         let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
 
         let mut i = 0;
@@ -100,15 +99,15 @@ impl PartialEq for RoutingKeys {
 }
 
 pub struct KeyMaterial {
-    pub initial_shared_secret: crypto::SharedSecret,
+    pub initial_shared_secret: PublicKey,
     // why this is here?
     pub routing_keys: Vec<RoutingKeys>,
 }
 
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
-    pub fn derive(route: &[Node], initial_secret: &EphemeralSecret) -> Self {
-        let initial_shared_secret = SharedSecret::from(initial_secret);
+    pub fn derive(route: &[Node], initial_secret: &StaticSecret) -> Self {
+        let initial_shared_secret = PublicKey::from(initial_secret);
         let mut routing_keys = Vec::with_capacity(route.len());
 
         let mut blinding_factors = vec![initial_secret.clone()];

@@ -13,7 +13,7 @@ readme = "README.md"
 [dependencies]
 aes = { version = "0.7.4", features = ["ctr"] }
 bs58 = "0.4.0"
-curve25519-dalek = "3.0.0"
+x25519-dalek = { version = "2.0.0", features = ["static_secrets", "getrandom"] }
 hmac = "0.11.0"
 digest = "0.9"
 log = "0.4"
