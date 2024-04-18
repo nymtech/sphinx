@@ -17,8 +17,8 @@ x25519-dalek = { version = "2.0.0", features = ["static_secrets", "getrandom"] }
 hmac = "0.11.0"
 digest = "0.9"
 log = "0.4"
-rand = {version = "0.7.3", features = ["wasm-bindgen"]}
-rand_distr = "0.3"
+rand = "0.8.5"
+rand_distr = "0.4.3"
 sha2 = "0.9.1"
 hkdf = "0.11.0"
 lioness = "0.1.2"
@@ -30,8 +30,8 @@ subtle = "2.3.0"
 
 
 [dev-dependencies]
-mockall = "0.10.2"
-criterion = "0.3"
+mockall = "0.12.1"
+criterion = "0.5.1"
 
 [[bench]]
 name = "benchmarks"
