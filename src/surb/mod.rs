@@ -166,24 +166,26 @@ impl SURB {
 mod prepare_and_use_process_surb {
     use super::*;
     use crate::constants::NODE_ADDRESS_LENGTH;
-    use crate::crypto;
     use crate::header::{delays, HEADER_SIZE};
-    use crate::{packet::builder::DEFAULT_PAYLOAD_SIZE, test_utils::fixtures::destination_fixture};
+    use crate::{
+        packet::builder::DEFAULT_PAYLOAD_SIZE,
+        test_utils::fixtures::{destination_fixture, keygen},
+    };
     use std::time::Duration;
 
     #[allow(non_snake_case)]
     fn SURB_fixture() -> SURB {
-        let (_, node1_pk) = crypto::keygen();
+        let (_, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -191,7 +193,7 @@ mod prepare_and_use_process_surb {
 
         let surb_route = vec![node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = EphemeralSecret::new();
+        let surb_initial_secret = StaticSecret::random();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 
@@ -206,7 +208,7 @@ mod prepare_and_use_process_surb {
     fn returns_error_if_surb_route_empty() {
         let surb_route = Vec::new();
         let surb_destination = destination_fixture();
-        let surb_initial_secret = EphemeralSecret::new();
+        let surb_initial_secret = StaticSecret::random();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
         let expected = ErrorKind::InvalidSURB;

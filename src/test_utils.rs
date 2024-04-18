@@ -14,11 +14,12 @@
 
 use crate::{
     constants::NODE_ADDRESS_LENGTH,
-    crypto,
     route::{Node, NodeAddressBytes},
 };
 
 pub mod fixtures {
+
+    use x25519_dalek::{PublicKey, StaticSecret};
 
     use crate::{
         constants::{
@@ -84,10 +85,16 @@ pub mod fixtures {
             integrity_mac: header_integrity_mac_fixture(),
         }
     }
+
+    pub fn keygen() -> (StaticSecret, PublicKey) {
+        let private_key = StaticSecret::random();
+        let public_key = PublicKey::from(&private_key);
+        (private_key, public_key)
+    }
 }
 
 pub fn random_node() -> Node {
-    let random_private_key = crypto::PrivateKey::new();
+    let random_private_key = x25519_dalek::EphemeralSecret::random();
     Node {
         address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
         pub_key: (&random_private_key).into(),

@@ -76,7 +76,7 @@ impl FinalRoutingInformation {
         // return D || I || PAD
         PaddedFinalRoutingInformation {
             value: std::iter::once(self.flag)
-                .chain(self.version.to_bytes().into_iter())
+                .chain(self.version.to_bytes())
                 .chain(self.destination.as_bytes().iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())

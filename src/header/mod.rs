@@ -245,29 +245,32 @@ impl SphinxHeader {
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
     use super::*;
-    use crate::{constants::NODE_ADDRESS_LENGTH, test_utils::fixtures::destination_fixture};
+    use crate::{
+        constants::NODE_ADDRESS_LENGTH,
+        test_utils::fixtures::{destination_fixture, keygen},
+    };
     use std::time::Duration;
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
         };
         let route = [node1, node2, node3];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
+        let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -387,24 +390,24 @@ mod unwrap_routing_information {
 mod unwrapping_using_previously_derived_keys {
     use super::*;
     use crate::constants::NODE_ADDRESS_LENGTH;
-    use crate::test_utils::fixtures::destination_fixture;
+    use crate::test_utils::fixtures::{destination_fixture, keygen};
     use std::time::Duration;
 
     #[test]
     fn produces_same_result_for_forward_hop() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
         let route = [node1, node2];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
+        let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -439,14 +442,14 @@ mod unwrapping_using_previously_derived_keys {
 
     #[test]
     fn produces_same_result_for_final_hop() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
         let route = [node1];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
+        let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -483,7 +486,7 @@ mod converting_header_to_bytes {
     fn it_is_possible_to_convert_back_and_forth() {
         let encapsulated_routing_info = encapsulated_routing_information_fixture();
         let header = SphinxHeader {
-            shared_secret: SharedSecret::from(&EphemeralSecret::new()),
+            shared_secret: PublicKey::from(&StaticSecret::random()),
             routing_info: encapsulated_routing_info,
         };
 

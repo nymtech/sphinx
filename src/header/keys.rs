@@ -147,12 +147,11 @@ mod deriving_key_material {
         #[test]
         fn it_returns_no_routing_keys() {
             let empty_route: Vec<Node> = vec![];
-            let initial_secret = EphemeralSecret::new();
-            let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
+            let initial_secret = StaticSecret::random();
             let key_material = KeyMaterial::derive(&empty_route, &initial_secret);
             assert_eq!(0, key_material.routing_keys.len());
             assert_eq!(
-                SharedSecret::from(&hacky_secret_copy).as_bytes(),
+                PublicKey::from(&initial_secret).as_bytes(),
                 key_material.initial_shared_secret.as_bytes()
             )
         }
@@ -163,12 +162,11 @@ mod deriving_key_material {
         use super::*;
         use crate::test_utils::random_node;
 
-        fn setup() -> (Vec<Node>, EphemeralSecret, KeyMaterial) {
+        fn setup() -> (Vec<Node>, StaticSecret, KeyMaterial) {
             let route: Vec<Node> = vec![random_node(), random_node(), random_node()];
-            let initial_secret = EphemeralSecret::new();
-            let hacky_secret_copy = EphemeralSecret::from(initial_secret.to_bytes());
+            let initial_secret = StaticSecret::random();
             let key_material = KeyMaterial::derive(&route, &initial_secret);
-            (route, hacky_secret_copy, key_material)
+            (route, initial_secret, key_material)
         }
 
         #[test]
@@ -181,7 +179,7 @@ mod deriving_key_material {
         fn it_returns_correctly_inited_shared_secret() {
             let (_, initial_secret, key_material) = setup();
             assert_eq!(
-                SharedSecret::from(&initial_secret).as_bytes(),
+                PublicKey::from(&initial_secret).as_bytes(),
                 key_material.initial_shared_secret.as_bytes()
             );
         }
@@ -194,13 +192,19 @@ mod deriving_key_material {
             // incorrectly blinded shared key through the mixnet in the (unencrypted)
             // Sphinx packet header. So this test ensures that the accumulator gets incremented
             // properly on each run through the loop.
-            let mut expected_accumulator = initial_secret;
+            let mut expected_accumulator = vec![initial_secret]; //SW TODO adapt this test to new way of computation
             for (i, node) in route.iter().enumerate() {
-                let expected_shared_key = expected_accumulator.diffie_hellman(&node.pub_key);
+                let expected_shared_key =
+                    expected_accumulator
+                        .iter()
+                        .fold(node.pub_key, |acc, blinding_factor| {
+                            PublicKey::from(blinding_factor.diffie_hellman(&acc).to_bytes())
+                        });
+
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
 
-                expected_accumulator = &expected_accumulator
-                    * &Scalar::from_bytes_mod_order(expected_routing_keys.blinding_factor);
+                expected_accumulator
+                    .push(StaticSecret::from(expected_routing_keys.blinding_factor));
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }
@@ -214,8 +218,8 @@ mod key_derivation_function {
 
     #[test]
     fn it_expands_the_seed_key_to_expected_length() {
-        let initial_secret = EphemeralSecret::new();
-        let shared_key = SharedSecret::from(&initial_secret);
+        let initial_secret = StaticSecret::random();
+        let shared_key = PublicKey::from(&initial_secret);
         let routing_keys = RoutingKeys::derive(shared_key);
         assert_eq!(
             crypto::STREAM_CIPHER_KEY_SIZE,
@@ -225,8 +229,8 @@ mod key_derivation_function {
 
     #[test]
     fn it_returns_the_same_output_for_two_equal_inputs() {
-        let initial_secret = EphemeralSecret::new();
-        let shared_key = SharedSecret::from(&initial_secret);
+        let initial_secret = StaticSecret::random();
+        let shared_key = PublicKey::from(&initial_secret);
         let routing_keys1 = RoutingKeys::derive(shared_key);
         let routing_keys2 = RoutingKeys::derive(shared_key);
         assert_eq!(routing_keys1, routing_keys2);
