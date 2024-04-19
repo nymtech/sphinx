@@ -192,7 +192,7 @@ mod deriving_key_material {
             // incorrectly blinded shared key through the mixnet in the (unencrypted)
             // Sphinx packet header. So this test ensures that the accumulator gets incremented
             // properly on each run through the loop.
-            let mut expected_accumulator = vec![initial_secret]; //SW TODO adapt this test to new way of computation
+            let mut expected_accumulator = vec![initial_secret];
             for (i, node) in route.iter().enumerate() {
                 let expected_shared_key =
                     expected_accumulator
