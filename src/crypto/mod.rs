@@ -28,9 +28,7 @@ use hmac::{Hmac, Mac};
 
 //type export and aliasing to keep compatibility
 pub use x25519_dalek::PublicKey;
-pub type SharedSecret = x25519_dalek::PublicKey;
 pub type PrivateKey = x25519_dalek::StaticSecret;
-pub type EphemeralSecret = x25519_dalek::StaticSecret;
 
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
