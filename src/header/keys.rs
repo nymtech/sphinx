@@ -12,6 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use std::convert::TryInto;
 use std::fmt;
 
 use crate::constants::{
@@ -30,14 +31,13 @@ pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
 // TODO: perhaps change PayloadKey to a Vec considering it's almost 200 bytes long?
 // we will lose length assertions but won't need to copy all that data every single function call
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
-pub type BlindingFactor = [u8; BLINDING_FACTOR_SIZE];
 
 #[derive(Clone)]
 pub struct RoutingKeys {
     pub stream_cipher_key: StreamCipherKey,
     pub header_integrity_hmac_key: HeaderIntegrityMacKey,
     pub payload_key: PayloadKey,
-    pub blinding_factor: BlindingFactor,
+    pub blinding_factor: StaticSecret,
 }
 
 impl RoutingKeys {
@@ -63,11 +63,10 @@ impl RoutingKeys {
         payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
         i += PAYLOAD_KEY_SIZE;
 
-        // TODO: we later treat blinding factor as a Scalar, the question is, should it be clamped
-        // and/or go through montgomery reduction? We kinda need somebody with good ECC knowledge
-        // to answer this question (and other related ones).
-        let mut blinding_factor: [u8; BLINDING_FACTOR_SIZE] = Default::default();
-        blinding_factor.copy_from_slice(&output[i..i + BLINDING_FACTOR_SIZE]);
+        //Safety, converting a slice of size BLINDING_FACTOR_SIZE into an array of type [u8; BLINDING_FACTOR_SIZE], hence unwrap is fine
+        let blinding_factor_bytes: [u8; BLINDING_FACTOR_SIZE] =
+            output[i..i + BLINDING_FACTOR_SIZE].try_into().unwrap();
+        let blinding_factor = StaticSecret::from(blinding_factor_bytes);
 
         Self {
             stream_cipher_key,
@@ -121,8 +120,7 @@ impl KeyMaterial {
 
             // it's not the last iteration
             if i != route.len() + 1 {
-                let next_blinding_factor = StaticSecret::from(node_routing_keys.blinding_factor);
-                blinding_factors.push(next_blinding_factor);
+                blinding_factors.push(node_routing_keys.blinding_factor.clone());
             }
 
             routing_keys.push(node_routing_keys);
@@ -203,8 +201,7 @@ mod deriving_key_material {
 
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
 
-                expected_accumulator
-                    .push(StaticSecret::from(expected_routing_keys.blinding_factor));
+                expected_accumulator.push(expected_routing_keys.blinding_factor);
                 let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
                 assert_eq!(expected_routing_keys, key_material.routing_keys[i])
             }

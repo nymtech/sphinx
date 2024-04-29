@@ -15,7 +15,7 @@
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
-use crate::header::keys::{BlindingFactor, PayloadKey};
+use crate::header::keys::PayloadKey;
 use crate::header::routing::nodes::ParsedRawRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
@@ -233,9 +233,8 @@ impl SphinxHeader {
 
     fn blind_the_shared_secret(
         shared_secret: PublicKey,
-        blinding_factor: BlindingFactor,
+        blinding_factor: StaticSecret,
     ) -> PublicKey {
-        let blinding_factor = StaticSecret::from(blinding_factor);
         // shared_secret * blinding_factor
         let new_shared_secret = blinding_factor.diffie_hellman(&shared_secret);
         PublicKey::from(new_shared_secret.to_bytes())
