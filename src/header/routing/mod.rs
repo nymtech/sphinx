@@ -289,7 +289,7 @@ mod encapsulating_forward_routing_information {
         let delay0 = Delay::new_from_nanos(10);
         let delay1 = Delay::new_from_nanos(20);
         let delay2 = Delay::new_from_nanos(30);
-        let delays = [delay0.clone(), delay1.clone(), delay2].to_vec();
+        let delays = [delay0, delay1, delay2].to_vec();
         let routing_keys = [
             routing_keys_fixture(),
             routing_keys_fixture(),

@@ -13,7 +13,6 @@
 // limitations under the License.
 
 use crate::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH};
-use crate::crypto;
 use crate::{Error, ErrorKind, Result};
 use std::fmt::{self, Display, Formatter};
 
@@ -176,11 +175,11 @@ impl Destination {
 #[derive(Clone, Debug)]
 pub struct Node {
     pub address: NodeAddressBytes,
-    pub pub_key: crypto::PublicKey,
+    pub pub_key: x25519_dalek::PublicKey,
 }
 
 impl Node {
-    pub fn new(address: NodeAddressBytes, pub_key: crypto::PublicKey) -> Self {
+    pub fn new(address: NodeAddressBytes, pub_key: x25519_dalek::PublicKey) -> Self {
         Self { address, pub_key }
     }
 }

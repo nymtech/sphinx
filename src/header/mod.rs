@@ -13,17 +13,15 @@
 // limitations under the License.
 
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
-use crate::crypto;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
-use crate::header::keys::{BlindingFactor, PayloadKey};
+use crate::header::keys::PayloadKey;
 use crate::header::routing::nodes::ParsedRawRoutingInformation;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
 use crate::{Error, ErrorKind, Result};
-use crypto::{EphemeralSecret, PrivateKey, SharedSecret};
-use curve25519_dalek::scalar::Scalar;
 use keys::RoutingKeys;
+use x25519_dalek::{PublicKey, StaticSecret};
 
 pub mod delays;
 pub mod filler;
@@ -37,7 +35,7 @@ pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTIN
 #[derive(Debug)]
 #[cfg_attr(test, derive(Clone))]
 pub struct SphinxHeader {
-    pub shared_secret: SharedSecret,
+    pub shared_secret: PublicKey,
     pub routing_info: EncapsulatedRoutingInformation,
 }
 
@@ -50,7 +48,7 @@ impl SphinxHeader {
     // needs client's secret key, how should we inject this?
     // needs to deal with SURBs too at some point
     pub fn new(
-        initial_secret: &EphemeralSecret,
+        initial_secret: &StaticSecret,
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
@@ -87,7 +85,7 @@ impl SphinxHeader {
     /// Prefer normal [process] instead.
     pub fn process_with_derived_keys(
         self,
-        new_blinded_secret: &Option<SharedSecret>,
+        new_blinded_secret: &Option<PublicKey>,
         routing_keys: &RoutingKeys,
     ) -> Result<ProcessedHeader> {
         if !self.routing_info.integrity_mac.verify(
@@ -140,14 +138,14 @@ impl SphinxHeader {
 
     /// Using the provided shared_secret and node's secret key, derive all routing keys for this hop.
     pub fn compute_routing_keys(
-        shared_secret: &SharedSecret,
-        node_secret_key: &PrivateKey,
+        shared_secret: &PublicKey,
+        node_secret_key: &StaticSecret,
     ) -> RoutingKeys {
-        let shared_key = node_secret_key.diffie_hellman(shared_secret);
+        let shared_key = PublicKey::from(node_secret_key.diffie_hellman(shared_secret).to_bytes());
         keys::RoutingKeys::derive(shared_key)
     }
 
-    pub fn process(self, node_secret_key: &PrivateKey) -> Result<ProcessedHeader> {
+    pub fn process(self, node_secret_key: &StaticSecret) -> Result<ProcessedHeader> {
         let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
 
         if !self.routing_info.integrity_mac.verify(
@@ -219,7 +217,7 @@ impl SphinxHeader {
         let mut shared_secret_bytes = [0u8; 32];
         // first 32 bytes represent the shared secret
         shared_secret_bytes.copy_from_slice(&bytes[..32]);
-        let shared_secret = SharedSecret::from(shared_secret_bytes);
+        let shared_secret = PublicKey::from(shared_secret_bytes);
 
         // the rest are for the encapsulated routing info
         let encapsulated_routing_info_bytes = bytes[32..HEADER_SIZE].to_vec();
@@ -234,43 +232,44 @@ impl SphinxHeader {
     }
 
     fn blind_the_shared_secret(
-        shared_secret: SharedSecret,
-        blinding_factor: BlindingFactor,
-    ) -> SharedSecret {
-        // TODO BEFORE PR: clamping, reduction, etc.
-        let blinding_factor = Scalar::from_bytes_mod_order(blinding_factor);
-        let blinder: EphemeralSecret = blinding_factor.into();
+        shared_secret: PublicKey,
+        blinding_factor: StaticSecret,
+    ) -> PublicKey {
         // shared_secret * blinding_factor
-        blinder.diffie_hellman(&shared_secret)
+        let new_shared_secret = blinding_factor.diffie_hellman(&shared_secret);
+        PublicKey::from(new_shared_secret.to_bytes())
     }
 }
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
     use super::*;
-    use crate::{constants::NODE_ADDRESS_LENGTH, test_utils::fixtures::destination_fixture};
+    use crate::{
+        constants::NODE_ADDRESS_LENGTH,
+        test_utils::fixtures::{destination_fixture, keygen},
+    };
     use std::time::Duration;
 
     #[test]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
         };
         let route = [node1, node2, node3];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
+        let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -390,24 +389,24 @@ mod unwrap_routing_information {
 mod unwrapping_using_previously_derived_keys {
     use super::*;
     use crate::constants::NODE_ADDRESS_LENGTH;
-    use crate::test_utils::fixtures::destination_fixture;
+    use crate::test_utils::fixtures::{destination_fixture, keygen};
     use std::time::Duration;
 
     #[test]
     fn produces_same_result_for_forward_hop() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
         let route = [node1, node2];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
+        let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -442,14 +441,14 @@ mod unwrapping_using_previously_derived_keys {
 
     #[test]
     fn produces_same_result_for_final_hop() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
         let route = [node1];
         let destination = destination_fixture();
-        let initial_secret = EphemeralSecret::new();
+        let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
@@ -486,7 +485,7 @@ mod converting_header_to_bytes {
     fn it_is_possible_to_convert_back_and_forth() {
         let encapsulated_routing_info = encapsulated_routing_information_fixture();
         let header = SphinxHeader {
-            shared_secret: SharedSecret::from(&EphemeralSecret::new()),
+            shared_secret: PublicKey::from(&StaticSecret::random()),
             routing_info: encapsulated_routing_info,
         };
 

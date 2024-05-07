@@ -14,7 +14,6 @@
 
 extern crate sphinx_packet;
 
-use sphinx_packet::crypto;
 use sphinx_packet::header::delays;
 use sphinx_packet::route::{Destination, Node};
 use sphinx_packet::SphinxPacket;
@@ -25,6 +24,7 @@ use sphinx_packet::SphinxPacket;
 mod create_and_process_sphinx_packet {
     use super::*;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
+    use sphinx_packet::test_utils::fixtures::keygen;
     use sphinx_packet::{
         constants::{
             DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
@@ -36,17 +36,17 @@ mod create_and_process_sphinx_packet {
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes_without_surb() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = keygen();
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = keygen();
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -103,6 +103,7 @@ mod create_and_process_sphinx_packet {
 mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
+    use sphinx_packet::test_utils::fixtures::keygen;
     use sphinx_packet::{
         constants::{
             DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
@@ -114,17 +115,17 @@ mod converting_sphinx_packet_to_and_from_bytes {
 
     #[test]
     fn it_is_possible_to_do_the_conversion_without_data_loss() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = keygen();
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = keygen();
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -184,17 +185,17 @@ mod converting_sphinx_packet_to_and_from_bytes {
     #[test]
     #[should_panic]
     fn it_panics_if_data_of_invalid_length_is_provided() {
-        let (_, node1_pk) = crypto::keygen();
+        let (_, node1_pk) = keygen();
         let node1 = Node::new(
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             node1_pk,
         );
-        let (_, node2_pk) = crypto::keygen();
+        let (_, node2_pk) = keygen();
         let node2 = Node::new(
             NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             node2_pk,
         );
-        let (_, node3_pk) = crypto::keygen();
+        let (_, node3_pk) = keygen();
         let node3 = Node::new(
             NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             node3_pk,
@@ -219,30 +220,30 @@ mod converting_sphinx_packet_to_and_from_bytes {
 #[cfg(test)]
 mod create_and_process_surb {
     use super::*;
-    use crypto::EphemeralSecret;
     use sphinx_packet::route::NodeAddressBytes;
     use sphinx_packet::surb::{SURBMaterial, SURB};
     use sphinx_packet::{
         constants::{NODE_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
         packet::builder::DEFAULT_PAYLOAD_SIZE,
-        test_utils::fixtures::destination_fixture,
+        test_utils::fixtures::{destination_fixture, keygen},
         ProcessedPacket,
     };
     use std::time::Duration;
+    use x25519_dalek::StaticSecret;
 
     #[test]
     fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = crypto::keygen();
+        let (node1_sk, node1_pk) = keygen();
         let node1 = Node {
             address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
             pub_key: node1_pk,
         };
-        let (node2_sk, node2_pk) = crypto::keygen();
+        let (node2_sk, node2_pk) = keygen();
         let node2 = Node {
             address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
             pub_key: node2_pk,
         };
-        let (node3_sk, node3_pk) = crypto::keygen();
+        let (node3_sk, node3_pk) = keygen();
         let node3 = Node {
             address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
             pub_key: node3_pk,
@@ -250,7 +251,7 @@ mod create_and_process_surb {
 
         let surb_route = vec![node1, node2, node3];
         let surb_destination = destination_fixture();
-        let surb_initial_secret = EphemeralSecret::new();
+        let surb_initial_secret = StaticSecret::random();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
 
