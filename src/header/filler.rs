@@ -102,7 +102,7 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_3_times_security_parameter() {
-        let shared_keys = vec![SharedSecret::from(&EphemeralSecret::new())];
+        let shared_keys = [SharedSecret::from(&EphemeralSecret::new())];
         let routing_keys: Vec<_> = shared_keys
             .iter()
             .map(|&key| keys::RoutingKeys::derive(key))
@@ -114,7 +114,7 @@ mod test_creating_pseudorandom_bytes {
 
     #[test]
     fn with_3_key_it_generates_filler_of_length_3_times_3_times_security_parameter() {
-        let shared_keys = vec![
+        let shared_keys = [
             SharedSecret::from(&EphemeralSecret::new()),
             SharedSecret::from(&EphemeralSecret::new()),
             SharedSecret::from(&EphemeralSecret::new()),

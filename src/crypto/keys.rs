@@ -36,7 +36,7 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
     scalar_bytes[0] &= 248;
     scalar_bytes[31] &= 127;
     scalar_bytes[31] |= 64;
-
+    #[allow(deprecated)]
     Scalar::from_bits(scalar_bytes)
 }
 
@@ -129,7 +129,7 @@ impl<'a> From<&'a PrivateKey> for PublicKey {
     fn from(private_key: &'a PrivateKey) -> PublicKey {
         // multiplication in edwards using the precomputed ed25519 basepoint table is over 3x quicker
         // than multiplication inside montgomery using the curve generator
-        PublicKey((&ED25519_BASEPOINT_TABLE * &private_key.0).to_montgomery())
+        PublicKey((ED25519_BASEPOINT_TABLE * &private_key.0).to_montgomery())
     }
 }
 

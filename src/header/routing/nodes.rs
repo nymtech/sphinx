@@ -69,7 +69,7 @@ impl RoutingInformation {
             .chain(self.version.to_bytes().iter().cloned())
             .chain(self.node_address.as_bytes_ref().iter().cloned())
             .chain(self.delay.to_bytes().iter().cloned())
-            .chain(self.header_integrity_mac.into_inner().into_iter())
+            .chain(self.header_integrity_mac.into_inner())
             .chain(self.next_routing_information.iter().cloned())
             .collect()
     }
