@@ -36,7 +36,7 @@ pub fn clamp_scalar_bytes(mut scalar_bytes: [u8; PRIVATE_KEY_SIZE]) -> Scalar {
     scalar_bytes[0] &= 248;
     scalar_bytes[31] &= 127;
     scalar_bytes[31] |= 64;
-
+    #[allow(deprecated)]
     Scalar::from_bits(scalar_bytes)
 }
 
