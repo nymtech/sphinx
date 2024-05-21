@@ -12,22 +12,28 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use aes::cipher::{NewCipher, StreamCipher};
-use aes::Aes128Ctr;
-use digest::generic_array::{ArrayLength, GenericArray};
-use digest::{BlockInput, FixedOutput, Reset, Update};
-use hmac::{crypto_mac, Hmac, Mac, NewMac};
-
+use aes::{
+    cipher::{KeyIvInit, StreamCipher},
+    Aes128,
+};
+use digest::{
+    block_buffer::Eager,
+    consts::U256,
+    core_api::{BlockSizeUser, BufferKindUser, CoreProxy, FixedOutputCore},
+    generic_array::GenericArray,
+    typenum::{IsLess, Le, NonZero},
+    CtOutput, HashMarker,
+};
+use hmac::{Hmac, Mac};
 pub mod keys;
-
-// to not break existing imports
 pub use keys::*;
 
 pub const STREAM_CIPHER_KEY_SIZE: usize = 16;
 pub const STREAM_CIPHER_INIT_VECTOR: [u8; 16] = [0u8; 16];
 
-// Type alias for ease of use so that it would not require explicit import of crypto_mac or Hmac
-pub type HmacOutput<D> = crypto_mac::Output<Hmac<D>>;
+// Type alias for ease of use
+pub type HmacOutput<D> = CtOutput<Hmac<D>>;
+type Aes128Ctr = ctr::Ctr64BE<Aes128>;
 
 pub fn generate_pseudorandom_bytes(
     // TODO: those should use proper generic arrays to begin with!!
@@ -49,9 +55,10 @@ pub fn generate_pseudorandom_bytes(
 /// Compute keyed hmac
 pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> HmacOutput<D>
 where
-    D: Update + BlockInput + FixedOutput + Reset + Default + Clone,
-    D::BlockSize: ArrayLength<u8>,
-    D::OutputSize: ArrayLength<u8>,
+    D: CoreProxy,
+    D::Core: HashMarker + FixedOutputCore + BufferKindUser<BufferKind = Eager> + Default + Clone,
+    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
+    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
     let mut hmac =
         Hmac::<D>::new_from_slice(key).expect("HMAC should be able to take key of any size!");

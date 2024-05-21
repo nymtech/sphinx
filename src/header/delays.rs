@@ -176,7 +176,7 @@ mod delay_summing {
         let delay2 = Delay(123);
 
         let expected1 = Delay(165);
-        assert_eq!(expected1, &delay1 + &delay2);
+        assert_eq!(expected1, delay1 + delay2);
 
         let expected2 = Delay(265);
         let delay3 = Delay(100);
@@ -185,7 +185,7 @@ mod delay_summing {
 
     #[test]
     fn works_with_iterator() {
-        let delays = vec![Delay(42), Delay(123), Delay(100)];
+        let delays = [Delay(42), Delay(123), Delay(100)];
         let expected = Delay(265);
 
         assert_eq!(expected, delays.iter().sum());

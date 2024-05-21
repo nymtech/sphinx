@@ -129,7 +129,7 @@ impl<'a> From<&'a PrivateKey> for PublicKey {
     fn from(private_key: &'a PrivateKey) -> PublicKey {
         // multiplication in edwards using the precomputed ed25519 basepoint table is over 3x quicker
         // than multiplication inside montgomery using the curve generator
-        PublicKey((&ED25519_BASEPOINT_TABLE * &private_key.0).to_montgomery())
+        PublicKey((ED25519_BASEPOINT_TABLE * &private_key.0).to_montgomery())
     }
 }
 
