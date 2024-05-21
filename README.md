@@ -3,7 +3,7 @@
 A [Sphinx](https://cypherpunks.ca/~iang/pubs/Sphinx_Oakland09.pdf) packet implementation in Rust.
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg?style=for-the-badge)](https://opensource.org/licenses/Apache-2.0)
-[![Build Status](https://img.shields.io/github/workflow/status/nymtech/sphinx/Continuous%20integration/develop?style=for-the-badge&logo=github-actions)](https://github.com/nymtech/sphinx/actions?query=branch%3Adevelop)
+[![Build Status](https://img.shields.io/github/actions/workflow/status/nymtech/sphinx/build.yml?branch=develop&style=for-the-badge&logo=github-actions)](https://github.com/nymtech/sphinx/actions?query=branch%3Adevelop)
 [![codecov](https://img.shields.io/codecov/c/github/nymtech/sphinx?style=for-the-badge&logo=codecov)](https://codecov.io/gh/nymtech/sphinx)
 
 ### Prerequisites
