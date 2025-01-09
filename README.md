@@ -40,3 +40,5 @@ test tests::bench_process ... bench:     157.322 us/iter
 
 * `1000000 / 386.348` = ~2588 packet creations per second
 * `1000000 / 157.322` = ~6356 packet unwrappings per second
+
+Taupaulin should work now.
