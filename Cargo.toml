@@ -38,3 +38,5 @@ criterion = "0.5.1"
 name = "benchmarks"
 harness = false
 
+[features]
+mock = []

@@ -101,6 +101,7 @@ impl Payload {
     }
 
     /// Tries to add an additional layer of encryption onto self.
+    #[cfg(not(feature = "mock"))]
     fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
         let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
             payload_enc_key,
@@ -117,7 +118,15 @@ impl Payload {
         Ok(self)
     }
 
+    #[cfg(feature = "mock")]
+    fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
+        // Mock implementation for testing purposes
+        // noop
+        Ok(self)
+    }
+
     /// Tries to remove single layer of encryption from self.
+    #[cfg(not(feature = "mock"))]
     pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
         let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
             payload_key,
@@ -130,6 +139,13 @@ impl Payload {
                 format!("error while unwrapping payload - {}", err),
             ));
         };
+        Ok(self)
+    }
+
+    #[cfg(feature = "mock")]
+    pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
+        // Mock implementation for testing purposes
+        // noop
         Ok(self)
     }
 
@@ -451,6 +467,7 @@ mod plaintext_recovery {
     }
 
     #[test]
+    #[cfg(not(feature = "mock"))]
     fn it_fails_to_recover_plaintext_from_invalid_payload() {
         let message = vec![42u8; 160];
 

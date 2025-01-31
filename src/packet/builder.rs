@@ -47,7 +47,7 @@ impl<'a> SphinxPacketBuilder<'a> {
     }
 }
 
-impl<'a> Default for SphinxPacketBuilder<'a> {
+impl Default for SphinxPacketBuilder<'_> {
     fn default() -> Self {
         SphinxPacketBuilder {
             payload_size: DEFAULT_PAYLOAD_SIZE,
