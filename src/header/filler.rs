@@ -130,8 +130,7 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     #[should_panic]
     fn panics_with_more_keys_than_the_maximum_path_length() {
-        let shared_keys: Vec<_> = std::iter::repeat(())
-            .take(constants::MAX_PATH_LENGTH + 1)
+        let shared_keys: Vec<_> = std::iter::repeat_n((), constants::MAX_PATH_LENGTH + 1)
             .map(|_| PublicKey::from(&StaticSecret::random()))
             .collect();
         let routing_keys: Vec<_> = shared_keys

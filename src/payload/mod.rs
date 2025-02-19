@@ -89,10 +89,9 @@ impl Payload {
     /// Note: this function should only ever be called in [`encapsulate_message`] after
     /// [`validate_parameters`] was performed.
     fn set_final_payload(plaintext_message: &[u8], payload_size: usize) -> Self {
-        let final_payload: Vec<u8> = std::iter::repeat(0u8)
-            .take(SECURITY_PARAMETER) // start with zero-padding
-            .chain(plaintext_message.iter().cloned()) // put the plaintext
-            .chain(std::iter::repeat(1u8).take(1)) // add single 1 byte to indicate start of padding
+        let final_payload: Vec<u8> = std::iter::repeat_n(0u8, SECURITY_PARAMETER) // start with zero-padding
+            .chain(plaintext_message.iter().copied()) // put the plaintext
+            .chain(std::iter::once(1)) // add single 1 byte to indicate start of padding
             .chain(std::iter::repeat(0u8)) // and fill everything else with zeroes
             .take(payload_size) // take however much we need (remember, iterators are lazy)
             .collect();
