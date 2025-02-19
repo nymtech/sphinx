@@ -12,9 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use std::convert::TryInto;
-use std::fmt;
-
 use crate::constants::{
     BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
     ROUTING_KEYS_LENGTH,
@@ -22,8 +19,11 @@ use crate::constants::{
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::route::Node;
+use curve25519_dalek::Scalar;
 use hkdf::Hkdf;
 use sha2::Sha256;
+use std::convert::TryInto;
+use std::fmt;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
@@ -128,6 +128,40 @@ impl KeyMaterial {
 
         Self {
             initial_shared_secret,
+            routing_keys,
+        }
+    }
+
+    pub fn derive_legacy(route: &[Node], initial_secret: &StaticSecret) -> Self {
+        let initial_secret_scalar = Scalar::from_bytes_mod_order(initial_secret.to_bytes());
+
+        let initial_shared_secret =
+            curve25519_dalek::MontgomeryPoint::mul_base(&initial_secret_scalar);
+
+        let mut routing_keys = Vec::with_capacity(route.len());
+
+        let mut accumulator = initial_secret_scalar;
+        for (i, node) in route.iter().enumerate() {
+            // pub^{a * b * ...}
+            let pk_mt = curve25519_dalek::MontgomeryPoint(node.pub_key.to_bytes());
+            let shared_key = pk_mt * accumulator;
+
+            let node_routing_keys = RoutingKeys::derive(PublicKey::from(shared_key.to_bytes()));
+
+            // it's not the last iteration
+            if i != route.len() + 1 {
+                // convert the blinding factor to a raw scalar and perform multiplication without
+                // any reduction (UNSAFE since we're not in ristretto)
+                let blinding_factor_scalar =
+                    &Scalar::from_bytes_mod_order(node_routing_keys.blinding_factor.to_bytes());
+
+                accumulator *= blinding_factor_scalar;
+            }
+
+            routing_keys.push(node_routing_keys);
+        }
+        Self {
+            initial_shared_secret: PublicKey::from(initial_shared_secret.0),
             routing_keys,
         }
     }

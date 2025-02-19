@@ -19,16 +19,18 @@ use crate::constants::{
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::delays::Delay;
-use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
+use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
     EncapsulatedRoutingInformation, RoutingFlag, Version, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
     FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
+use crate::header::{ProcessedHeader, SphinxHeader};
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 use crate::{Error, ErrorKind, Result};
 use std::fmt;
+use x25519_dalek::PublicKey;
 
 pub const PADDED_ENCRYPTED_ROUTING_INFO_SIZE: usize =
     ENCRYPTED_ROUTING_INFO_SIZE + NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
@@ -105,13 +107,17 @@ pub struct EncryptedRoutingInformation {
     value: [u8; ENCRYPTED_ROUTING_INFO_SIZE],
 }
 
+impl AsRef<[u8]> for EncryptedRoutingInformation {
+    fn as_ref(&self) -> &[u8] {
+        self.value.as_ref()
+    }
+}
+
 impl fmt::Debug for EncryptedRoutingInformation {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "EncryptedRoutingInformation: {{ value: {:?} }}",
-            self.value.to_vec()
-        )
+        f.debug_struct("EncryptedRoutingInformation")
+            .field("value", &self.value)
+            .finish()
     }
 }
 
@@ -124,10 +130,6 @@ impl EncryptedRoutingInformation {
         let mut truncated_routing_info = [0u8; TRUNCATED_ROUTING_INFO_SIZE];
         truncated_routing_info.copy_from_slice(&self.value[..TRUNCATED_ROUTING_INFO_SIZE]);
         truncated_routing_info
-    }
-
-    pub fn get_value_ref(&self) -> &[u8] {
-        self.value.as_ref()
     }
 
     pub(super) fn encapsulate_with_mac(
@@ -158,7 +160,7 @@ impl EncryptedRoutingInformation {
 
     pub(crate) fn unwrap(
         self,
-        stream_cipher_key: StreamCipherKey,
+        stream_cipher_key: &StreamCipherKey,
     ) -> Result<ParsedRawRoutingInformation> {
         // we have to add padding to the encrypted routing information before decrypting, otherwise we gonna lose information
         self.add_zero_padding().decrypt(stream_cipher_key).parse()
@@ -170,10 +172,10 @@ pub struct PaddedEncryptedRoutingInformation {
 }
 
 impl PaddedEncryptedRoutingInformation {
-    pub fn decrypt(self, key: StreamCipherKey) -> RawRoutingInformation {
+    pub fn decrypt(self, key: &StreamCipherKey) -> RawRoutingInformation {
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-            &key,
-            &crypto::STREAM_CIPHER_INIT_VECTOR,
+            key,
+            &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
 
@@ -191,6 +193,78 @@ pub struct RawRoutingInformation {
 pub enum ParsedRawRoutingInformation {
     ForwardHop(NodeAddressBytes, Delay, Box<EncapsulatedRoutingInformation>),
     FinalHop(DestinationAddressBytes, SURBIdentifier),
+}
+
+impl ParsedRawRoutingInformation {
+    pub(crate) fn into_processed_header(
+        self,
+        shared_secret: PublicKey,
+        routing_keys: RoutingKeys,
+    ) -> ProcessedHeader {
+        match self {
+            ParsedRawRoutingInformation::ForwardHop(
+                next_hop_address,
+                delay,
+                new_encapsulated_routing_info,
+            ) => {
+                // blind the shared_secret in the header
+                let new_shared_secret = SphinxHeader::blind_the_shared_secret(
+                    shared_secret,
+                    routing_keys.blinding_factor,
+                );
+
+                let new_header = SphinxHeader {
+                    shared_secret: new_shared_secret,
+                    routing_info: *new_encapsulated_routing_info,
+                };
+
+                ProcessedHeader::ForwardHop(
+                    Box::new(new_header),
+                    next_hop_address,
+                    delay,
+                    routing_keys.payload_key,
+                )
+            }
+            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
+                ProcessedHeader::FinalHop(destination_address, identifier, routing_keys.payload_key)
+            }
+        }
+    }
+
+    pub(crate) fn legacy_into_processed_header(
+        self,
+        shared_secret: PublicKey,
+        routing_keys: RoutingKeys,
+    ) -> ProcessedHeader {
+        match self {
+            ParsedRawRoutingInformation::ForwardHop(
+                next_hop_address,
+                delay,
+                new_encapsulated_routing_info,
+            ) => {
+                // blind the shared_secret in the header
+                let new_shared_secret = SphinxHeader::legacy_blind_shared_secret(
+                    shared_secret,
+                    routing_keys.blinding_factor,
+                );
+
+                let new_header = SphinxHeader {
+                    shared_secret: new_shared_secret,
+                    routing_info: *new_encapsulated_routing_info,
+                };
+
+                ProcessedHeader::ForwardHop(
+                    Box::new(new_header),
+                    next_hop_address,
+                    delay,
+                    routing_keys.payload_key,
+                )
+            }
+            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
+                ProcessedHeader::FinalHop(destination_address, identifier, routing_keys.payload_key)
+            }
+        }
+    }
 }
 
 impl RawRoutingInformation {
@@ -452,7 +526,7 @@ mod parse_decrypted_routing_information {
                     next_routing_information.to_vec(),
                     encapsulated_routing_info
                         .enc_routing_information
-                        .get_value_ref()
+                        .as_ref()
                         .to_vec()
                 );
             }

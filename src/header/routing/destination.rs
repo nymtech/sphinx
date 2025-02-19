@@ -178,7 +178,7 @@ mod test_encapsulating_final_routing_information_and_mac {
 
         let expected_mac = HeaderIntegrityMac::compute(
             routing_keys.last().unwrap().header_integrity_hmac_key,
-            final_routing_info.enc_routing_information.get_value_ref(),
+            final_routing_info.enc_routing_information.as_ref(),
         );
         assert_eq!(
             expected_mac.into_inner(),
@@ -209,7 +209,7 @@ mod test_encapsulating_final_routing_information {
 
         assert_eq!(
             expected_final_header_len,
-            final_routing_header.get_value_ref().len()
+            final_routing_header.as_ref().len()
         );
     }
 
@@ -230,7 +230,7 @@ mod test_encapsulating_final_routing_information {
 
         assert_eq!(
             expected_final_header_len,
-            final_routing_header.get_value_ref().len()
+            final_routing_header.as_ref().len()
         );
     }
 
@@ -251,7 +251,7 @@ mod test_encapsulating_final_routing_information {
 
         assert_eq!(
             expected_final_header_len,
-            final_routing_header.get_value_ref().len()
+            final_routing_header.as_ref().len()
         );
     }
 

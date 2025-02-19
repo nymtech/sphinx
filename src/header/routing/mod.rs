@@ -153,8 +153,8 @@ impl EncapsulatedRoutingInformation {
         self.integrity_mac
             .as_bytes()
             .iter()
-            .cloned()
-            .chain(self.enc_routing_information.get_value_ref().iter().cloned())
+            .copied()
+            .chain(self.enc_routing_information.as_ref().iter().copied())
             .collect()
     }
 
@@ -312,11 +312,11 @@ mod encapsulating_forward_routing_information {
         assert_eq!(
             destination_routing_info
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec(),
             destination_routing_info_copy
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec()
         );
         assert_eq!(
@@ -345,14 +345,8 @@ mod encapsulating_forward_routing_information {
             .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 
         assert_eq!(
-            routing_info
-                .enc_routing_information
-                .get_value_ref()
-                .to_vec(),
-            layer_0_routing
-                .enc_routing_information
-                .get_value_ref()
-                .to_vec()
+            routing_info.enc_routing_information.as_ref().to_vec(),
+            layer_0_routing.enc_routing_information.as_ref().to_vec()
         );
         assert_eq!(
             routing_info.integrity_mac.into_inner(),
@@ -394,11 +388,11 @@ mod converting_encapsulated_routing_info_to_bytes {
         assert_eq!(
             encapsulated_routing_info
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec(),
             recovered_routing_info
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec()
         );
 
