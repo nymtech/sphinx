@@ -82,6 +82,8 @@ impl SphinxHeader {
         Self::build_header(key_material, route, delays, destination)
     }
 
+    #[deprecated]
+    #[allow(deprecated)]
     pub fn new_legacy(
         initial_secret: &StaticSecret,
         route: &[Node],
@@ -213,6 +215,8 @@ impl SphinxHeader {
         Ok(unwrapped_routing_information.into_processed_header(self.shared_secret, routing_keys))
     }
 
+    #[deprecated]
+    #[allow(deprecated)]
     pub fn process_legacy(self, node_secret_key: &StaticSecret) -> Result<ProcessedHeader> {
         let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
         self.ensure_valid_mac(&routing_keys)?;
@@ -274,6 +278,7 @@ impl SphinxHeader {
     }
 
     /// use unreduced multiplication for legacy backwards compatibility
+    #[deprecated]
     fn legacy_blind_shared_secret(
         shared_secret: PublicKey,
         blinding_factor: StaticSecret,

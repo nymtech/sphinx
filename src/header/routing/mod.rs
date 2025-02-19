@@ -43,6 +43,9 @@ pub struct Version {
 }
 
 impl Version {
+    // this one is quite unfortunate. it can possibly panic if the env is setup incorrectly
+    // or if one of the semver values is above 255, however, changing it now would be a breaking change
+    #[allow(clippy::unwrap_used)]
     pub fn new() -> Self {
         Self {
             major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),

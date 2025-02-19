@@ -14,6 +14,7 @@
 
 use crate::constants::DELAY_LENGTH;
 use byteorder::{BigEndian, ByteOrder};
+use rand_distr::num_traits::Zero;
 use rand_distr::{Distribution, Exp};
 use std::{borrow::Borrow, time::Duration};
 
@@ -110,7 +111,13 @@ pub fn generate_from_average_duration(number: usize, average_delay: Duration) ->
 }
 
 fn generate_delays(number: usize, average_delay: f64) -> Vec<Delay> {
-    let exp = Exp::new(1.0 / average_delay).unwrap();
+    if average_delay.is_zero() {
+        return vec![Delay::new_from_nanos(0); number];
+    }
+
+    let Ok(exp) = Exp::new(1.0 / average_delay) else {
+        return vec![Delay::new_from_nanos(0); number];
+    };
 
     let mut delays = Vec::new();
     for _ in 0..number {

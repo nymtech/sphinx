@@ -61,17 +61,16 @@ impl SURB {
         /* Pre-computes the header of the Sphinx packet which will be used as SURB
         and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
         which should be used to layer encrypt the payload. */
-        if surb_route.is_empty() {
+        let Some(first_hop) = surb_route.first() else {
             return Err(Error::new(
                 ErrorKind::InvalidSURB,
                 "tried to create SURB for an empty route",
             ));
-        }
+        };
+
         if surb_route.len() != surb_delays.len() {
             return Err(Error::new(ErrorKind::InvalidSURB, format!("creating SURB for contradictory data: route has len {} while there are {} delays generated", surb_route.len(), surb_delays.len())));
         }
-
-        let first_hop = surb_route.first().unwrap();
 
         let (header, payload_keys) = header::SphinxHeader::new(
             &surb_initial_secret,

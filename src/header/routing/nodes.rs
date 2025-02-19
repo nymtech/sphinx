@@ -230,6 +230,8 @@ impl ParsedRawRoutingInformation {
         }
     }
 
+    #[deprecated]
+    #[allow(deprecated)]
     pub(crate) fn legacy_into_processed_header(
         self,
         shared_secret: PublicKey,

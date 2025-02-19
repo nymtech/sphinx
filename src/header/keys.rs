@@ -49,6 +49,8 @@ impl RoutingKeys {
 
         let mut i = 0;
         let mut output = [0u8; ROUTING_KEYS_LENGTH];
+        // SAFETY: the length of the provided okm is within the allowed range
+        #[allow(clippy::unwrap_used)]
         hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
 
         let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
@@ -64,6 +66,7 @@ impl RoutingKeys {
         i += PAYLOAD_KEY_SIZE;
 
         //Safety, converting a slice of size BLINDING_FACTOR_SIZE into an array of type [u8; BLINDING_FACTOR_SIZE], hence unwrap is fine
+        #[allow(clippy::unwrap_used)]
         let blinding_factor_bytes: [u8; BLINDING_FACTOR_SIZE] =
             output[i..i + BLINDING_FACTOR_SIZE].try_into().unwrap();
         let blinding_factor = StaticSecret::from(blinding_factor_bytes);
@@ -131,6 +134,7 @@ impl KeyMaterial {
         }
     }
 
+    #[deprecated]
     pub fn derive_legacy(route: &[Node], initial_secret: &StaticSecret) -> Self {
         let initial_secret_scalar = Scalar::from_bytes_mod_order(initial_secret.to_bytes());
 

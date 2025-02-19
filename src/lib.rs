@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![warn(clippy::expect_used)]
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::todo)]
+#![warn(clippy::dbg_macro)]
+
 pub mod constants;
 pub mod crypto;
 pub mod header;

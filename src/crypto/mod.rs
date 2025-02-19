@@ -62,6 +62,7 @@ where
     <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
     Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
 {
+    #[allow(clippy::expect_used)]
     let mut hmac =
         Hmac::<D>::new_from_slice(key).expect("HMAC should be able to take key of any size!");
     hmac.update(data);

@@ -59,6 +59,7 @@ impl SphinxPacket {
     ///
     /// However, unless you know exactly what you are doing, you should NEVER use this method!
     /// Prefer normal [process] instead.
+    #[deprecated]
     pub fn process_with_derived_keys(
         self,
         new_blinded_secret: &Option<PublicKey>,
@@ -81,6 +82,8 @@ impl SphinxPacket {
     }
 
     /// Attempt to process the packet using the legacy method of using unreduced scalar multiplication
+    #[deprecated]
+    #[allow(deprecated)]
     pub fn process_legacy(self, node_secret_key: &StaticSecret) -> Result<ProcessedPacket> {
         let unwrapped_header = self.header.process_legacy(node_secret_key)?;
         let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
