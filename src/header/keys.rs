@@ -79,13 +79,12 @@ impl RoutingKeys {
 
 impl fmt::Debug for RoutingKeys {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(
-            f,
-            "{:?} {:?} {:?}",
-            self.stream_cipher_key,
-            self.header_integrity_hmac_key,
-            self.payload_key.to_vec()
-        )
+        f.debug_struct("RoutingKeys")
+            .field("stream_cipher_key", &self.stream_cipher_key)
+            .field("header_integrity_hmac_key", &self.header_integrity_hmac_key)
+            .field("payload_key", &self.payload_key)
+            .field("blinding_factor", self.blinding_factor.as_bytes())
+            .finish()
     }
 }
 

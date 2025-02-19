@@ -21,17 +21,11 @@ pub struct SURB {
 
 impl fmt::Debug for SURB {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut formatted_keys_inner = Vec::with_capacity(self.payload_keys.len());
-        for payload_key in &self.payload_keys {
-            formatted_keys_inner.push(format!("{{ payload_key: {:?} }}", payload_key.to_vec()))
-        }
-        let formatted_keys = format!("{{ {} }}", formatted_keys_inner.join(", "));
-
-        write!(
-            f,
-            "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {:?} }}",
-            self.SURB_header, self.first_hop_address, formatted_keys
-        )
+        f.debug_struct("SURB")
+            .field("SURB_header", &self.SURB_header)
+            .field("first_hop_address", &self.first_hop_address)
+            .field("payload_keys", &self.payload_keys)
+            .finish()
     }
 }
 
