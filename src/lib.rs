@@ -32,5 +32,7 @@ pub mod test_utils;
 pub mod version;
 
 pub use crate::error::{Error, ErrorKind, Result};
-pub use crate::packet::{builder::SphinxPacketBuilder, ProcessedPacket, SphinxPacket};
+pub use crate::packet::{
+    builder::SphinxPacketBuilder, ProcessedPacket, ProcessedPacketData, SphinxPacket,
+};
 pub use crate::surb::{SURBMaterial, SURB};
