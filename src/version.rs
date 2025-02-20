@@ -29,15 +29,19 @@ pub const KNOWN_VERSIONS: &[Version] = &[
 ];
 
 #[derive(Debug, Copy, Clone, PartialEq)]
-pub struct Version(u16);
+pub struct Version(pub u16);
 
 impl Version {
-    pub fn is_legacy(&self) -> bool {
-        self == &INITIAL_LEGACY_VERSION || self == &UPDATED_LEGACY_VERSION
-    }
-
     pub fn new(value: u16) -> Version {
         Version(value)
+    }
+
+    pub fn value(&self) -> u16 {
+        self.0
+    }
+
+    pub fn is_legacy(&self) -> bool {
+        self == &INITIAL_LEGACY_VERSION || self == &UPDATED_LEGACY_VERSION
     }
 
     // extra byte comes from the legacy interpretation

@@ -37,6 +37,10 @@ allows using the library with either the v0.2.0 or v0.1.1 crypto (for backwards 
 the public API to expose version information which has further been reinterpreted to no longer map to the semver version
 of this library
 
+#### v0.3.1
+
+added additional public methods on the `Version`
+
 ### Benchmarks
 
 To run benchmarks, use:
