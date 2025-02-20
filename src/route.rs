@@ -80,7 +80,7 @@ impl DestinationAddressBytes {
 
 impl Display for DestinationAddressBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "DestinationAddressBytes: {}", self.as_base58_string())
+        self.as_base58_string().fmt(f)
     }
 }
 
@@ -148,7 +148,7 @@ impl NodeAddressBytes {
 
 impl Display for NodeAddressBytes {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "NodeAddressBytes: {}", self.as_base58_string())
+        self.as_base58_string().fmt(f)
     }
 }
 

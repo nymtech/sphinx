@@ -36,19 +36,22 @@ use rand::rngs::OsRng;
 pub(super) struct FinalRoutingInformation {
     flag: RoutingFlag,
     version: Version,
-    destination: DestinationAddressBytes,
+
     // in paper delta
-    identifier: SURBIdentifier, // in paper I
+    destination: DestinationAddressBytes,
+
+    // in paper I
+    identifier: SURBIdentifier,
 }
 
 impl FinalRoutingInformation {
     // TODO: this should really return a Result in case the assertion failed
-    pub fn new(dest: &Destination, route_len: usize) -> Self {
+    pub fn new(dest: &Destination, route_len: usize, version: Version) -> Self {
         assert!(dest.address.as_bytes_ref().len() <= Self::max_destination_length(route_len));
 
         Self {
             flag: FINAL_HOP,
-            version: Version::new(),
+            version,
             destination: dest.address,
             identifier: dest.identifier,
         }
@@ -96,7 +99,7 @@ impl PaddedFinalRoutingInformation {
         key: StreamCipherKey,
         route_len: usize,
     ) -> EncryptedPaddedFinalRoutingInformation {
-        assert_eq!(
+        debug_assert_eq!(
             FinalRoutingInformation::max_padded_destination_identifier_length(route_len),
             self.value.len()
         );
@@ -131,7 +134,7 @@ impl EncryptedPaddedFinalRoutingInformation {
         route_len: usize,
     ) -> EncryptedRoutingInformation {
         let filler_value = filler.get_value();
-        assert_eq!(
+        debug_assert_eq!(
             filler_value.len(),
             FILLER_STEP_SIZE_INCREASE * (route_len - 1)
         );
@@ -139,7 +142,7 @@ impl EncryptedPaddedFinalRoutingInformation {
         let final_routing_info_vec: Vec<u8> = self.value.into_iter().chain(filler_value).collect();
 
         // sanity check assertion, because we're using vectors
-        assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);
+        debug_assert_eq!(final_routing_info_vec.len(), ENCRYPTED_ROUTING_INFO_SIZE);
         let mut final_routing_information = [0u8; ENCRYPTED_ROUTING_INFO_SIZE];
         final_routing_information
             .copy_from_slice(&final_routing_info_vec[..ENCRYPTED_ROUTING_INFO_SIZE]);
@@ -150,6 +153,7 @@ impl EncryptedPaddedFinalRoutingInformation {
 #[cfg(test)]
 mod test_encapsulating_final_routing_information_and_mac {
     use crate::header::mac::HeaderIntegrityMac;
+    use crate::version::Version;
     use crate::{
         header::routing::EncapsulatedRoutingInformation,
         test_utils::{
@@ -174,11 +178,12 @@ mod test_encapsulating_final_routing_information_and_mac {
             routing_keys.last().unwrap(),
             filler,
             route.len(),
+            Version::default(),
         );
 
         let expected_mac = HeaderIntegrityMac::compute(
             routing_keys.last().unwrap().header_integrity_hmac_key,
-            final_routing_info.enc_routing_information.get_value_ref(),
+            final_routing_info.enc_routing_information.as_ref(),
         );
         assert_eq!(
             expected_mac.into_inner(),
@@ -200,16 +205,17 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len - 1);
         let destination = destination_fixture();
 
-        let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
-            .encrypt(final_keys.stream_cipher_key, route_len)
-            .combine_with_filler(filler, route_len);
+        let final_routing_header =
+            FinalRoutingInformation::new(&destination, route_len, Version::default())
+                .add_padding(route_len)
+                .encrypt(final_keys.stream_cipher_key, route_len)
+                .combine_with_filler(filler, route_len);
 
         let expected_final_header_len = ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
-            final_routing_header.get_value_ref().len()
+            final_routing_header.as_ref().len()
         );
     }
 
@@ -221,16 +227,17 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len - 1);
         let destination = destination_fixture();
 
-        let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
-            .encrypt(final_keys.stream_cipher_key, route_len)
-            .combine_with_filler(filler, route_len);
+        let final_routing_header =
+            FinalRoutingInformation::new(&destination, route_len, Version::default())
+                .add_padding(route_len)
+                .encrypt(final_keys.stream_cipher_key, route_len)
+                .combine_with_filler(filler, route_len);
 
         let expected_final_header_len = ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
-            final_routing_header.get_value_ref().len()
+            final_routing_header.as_ref().len()
         );
     }
 
@@ -242,16 +249,17 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len - 1);
         let destination = destination_fixture();
 
-        let final_routing_header = FinalRoutingInformation::new(&destination, route_len)
-            .add_padding(route_len)
-            .encrypt(final_keys.stream_cipher_key, route_len)
-            .combine_with_filler(filler, route_len);
+        let final_routing_header =
+            FinalRoutingInformation::new(&destination, route_len, Version::default())
+                .add_padding(route_len)
+                .encrypt(final_keys.stream_cipher_key, route_len)
+                .combine_with_filler(filler, route_len);
 
         let expected_final_header_len = ENCRYPTED_ROUTING_INFO_SIZE;
 
         assert_eq!(
             expected_final_header_len,
-            final_routing_header.get_value_ref().len()
+            final_routing_header.as_ref().len()
         );
     }
 
@@ -263,7 +271,7 @@ mod test_encapsulating_final_routing_information {
         let filler = filler_fixture(route_len);
         let destination = destination_fixture();
 
-        FinalRoutingInformation::new(&destination, route_len)
+        FinalRoutingInformation::new(&destination, route_len, Version::default())
             .add_padding(route_len)
             .encrypt(final_keys.stream_cipher_key, route_len)
             .combine_with_filler(filler, route_len);

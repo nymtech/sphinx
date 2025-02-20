@@ -21,17 +21,11 @@ pub struct SURB {
 
 impl fmt::Debug for SURB {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut formatted_keys_inner = Vec::with_capacity(self.payload_keys.len());
-        for payload_key in &self.payload_keys {
-            formatted_keys_inner.push(format!("{{ payload_key: {:?} }}", payload_key.to_vec()))
-        }
-        let formatted_keys = format!("{{ {} }}", formatted_keys_inner.join(", "));
-
-        write!(
-            f,
-            "SURB: {{ SURB_header: {:?}, first_hop_address: {:?}, payload_keys: {:?} }}",
-            self.SURB_header, self.first_hop_address, formatted_keys
-        )
+        f.debug_struct("SURB")
+            .field("SURB_header", &self.SURB_header)
+            .field("first_hop_address", &self.first_hop_address)
+            .field("payload_keys", &self.payload_keys)
+            .finish()
     }
 }
 
@@ -67,17 +61,16 @@ impl SURB {
         /* Pre-computes the header of the Sphinx packet which will be used as SURB
         and encapsulates it into struct together with the address of the first hop in the route of the SURB, and the key material
         which should be used to layer encrypt the payload. */
-        if surb_route.is_empty() {
+        let Some(first_hop) = surb_route.first() else {
             return Err(Error::new(
                 ErrorKind::InvalidSURB,
                 "tried to create SURB for an empty route",
             ));
-        }
+        };
+
         if surb_route.len() != surb_delays.len() {
             return Err(Error::new(ErrorKind::InvalidSURB, format!("creating SURB for contradictory data: route has len {} while there are {} delays generated", surb_route.len(), surb_delays.len())));
         }
-
-        let first_hop = surb_route.first().unwrap();
 
         let (header, payload_keys) = header::SphinxHeader::new(
             &surb_initial_secret,

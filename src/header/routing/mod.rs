@@ -20,6 +20,7 @@ use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::destination::FinalRoutingInformation;
 use crate::header::routing::nodes::{EncryptedRoutingInformation, RoutingInformation};
 use crate::route::{Destination, Node, NodeAddressBytes};
+use crate::version::Version;
 use crate::{Error, ErrorKind, Result};
 
 pub const TRUNCATED_ROUTING_INFO_SIZE: usize =
@@ -35,28 +36,6 @@ pub const FINAL_HOP: RoutingFlag = 2;
 
 pub type RoutingFlag = u8;
 
-#[derive(Default)]
-pub struct Version {
-    major: u8,
-    minor: u8,
-    patch: u8,
-}
-
-impl Version {
-    pub fn new() -> Self {
-        Self {
-            major: env!("CARGO_PKG_VERSION_MAJOR").to_string().parse().unwrap(),
-            minor: env!("CARGO_PKG_VERSION_MINOR").to_string().parse().unwrap(),
-            patch: env!("CARGO_PKG_VERSION_PATCH").to_string().parse().unwrap(),
-        }
-    }
-
-    pub fn to_bytes(&self) -> Vec<u8> {
-        vec![self.major, self.minor, self.patch]
-    }
-}
-
-// the derivation is only required for the tests. please remove it in production
 #[derive(Clone, Debug)]
 pub struct EncapsulatedRoutingInformation {
     pub(crate) enc_routing_information: EncryptedRoutingInformation,
@@ -80,6 +59,7 @@ impl EncapsulatedRoutingInformation {
         delays: &[Delay],
         routing_keys: &[RoutingKeys],
         filler: Filler,
+        version: Version,
     ) -> Self {
         assert_eq!(route.len(), routing_keys.len());
         assert_eq!(delays.len(), route.len());
@@ -90,13 +70,14 @@ impl EncapsulatedRoutingInformation {
         };
 
         let encapsulated_destination_routing_info =
-            Self::for_final_hop(destination, final_keys, filler, route.len());
+            Self::for_final_hop(destination, final_keys, filler, route.len(), version);
 
         Self::for_forward_hops(
             encapsulated_destination_routing_info,
             delays,
             route,
             routing_keys,
+            version,
         )
     }
 
@@ -105,9 +86,9 @@ impl EncapsulatedRoutingInformation {
         routing_keys: &RoutingKeys,
         filler: Filler,
         route_len: usize,
+        version: Version,
     ) -> Self {
-        // personal note: I like how this looks so much.
-        FinalRoutingInformation::new(dest, route_len)
+        FinalRoutingInformation::new(dest, route_len, version)
             .add_padding(route_len) // add padding to obtain correct destination length
             .encrypt(routing_keys.stream_cipher_key, route_len) // encrypt with the key of final node (in our case service provider)
             .combine_with_filler(filler, route_len) // add filler to get header of correct length
@@ -119,6 +100,7 @@ impl EncapsulatedRoutingInformation {
         delays: &[Delay],
         route: &[Node],               // [Mix0, Mix1, Mix2, ..., Mix_{v-1}, Mix_v]
         routing_keys: &[RoutingKeys], // [Keys0, Keys1, Keys2, ..., Keys_{v-1}, Keys_v]
+        version: Version,
     ) -> Self {
         route
             .iter()
@@ -142,6 +124,7 @@ impl EncapsulatedRoutingInformation {
                         NodeAddressBytes::from_bytes(current_node_address),
                         delay.to_owned(),
                         next_hop_encapsulated_routing_information,
+                        version,
                     )
                     .encrypt(previous_node_routing_keys.stream_cipher_key)
                     .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key)
@@ -153,8 +136,8 @@ impl EncapsulatedRoutingInformation {
         self.integrity_mac
             .as_bytes()
             .iter()
-            .cloned()
-            .chain(self.enc_routing_information.get_value_ref().iter().cloned())
+            .copied()
+            .chain(self.enc_routing_information.as_ref().iter().copied())
             .collect()
     }
 
@@ -213,7 +196,14 @@ mod encapsulating_all_routing_information {
         let keys = [routing_keys_fixture(), routing_keys_fixture()];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &keys,
+            filler,
+            Version::default(),
+        );
     }
 
     #[test]
@@ -233,7 +223,14 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &keys,
+            filler,
+            Version::default(),
+        );
     }
 
     #[test]
@@ -253,7 +250,14 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &keys,
+            filler,
+            Version::default(),
+        );
     }
 
     #[test]
@@ -269,7 +273,14 @@ mod encapsulating_all_routing_information {
         let keys = vec![];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(&route, &destination, &delays, &keys, filler);
+        EncapsulatedRoutingInformation::new(
+            &route,
+            &destination,
+            &delays,
+            &keys,
+            filler,
+            Version::default(),
+        );
     }
 }
 
@@ -304,6 +315,7 @@ mod encapsulating_forward_routing_information {
             routing_keys.last().unwrap(),
             filler,
             route.len(),
+            Version::default(),
         );
 
         let destination_routing_info_copy = destination_routing_info.clone();
@@ -312,11 +324,11 @@ mod encapsulating_forward_routing_information {
         assert_eq!(
             destination_routing_info
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec(),
             destination_routing_info_copy
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec()
         );
         assert_eq!(
@@ -332,27 +344,31 @@ mod encapsulating_forward_routing_information {
             &delays,
             &route,
             &routing_keys,
+            Version::default(),
         );
 
-        let layer_1_routing =
-            RoutingInformation::new(route[2].address, delay1, destination_routing_info_copy)
-                .encrypt(routing_keys[1].stream_cipher_key)
-                .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
+        let layer_1_routing = RoutingInformation::new(
+            route[2].address,
+            delay1,
+            destination_routing_info_copy,
+            Version::default(),
+        )
+        .encrypt(routing_keys[1].stream_cipher_key)
+        .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key);
 
         // this is what first mix should receive
-        let layer_0_routing = RoutingInformation::new(route[1].address, delay0, layer_1_routing)
-            .encrypt(routing_keys[0].stream_cipher_key)
-            .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
+        let layer_0_routing = RoutingInformation::new(
+            route[1].address,
+            delay0,
+            layer_1_routing,
+            Version::default(),
+        )
+        .encrypt(routing_keys[0].stream_cipher_key)
+        .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key);
 
         assert_eq!(
-            routing_info
-                .enc_routing_information
-                .get_value_ref()
-                .to_vec(),
-            layer_0_routing
-                .enc_routing_information
-                .get_value_ref()
-                .to_vec()
+            routing_info.enc_routing_information.as_ref().to_vec(),
+            layer_0_routing.enc_routing_information.as_ref().to_vec()
         );
         assert_eq!(
             routing_info.integrity_mac.into_inner(),
@@ -394,11 +410,11 @@ mod converting_encapsulated_routing_info_to_bytes {
         assert_eq!(
             encapsulated_routing_info
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec(),
             recovered_routing_info
                 .enc_routing_information
-                .get_value_ref()
+                .as_ref()
                 .to_vec()
         );
 

@@ -1,4 +1,5 @@
 use crate::header::keys::RoutingKeys;
+use crate::version::Version;
 use crate::{
     header::{self, delays::Delay, HEADER_SIZE},
     payload::{Payload, PAYLOAD_OVERHEAD_SIZE},
@@ -6,29 +7,42 @@ use crate::{
     Error, ErrorKind, Result,
 };
 use builder::SphinxPacketBuilder;
-use header::{ProcessedHeader, SphinxHeader};
+use header::SphinxHeader;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 pub mod builder;
 
-pub enum ProcessedPacket {
-    // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
-    // should follow clippy recommendation and box it
-    ForwardHop(Box<SphinxPacket>, NodeAddressBytes, Delay),
-    FinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
+pub struct ProcessedPacket {
+    pub version: Version,
+    pub data: ProcessedPacketData,
+}
+
+pub enum ProcessedPacketData {
+    ForwardHop {
+        next_hop_packet: SphinxPacket,
+        next_hop_address: NodeAddressBytes,
+        delay: Delay,
+    },
+    FinalHop {
+        destination: DestinationAddressBytes,
+        identifier: SURBIdentifier,
+        payload: Payload,
+    },
 }
 
 impl ProcessedPacket {
     pub fn shared_secret(&self) -> Option<PublicKey> {
-        match self {
-            ProcessedPacket::ForwardHop(packet, ..) => Some(packet.shared_secret()),
-            ProcessedPacket::FinalHop(..) => None,
+        match &self.data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet, ..
+            } => Some(next_hop_packet.shared_secret()),
+            ProcessedPacketData::FinalHop { .. } => None,
         }
     }
 }
 
 pub struct SphinxPacket {
-    pub header: header::SphinxHeader,
+    pub header: SphinxHeader,
     pub payload: Payload,
 }
 
@@ -59,6 +73,7 @@ impl SphinxPacket {
     ///
     /// However, unless you know exactly what you are doing, you should NEVER use this method!
     /// Prefer normal [process] instead.
+    #[deprecated]
     pub fn process_with_derived_keys(
         self,
         new_blinded_secret: &Option<PublicKey>,
@@ -67,63 +82,51 @@ impl SphinxPacket {
         let unwrapped_header = self
             .header
             .process_with_derived_keys(new_blinded_secret, routing_keys)?;
-        match unwrapped_header {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
-                let new_packet = SphinxPacket {
-                    header: *new_header,
-                    payload: new_payload,
-                };
-                Ok(ProcessedPacket::ForwardHop(
-                    Box::new(new_packet),
-                    next_hop_address,
-                    delay,
-                ))
-            }
-            ProcessedHeader::FinalHop(destination, identifier, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
-                Ok(ProcessedPacket::FinalHop(
-                    destination,
-                    identifier,
-                    new_payload,
-                ))
-            }
-        }
+        let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
+
+        Ok(unwrapped_header.attach_payload(unwrapped_payload))
+    }
+
+    #[allow(deprecated)]
+    pub fn process(self, node_secret_key: &StaticSecret) -> Result<ProcessedPacket> {
+        let unwrapped_header = self.header.process(node_secret_key)?;
+        let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
+
+        Ok(unwrapped_header.attach_payload(unwrapped_payload))
     }
 
     // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
-    pub fn process(self, node_secret_key: &StaticSecret) -> Result<ProcessedPacket> {
-        let unwrapped_header = self.header.process(node_secret_key)?;
-        match unwrapped_header {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
-                let new_packet = SphinxPacket {
-                    header: *new_header,
-                    payload: new_payload,
-                };
-                Ok(ProcessedPacket::ForwardHop(
-                    Box::new(new_packet),
-                    next_hop_address,
-                    delay,
-                ))
-            }
-            ProcessedHeader::FinalHop(destination, identifier, payload_key) => {
-                let new_payload = self.payload.unwrap(&payload_key)?;
-                Ok(ProcessedPacket::FinalHop(
-                    destination,
-                    identifier,
-                    new_payload,
-                ))
-            }
-        }
+    #[deprecated]
+    #[allow(deprecated)]
+    pub fn unchecked_process_as_current(
+        self,
+        node_secret_key: &StaticSecret,
+    ) -> Result<ProcessedPacket> {
+        let unwrapped_header = self.header.unchecked_process_as_current(node_secret_key)?;
+        let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
+
+        Ok(unwrapped_header.attach_payload(unwrapped_payload))
+    }
+
+    /// Attempt to process the packet using the legacy method of using unreduced scalar multiplication
+    #[deprecated]
+    #[allow(deprecated)]
+    pub fn unchecked_process_as_legacy(
+        self,
+        node_secret_key: &StaticSecret,
+    ) -> Result<ProcessedPacket> {
+        let unwrapped_header = self.header.unchecked_process_as_legacy(node_secret_key)?;
+        let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
+
+        Ok(unwrapped_header.attach_payload(unwrapped_payload))
     }
 
     pub fn to_bytes(&self) -> Vec<u8> {
         self.header
             .to_bytes()
             .iter()
-            .cloned()
-            .chain(self.payload.as_bytes().iter().cloned())
+            .copied()
+            .chain(self.payload.as_bytes().iter().copied())
             .collect()
     }
 

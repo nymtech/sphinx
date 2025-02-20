@@ -12,6 +12,11 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![warn(clippy::expect_used)]
+#![warn(clippy::unwrap_used)]
+#![warn(clippy::todo)]
+#![warn(clippy::dbg_macro)]
+
 pub mod constants;
 pub mod crypto;
 pub mod header;
@@ -24,7 +29,10 @@ mod utils;
 // cleaned-up modules + imports here:
 pub mod error;
 pub mod test_utils;
+pub mod version;
 
 pub use crate::error::{Error, ErrorKind, Result};
-pub use crate::packet::{builder::SphinxPacketBuilder, ProcessedPacket, SphinxPacket};
+pub use crate::packet::{
+    builder::SphinxPacketBuilder, ProcessedPacket, ProcessedPacketData, SphinxPacket,
+};
 pub use crate::surb::{SURBMaterial, SURB};
