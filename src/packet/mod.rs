@@ -87,9 +87,22 @@ impl SphinxPacket {
         Ok(unwrapped_header.attach_payload(unwrapped_payload))
     }
 
-    // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
+    #[allow(deprecated)]
     pub fn process(self, node_secret_key: &StaticSecret) -> Result<ProcessedPacket> {
         let unwrapped_header = self.header.process(node_secret_key)?;
+        let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
+
+        Ok(unwrapped_header.attach_payload(unwrapped_payload))
+    }
+
+    // TODO: we should have some list of 'seen shared_keys' for replay detection, but this should be handled by a mix node
+    #[deprecated]
+    #[allow(deprecated)]
+    pub fn unchecked_process_as_current(
+        self,
+        node_secret_key: &StaticSecret,
+    ) -> Result<ProcessedPacket> {
+        let unwrapped_header = self.header.unchecked_process_as_current(node_secret_key)?;
         let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
 
         Ok(unwrapped_header.attach_payload(unwrapped_payload))
@@ -98,8 +111,11 @@ impl SphinxPacket {
     /// Attempt to process the packet using the legacy method of using unreduced scalar multiplication
     #[deprecated]
     #[allow(deprecated)]
-    pub fn process_legacy(self, node_secret_key: &StaticSecret) -> Result<ProcessedPacket> {
-        let unwrapped_header = self.header.process_legacy(node_secret_key)?;
+    pub fn unchecked_process_as_legacy(
+        self,
+        node_secret_key: &StaticSecret,
+    ) -> Result<ProcessedPacket> {
+        let unwrapped_header = self.header.unchecked_process_as_legacy(node_secret_key)?;
         let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
 
         Ok(unwrapped_header.attach_payload(unwrapped_payload))

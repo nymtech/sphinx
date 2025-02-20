@@ -101,7 +101,7 @@ fn bench_unwrap(c: &mut Criterion) {
     c.bench_function("sphinx unwrap", |b| {
         b.iter(|| {
             make_packet_copy(&packet)
-                .process(black_box(&node1_sk))
+                .unchecked_process_as_current(black_box(&node1_sk))
                 .unwrap()
         })
     });

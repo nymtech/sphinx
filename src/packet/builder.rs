@@ -1,3 +1,4 @@
+use crate::version::Version;
 use crate::{
     header::{delays::Delay, SphinxHeader},
     payload::Payload,
@@ -11,6 +12,7 @@ pub const DEFAULT_PAYLOAD_SIZE: usize = 1024;
 pub struct SphinxPacketBuilder<'a> {
     payload_size: usize,
     initial_secret: Option<&'a StaticSecret>,
+    version: Version,
 }
 
 impl<'a> SphinxPacketBuilder<'a> {
@@ -18,11 +20,19 @@ impl<'a> SphinxPacketBuilder<'a> {
         Self::default()
     }
 
+    #[must_use]
+    pub fn with_version(mut self, version: Version) -> Self {
+        self.version = version;
+        self
+    }
+
+    #[must_use]
     pub fn with_payload_size(mut self, payload_size: usize) -> Self {
         self.payload_size = payload_size;
         self
     }
 
+    #[must_use]
     pub fn with_initial_secret(mut self, initial_secret: &'a StaticSecret) -> Self {
         self.initial_secret = Some(initial_secret);
         self
@@ -36,8 +46,20 @@ impl<'a> SphinxPacketBuilder<'a> {
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
         let (header, payload_keys) = match self.initial_secret.as_ref() {
-            Some(initial_secret) => SphinxHeader::new(initial_secret, route, delays, destination),
-            None => SphinxHeader::new(&StaticSecret::random(), route, delays, destination),
+            Some(initial_secret) => SphinxHeader::new_versioned(
+                initial_secret,
+                route,
+                delays,
+                destination,
+                self.version,
+            ),
+            None => SphinxHeader::new_versioned(
+                &StaticSecret::random(),
+                route,
+                delays,
+                destination,
+                self.version,
+            ),
         };
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation
@@ -52,6 +74,7 @@ impl Default for SphinxPacketBuilder<'_> {
         SphinxPacketBuilder {
             payload_size: DEFAULT_PAYLOAD_SIZE,
             initial_secret: None,
+            version: Default::default(),
         }
     }
 }

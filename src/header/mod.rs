@@ -128,6 +128,22 @@ impl SphinxHeader {
         )
     }
 
+    #[allow(deprecated)]
+    pub fn new_versioned(
+        initial_secret: &StaticSecret,
+        route: &[Node],
+        delays: &[Delay],
+        destination: &Destination,
+        version: Version,
+    ) -> (Self, Vec<PayloadKey>) {
+        let key_material = if version.is_legacy() {
+            keys::KeyMaterial::derive_legacy(route, initial_secret)
+        } else {
+            keys::KeyMaterial::derive(route, initial_secret)
+        };
+        Self::build_header(key_material, route, delays, destination, version)
+    }
+
     fn build_header(
         key_material: KeyMaterial,
         route: &[Node],
@@ -246,7 +262,30 @@ impl SphinxHeader {
         Ok(())
     }
 
+    #[allow(deprecated)]
     pub fn process(self, node_secret_key: &StaticSecret) -> Result<ProcessedHeader> {
+        let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
+        self.ensure_valid_mac(&routing_keys)?;
+
+        let unwrapped_routing_information = self
+            .routing_info
+            .enc_routing_information
+            .unwrap(&routing_keys.stream_cipher_key)?;
+
+        if unwrapped_routing_information.version.is_legacy() {
+            Ok(unwrapped_routing_information
+                .legacy_into_processed_header(self.shared_secret, routing_keys))
+        } else {
+            Ok(unwrapped_routing_information
+                .into_processed_header(self.shared_secret, routing_keys))
+        }
+    }
+
+    #[deprecated]
+    pub fn unchecked_process_as_current(
+        self,
+        node_secret_key: &StaticSecret,
+    ) -> Result<ProcessedHeader> {
         let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
         self.ensure_valid_mac(&routing_keys)?;
 
@@ -260,7 +299,10 @@ impl SphinxHeader {
 
     #[deprecated]
     #[allow(deprecated)]
-    pub fn process_legacy(self, node_secret_key: &StaticSecret) -> Result<ProcessedHeader> {
+    pub fn unchecked_process_as_legacy(
+        self,
+        node_secret_key: &StaticSecret,
+    ) -> Result<ProcessedHeader> {
         let routing_keys = Self::compute_routing_keys(&self.shared_secret, node_secret_key);
         self.ensure_valid_mac(&routing_keys)?;
 
@@ -470,7 +512,11 @@ mod create_and_process_sphinx_packet_header {
             SphinxHeader::new_legacy(&initial_secret, &route, &delays, &route_destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
-        let new_header = match sphinx_header.process_legacy(&node1_sk).unwrap().data {
+        let new_header = match sphinx_header
+            .unchecked_process_as_legacy(&node1_sk)
+            .unwrap()
+            .data
+        {
             ProcessedHeaderData::ForwardHop {
                 updated_header,
                 next_hop_address,
@@ -486,7 +532,11 @@ mod create_and_process_sphinx_packet_header {
             _ => panic!(),
         };
 
-        let new_header2 = match new_header.process_legacy(&node2_sk).unwrap().data {
+        let new_header2 = match new_header
+            .unchecked_process_as_legacy(&node2_sk)
+            .unwrap()
+            .data
+        {
             ProcessedHeaderData::ForwardHop {
                 updated_header,
                 next_hop_address,
@@ -501,7 +551,11 @@ mod create_and_process_sphinx_packet_header {
             }
             _ => panic!(),
         };
-        match new_header2.process_legacy(&node3_sk).unwrap().data {
+        match new_header2
+            .unchecked_process_as_legacy(&node3_sk)
+            .unwrap()
+            .data
+        {
             ProcessedHeaderData::FinalHop {
                 destination,
                 identifier: _,
