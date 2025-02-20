@@ -1,4 +1,5 @@
 use crate::header::keys::RoutingKeys;
+use crate::version::Version;
 use crate::{
     header::{self, delays::Delay, HEADER_SIZE},
     payload::{Payload, PAYLOAD_OVERHEAD_SIZE},
@@ -11,24 +12,37 @@ use x25519_dalek::{PublicKey, StaticSecret};
 
 pub mod builder;
 
-pub enum ProcessedPacket {
-    // TODO: considering fields sizes here (`SphinxPacket` and `Payload`), we perhaps
-    // should follow clippy recommendation and box it
-    ForwardHop(Box<SphinxPacket>, NodeAddressBytes, Delay),
-    FinalHop(DestinationAddressBytes, SURBIdentifier, Payload),
+pub struct ProcessedPacket {
+    pub version: Version,
+    pub data: ProcessedPacketData,
+}
+
+pub enum ProcessedPacketData {
+    ForwardHop {
+        next_hop_packet: SphinxPacket,
+        next_hop_address: NodeAddressBytes,
+        delay: Delay,
+    },
+    FinalHop {
+        destination: DestinationAddressBytes,
+        identifier: SURBIdentifier,
+        payload: Payload,
+    },
 }
 
 impl ProcessedPacket {
     pub fn shared_secret(&self) -> Option<PublicKey> {
-        match self {
-            ProcessedPacket::ForwardHop(packet, ..) => Some(packet.shared_secret()),
-            ProcessedPacket::FinalHop(..) => None,
+        match &self.data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet, ..
+            } => Some(next_hop_packet.shared_secret()),
+            ProcessedPacketData::FinalHop { .. } => None,
         }
     }
 }
 
 pub struct SphinxPacket {
-    pub header: header::SphinxHeader,
+    pub header: SphinxHeader,
     pub payload: Payload,
 }
 

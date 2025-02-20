@@ -14,6 +14,29 @@ A [Sphinx](https://cypherpunks.ca/~iang/pubs/Sphinx_Oakland09.pdf) packet implem
 
 `cargo test` will run the unit and integration tests.
 
+### Versioning
+
+Whilst this crate hasn't been strictly following the semver versioning conventions, the following changes have been
+made:
+
+#### v0.1.0
+
+initial release
+
+#### v0.1.1
+
+updates crypto dependencies, including dalek libraries
+
+#### v0.2.0
+
+fixes uses of undefined scalar multiplications and transitions to using pure x25519 instead
+
+#### v0.3.0
+
+allows using the library with either the v0.2.0 or v0.1.1 crypto (for backwards compatibility reasons). it also changes
+the public API to expose version information which has further been reinterpreted to no longer map to the semver version
+of this library
+
 ### Benchmarks
 
 To run benchmarks, use:

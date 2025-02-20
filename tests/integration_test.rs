@@ -23,15 +23,13 @@ use sphinx_packet::SphinxPacket;
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
     use super::*;
+    use sphinx_packet::constants::{
+        DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
+        SECURITY_PARAMETER,
+    };
+    use sphinx_packet::packet::ProcessedPacketData;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx_packet::test_utils::fixtures::keygen;
-    use sphinx_packet::{
-        constants::{
-            DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
-            SECURITY_PARAMETER,
-        },
-        ProcessedPacket,
-    };
     use std::time::Duration;
 
     #[test]
@@ -64,30 +62,38 @@ mod create_and_process_sphinx_packet {
         let sphinx_packet =
             SphinxPacket::new(message.clone(), &route, &destination, &delays).unwrap();
 
-        let next_sphinx_packet_1 = match sphinx_packet.process(&node1_sk).unwrap() {
-            ProcessedPacket::ForwardHop(next_packet, next_hop_addr1, _delay1) => {
+        let next_sphinx_packet_1 = match sphinx_packet.process(&node1_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                delay: _,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
-                    next_hop_addr1
+                    next_hop_address
                 );
-                next_packet
+                next_hop_packet
             }
             _ => panic!(),
         };
 
-        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap() {
-            ProcessedPacket::ForwardHop(next_packet, next_hop_addr2, _delay2) => {
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                delay: _,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
-                    next_hop_addr2
+                    next_hop_address
                 );
-                next_packet
+                next_hop_packet
             }
             _ => panic!(),
         };
 
-        match next_sphinx_packet_2.process(&node3_sk).unwrap() {
-            ProcessedPacket::FinalHop(_, _, payload) => {
+        match next_sphinx_packet_2.process(&node3_sk).unwrap().data {
+            ProcessedPacketData::FinalHop { payload, .. } => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding =
                     vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - 1];
@@ -102,15 +108,13 @@ mod create_and_process_sphinx_packet {
 #[cfg(test)]
 mod converting_sphinx_packet_to_and_from_bytes {
     use super::*;
+    use sphinx_packet::constants::{
+        DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
+        SECURITY_PARAMETER,
+    };
+    use sphinx_packet::packet::ProcessedPacketData;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx_packet::test_utils::fixtures::keygen;
-    use sphinx_packet::{
-        constants::{
-            DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH, PAYLOAD_SIZE,
-            SECURITY_PARAMETER,
-        },
-        ProcessedPacket,
-    };
     use std::time::Duration;
 
     #[test]
@@ -146,32 +150,40 @@ mod converting_sphinx_packet_to_and_from_bytes {
         let sphinx_packet_bytes = sphinx_packet.to_bytes();
         let recovered_packet = SphinxPacket::from_bytes(&sphinx_packet_bytes).unwrap();
 
-        let next_sphinx_packet_1 = match recovered_packet.process(&node1_sk).unwrap() {
-            ProcessedPacket::ForwardHop(next_packet, next_hop_address, delay) => {
+        let next_sphinx_packet_1 = match recovered_packet.process(&node1_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[0].to_nanos(), delay.to_nanos());
-                next_packet
+                next_hop_packet
             }
             _ => panic!(),
         };
 
-        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap() {
-            ProcessedPacket::ForwardHop(next_packet, next_hop_address, delay) => {
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[1].to_nanos(), delay.to_nanos());
-                next_packet
+                next_hop_packet
             }
             _ => panic!(),
         };
 
-        match next_sphinx_packet_2.process(&node3_sk).unwrap() {
-            ProcessedPacket::FinalHop(_, _, payload) => {
+        match next_sphinx_packet_2.process(&node3_sk).unwrap().data {
+            ProcessedPacketData::FinalHop { payload, .. } => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding =
                     vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - message.len() - 1];
@@ -220,13 +232,13 @@ mod converting_sphinx_packet_to_and_from_bytes {
 #[cfg(test)]
 mod create_and_process_surb {
     use super::*;
+    use sphinx_packet::packet::ProcessedPacketData;
     use sphinx_packet::route::NodeAddressBytes;
     use sphinx_packet::surb::{SURBMaterial, SURB};
     use sphinx_packet::{
         constants::{NODE_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
         packet::builder::DEFAULT_PAYLOAD_SIZE,
         test_utils::fixtures::{destination_fixture, keygen},
-        ProcessedPacket,
     };
     use std::time::Duration;
     use x25519_dalek::StaticSecret;
@@ -270,32 +282,40 @@ mod create_and_process_surb {
             NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH])
         );
 
-        let next_sphinx_packet_1 = match surb_sphinx_packet.process(&node1_sk).unwrap() {
-            ProcessedPacket::ForwardHop(next_packet, next_hop_addr1, _delay1) => {
+        let next_sphinx_packet_1 = match surb_sphinx_packet.process(&node1_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
-                    next_hop_addr1
+                    next_hop_address
                 );
-                assert_eq!(_delay1, surb_delays[0]);
-                next_packet
+                assert_eq!(delay, surb_delays[0]);
+                next_hop_packet
             }
             _ => panic!(),
         };
 
-        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap() {
-            ProcessedPacket::ForwardHop(next_packet, next_hop_addr2, _delay2) => {
+        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
-                    next_hop_addr2
+                    next_hop_address
                 );
-                assert_eq!(_delay2, surb_delays[1]);
-                next_packet
+                assert_eq!(delay, surb_delays[1]);
+                next_hop_packet
             }
             _ => panic!(),
         };
 
-        match next_sphinx_packet_2.process(&node3_sk).unwrap() {
-            ProcessedPacket::FinalHop(_, _, payload) => {
+        match next_sphinx_packet_2.process(&node3_sk).unwrap().data {
+            ProcessedPacketData::FinalHop { payload, .. } => {
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding =
                     vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - plaintext_message.len() - 1];

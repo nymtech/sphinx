@@ -16,10 +16,12 @@ use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::{KeyMaterial, PayloadKey};
-use crate::header::routing::nodes::ParsedRawRoutingInformation;
+use crate::header::routing::nodes::ParsedRawRoutingInformationData;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
+use crate::packet::ProcessedPacketData;
 use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
+use crate::version::{Version, CURRENT_VERSION, UPDATED_LEGACY_VERSION};
 use crate::{Error, ErrorKind, ProcessedPacket, Result, SphinxPacket};
 use keys::RoutingKeys;
 use x25519_dalek::{PublicKey, StaticSecret};
@@ -37,34 +39,60 @@ pub const HEADER_SIZE: usize = 32 + HEADER_INTEGRITY_MAC_SIZE + ENCRYPTED_ROUTIN
 #[cfg_attr(test, derive(Clone))]
 pub struct SphinxHeader {
     pub shared_secret: PublicKey,
-    pub routing_info: EncapsulatedRoutingInformation,
+    pub routing_info: Box<EncapsulatedRoutingInformation>,
 }
 
-pub enum ProcessedHeader {
-    ForwardHop(Box<SphinxHeader>, NodeAddressBytes, Delay, PayloadKey),
-    FinalHop(DestinationAddressBytes, SURBIdentifier, PayloadKey),
+pub struct ProcessedHeader {
+    payload_key: PayloadKey,
+    version: Version,
+    data: ProcessedHeaderData,
+}
+
+pub enum ProcessedHeaderData {
+    FinalHop {
+        destination: DestinationAddressBytes,
+        identifier: SURBIdentifier,
+    },
+    ForwardHop {
+        updated_header: SphinxHeader,
+        next_hop_address: NodeAddressBytes,
+        delay: Delay,
+    },
 }
 
 impl ProcessedHeader {
     pub(crate) fn payload_key(&self) -> &PayloadKey {
-        match self {
-            ProcessedHeader::ForwardHop(_, _, _, ref payload_key) => payload_key,
-            ProcessedHeader::FinalHop(_, _, ref payload_key) => payload_key,
-        }
+        &self.payload_key
     }
 
     pub(crate) fn attach_payload(self, payload: Payload) -> ProcessedPacket {
-        match self {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
-                let new_packet = SphinxPacket {
-                    header: *new_header,
+        match self.data {
+            ProcessedHeaderData::ForwardHop {
+                updated_header,
+                next_hop_address,
+                delay,
+            } => ProcessedPacket {
+                version: self.version,
+                data: ProcessedPacketData::ForwardHop {
+                    next_hop_packet: SphinxPacket {
+                        header: updated_header,
+                        payload,
+                    },
+                    next_hop_address,
+                    delay,
+                },
+            },
+            ProcessedHeaderData::FinalHop {
+                destination,
+                identifier,
+            } => ProcessedPacket {
+                version: self.version,
+                data: ProcessedPacketData::FinalHop {
+                    destination,
+                    identifier,
                     payload,
-                };
-                ProcessedPacket::ForwardHop(Box::new(new_packet), next_hop_address, delay)
-            }
-            ProcessedHeader::FinalHop(destination, identifier, _) => {
-                ProcessedPacket::FinalHop(destination, identifier, payload)
-            }
+                },
+            },
         }
     }
 }
@@ -79,7 +107,7 @@ impl SphinxHeader {
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
-        Self::build_header(key_material, route, delays, destination)
+        Self::build_header(key_material, route, delays, destination, CURRENT_VERSION)
     }
 
     #[deprecated]
@@ -91,7 +119,13 @@ impl SphinxHeader {
         destination: &Destination,
     ) -> (Self, Vec<PayloadKey>) {
         let key_material = keys::KeyMaterial::derive_legacy(route, initial_secret);
-        Self::build_header(key_material, route, delays, destination)
+        Self::build_header(
+            key_material,
+            route,
+            delays,
+            destination,
+            UPDATED_LEGACY_VERSION,
+        )
     }
 
     fn build_header(
@@ -99,15 +133,17 @@ impl SphinxHeader {
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
+        version: Version,
     ) -> (Self, Vec<PayloadKey>) {
         let filler_string = Filler::new(&key_material.routing_keys[..route.len() - 1]);
-        let routing_info = routing::EncapsulatedRoutingInformation::new(
+        let routing_info = Box::new(routing::EncapsulatedRoutingInformation::new(
             route,
             destination,
             delays,
             &key_material.routing_keys,
             filler_string,
-        );
+            version,
+        ));
 
         // encapsulate header.routing information, compute MACs
         (
@@ -148,22 +184,25 @@ impl SphinxHeader {
             .routing_info
             .enc_routing_information
             .unwrap(&routing_keys.stream_cipher_key)?;
-        match unwrapped_routing_information {
-            ParsedRawRoutingInformation::ForwardHop(
+        match unwrapped_routing_information.data {
+            ParsedRawRoutingInformationData::ForwardHop {
                 next_hop_address,
                 delay,
-                new_encapsulated_routing_info,
-            ) => {
+                new_routing_information,
+            } => {
                 if let Some(new_blinded_secret) = new_blinded_secret {
-                    Ok(ProcessedHeader::ForwardHop(
-                        Box::new(SphinxHeader {
-                            shared_secret: *new_blinded_secret,
-                            routing_info: *new_encapsulated_routing_info,
-                        }),
-                        next_hop_address,
-                        delay,
-                        routing_keys.payload_key,
-                    ))
+                    Ok(ProcessedHeader {
+                        payload_key: routing_keys.payload_key,
+                        version: unwrapped_routing_information.version,
+                        data: ProcessedHeaderData::ForwardHop {
+                            updated_header: SphinxHeader {
+                                shared_secret: *new_blinded_secret,
+                                routing_info: new_routing_information,
+                            },
+                            next_hop_address,
+                            delay,
+                        },
+                    })
                 } else {
                     Err(Error::new(
                         ErrorKind::InvalidHeader,
@@ -171,13 +210,17 @@ impl SphinxHeader {
                     ))
                 }
             }
-            ParsedRawRoutingInformation::FinalHop(destination_address, identifier) => {
-                Ok(ProcessedHeader::FinalHop(
-                    destination_address,
+            ParsedRawRoutingInformationData::FinalHop {
+                destination,
+                identifier,
+            } => Ok(ProcessedHeader {
+                payload_key: routing_keys.payload_key,
+                version: unwrapped_routing_information.version,
+                data: ProcessedHeaderData::FinalHop {
+                    destination,
                     identifier,
-                    routing_keys.payload_key,
-                ))
-            }
+                },
+            }),
         }
     }
 
@@ -259,8 +302,9 @@ impl SphinxHeader {
         // the rest are for the encapsulated routing info
         let encapsulated_routing_info_bytes = bytes[32..HEADER_SIZE].to_vec();
 
-        let routing_info =
-            EncapsulatedRoutingInformation::from_bytes(&encapsulated_routing_info_bytes)?;
+        let routing_info = Box::new(EncapsulatedRoutingInformation::from_bytes(
+            &encapsulated_routing_info_bytes,
+        )?);
 
         Ok(SphinxHeader {
             shared_secret,
@@ -318,46 +362,59 @@ mod create_and_process_sphinx_packet_header {
             pub_key: node3_pk,
         };
         let route = [node1, node2, node3];
-        let destination = destination_fixture();
+        let route_destination = destination_fixture();
         let initial_secret = StaticSecret::random();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
+        let (sphinx_header, _) =
+            SphinxHeader::new(&initial_secret, &route, &delays, &route_destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
-        let new_header = match sphinx_header.process(&node1_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+        let new_header = match sphinx_header.process(&node1_sk).unwrap().data {
+            ProcessedHeaderData::ForwardHop {
+                updated_header,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[0].to_nanos(), delay.to_nanos());
-                new_header
+                updated_header
             }
             _ => panic!(),
         };
 
-        let new_header2 = match new_header.process(&node2_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+        let new_header2 = match new_header.process(&node2_sk).unwrap().data {
+            ProcessedHeaderData::ForwardHop {
+                updated_header,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[1].to_nanos(), delay.to_nanos());
-                new_header
+                updated_header
             }
             _ => panic!(),
         };
-        match new_header2.process(&node3_sk).unwrap() {
-            ProcessedHeader::FinalHop(final_destination, _, _) => {
-                assert_eq!(destination.address, final_destination);
+        match new_header2.process(&node3_sk).unwrap().data {
+            ProcessedHeaderData::FinalHop {
+                destination,
+                identifier: _,
+            } => {
+                assert_eq!(route_destination.address, destination);
             }
             _ => panic!(),
         };
     }
 
     #[test]
+    #[allow(deprecated)]
     fn it_returns_correct_routing_information_at_each_hop_for_route_of_3_mixnodes_with_legacy_processing(
     ) {
         let node1_sk = PrivateKey::from([
@@ -405,40 +462,51 @@ mod create_and_process_sphinx_packet_header {
         ]);
 
         let route = [node1, node2, node3];
-        let destination = destination_fixture();
+        let route_destination = destination_fixture();
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
         let (sphinx_header, _) =
-            SphinxHeader::new_legacy(&initial_secret, &route, &delays, &destination);
+            SphinxHeader::new_legacy(&initial_secret, &route, &delays, &route_destination);
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
-        let new_header = match sphinx_header.process_legacy(&node1_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+        let new_header = match sphinx_header.process_legacy(&node1_sk).unwrap().data {
+            ProcessedHeaderData::ForwardHop {
+                updated_header,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[0].to_nanos(), delay.to_nanos());
-                new_header
+                updated_header
             }
             _ => panic!(),
         };
 
-        let new_header2 = match new_header.process_legacy(&node2_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, next_hop_address, delay, _) => {
+        let new_header2 = match new_header.process_legacy(&node2_sk).unwrap().data {
+            ProcessedHeaderData::ForwardHop {
+                updated_header,
+                next_hop_address,
+                delay,
+            } => {
                 assert_eq!(
                     NodeAddressBytes::from_bytes([3u8; NODE_ADDRESS_LENGTH]),
                     next_hop_address
                 );
                 assert_eq!(delays[1].to_nanos(), delay.to_nanos());
-                new_header
+                updated_header
             }
             _ => panic!(),
         };
-        match new_header2.process_legacy(&node3_sk).unwrap() {
-            ProcessedHeader::FinalHop(final_destination, _, _) => {
-                assert_eq!(destination.address, final_destination);
+        match new_header2.process_legacy(&node3_sk).unwrap().data {
+            ProcessedHeaderData::FinalHop {
+                destination,
+                identifier: _,
+            } => {
+                assert_eq!(route_destination.address, destination);
             }
             _ => panic!(),
         };
@@ -461,6 +529,9 @@ mod unwrap_routing_information {
     fn it_returns_correct_unwrapped_routing_information() {
         let mut routing_info = [9u8; ENCRYPTED_ROUTING_INFO_SIZE];
         routing_info[0] = FORWARD_HOP;
+        // reserved 0 byte for version
+        routing_info[1] = 0;
+
         let stream_cipher_key = [1u8; crypto::STREAM_CIPHER_KEY_SIZE];
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             &stream_cipher_key,
@@ -485,26 +556,23 @@ mod unwrap_routing_information {
         ]
         .concat();
         let next_hop_encapsulated_routing_info =
-            match enc_routing_info.unwrap(&stream_cipher_key).unwrap() {
-                ParsedRawRoutingInformation::ForwardHop(
+            match enc_routing_info.unwrap(&stream_cipher_key).unwrap().data {
+                ParsedRawRoutingInformationData::ForwardHop {
                     next_hop_address,
-                    _delay,
-                    next_hop_encapsulated_routing_info,
-                ) => {
+                    new_routing_information,
+                    ..
+                } => {
                     assert_eq!(
-                        routing_info[1..1 + NODE_ADDRESS_LENGTH],
+                        routing_info[2..2 + NODE_ADDRESS_LENGTH],
                         next_hop_address.as_bytes()
                     );
                     assert_eq!(
                         routing_info
                             [NODE_ADDRESS_LENGTH..NODE_ADDRESS_LENGTH + HEADER_INTEGRITY_MAC_SIZE]
                             .to_vec(),
-                        next_hop_encapsulated_routing_info
-                            .integrity_mac
-                            .as_bytes()
-                            .to_vec()
+                        new_routing_information.integrity_mac.as_bytes().to_vec()
                     );
-                    next_hop_encapsulated_routing_info
+                    new_routing_information
                 }
                 _ => panic!(),
             };
@@ -550,8 +618,8 @@ mod unwrapping_using_previously_derived_keys {
         let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
         let initial_secret = sphinx_header.shared_secret;
 
-        let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
-            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+        let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap().data {
+            ProcessedHeaderData::ForwardHop { updated_header, .. } => updated_header,
             _ => unreachable!(),
         };
 
@@ -561,8 +629,9 @@ mod unwrapping_using_previously_derived_keys {
         let derived_unwrapped = match sphinx_header
             .process_with_derived_keys(&Some(new_secret), &routing_keys)
             .unwrap()
+            .data
         {
-            ProcessedHeader::ForwardHop(new_header, ..) => new_header,
+            ProcessedHeaderData::ForwardHop { updated_header, .. } => updated_header,
             _ => unreachable!(),
         };
 
@@ -592,18 +661,26 @@ mod unwrapping_using_previously_derived_keys {
         let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
         let initial_secret = sphinx_header.shared_secret;
 
-        let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap() {
-            ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
+        let normally_unwrapped = sphinx_header.clone().process(&node1_sk).unwrap();
+        let normally_unwrapped = match normally_unwrapped.data {
+            ProcessedHeaderData::FinalHop {
+                destination,
+                identifier,
+            } => (destination, identifier, normally_unwrapped.payload_key),
             _ => unreachable!(),
         };
 
         let routing_keys = SphinxHeader::compute_routing_keys(&initial_secret, &node1_sk);
 
-        let derived_unwrapped = match sphinx_header
+        let derived_unwrapped = sphinx_header
             .process_with_derived_keys(&None, &routing_keys)
-            .unwrap()
-        {
-            ProcessedHeader::FinalHop(destination, surb_id, keys) => (destination, surb_id, keys),
+            .unwrap();
+
+        let derived_unwrapped = match derived_unwrapped.data {
+            ProcessedHeaderData::FinalHop {
+                destination,
+                identifier,
+            } => (destination, identifier, derived_unwrapped.payload_key),
             _ => unreachable!(),
         };
 
@@ -620,7 +697,7 @@ mod converting_header_to_bytes {
 
     #[test]
     fn it_is_possible_to_convert_back_and_forth() {
-        let encapsulated_routing_info = encapsulated_routing_information_fixture();
+        let encapsulated_routing_info = Box::new(encapsulated_routing_information_fixture());
         let header = SphinxHeader {
             shared_secret: PublicKey::from(&StaticSecret::random()),
             routing_info: encapsulated_routing_info,

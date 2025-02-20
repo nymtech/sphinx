@@ -29,6 +29,7 @@ mod utils;
 // cleaned-up modules + imports here:
 pub mod error;
 pub mod test_utils;
+mod version;
 
 pub use crate::error::{Error, ErrorKind, Result};
 pub use crate::packet::{builder::SphinxPacketBuilder, ProcessedPacket, SphinxPacket};
