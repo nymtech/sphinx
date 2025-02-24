@@ -41,6 +41,10 @@ of this library
 
 added additional public methods on the `Version`
 
+#### v0.4.0
+
+removed processing and creation of packets with undefined operations
+
 ### Benchmarks
 
 To run benchmarks, use:
