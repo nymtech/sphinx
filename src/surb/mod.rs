@@ -3,6 +3,7 @@ use crate::header::delays::Delay;
 use crate::header::keys::PayloadKey;
 use crate::payload::Payload;
 use crate::route::{Destination, Node, NodeAddressBytes};
+use crate::version::Version;
 use crate::{header, SphinxPacket};
 use crate::{Error, ErrorKind, Result};
 use header::{SphinxHeader, HEADER_SIZE};
@@ -33,6 +34,7 @@ pub struct SURBMaterial {
     surb_route: Vec<Node>,
     surb_delays: Vec<Delay>,
     surb_destination: Destination,
+    version: Version,
 }
 
 impl SURBMaterial {
@@ -41,6 +43,7 @@ impl SURBMaterial {
             surb_route: route,
             surb_delays: delays,
             surb_destination: destination,
+            version: Default::default(),
         }
     }
 
@@ -48,6 +51,12 @@ impl SURBMaterial {
     pub fn construct_SURB(self) -> Result<SURB> {
         let surb_initial_secret = StaticSecret::random();
         SURB::new(surb_initial_secret, self)
+    }
+
+    #[must_use]
+    pub fn with_version(mut self, version: Version) -> Self {
+        self.version = version;
+        self
     }
 }
 
@@ -72,11 +81,13 @@ impl SURB {
             return Err(Error::new(ErrorKind::InvalidSURB, format!("creating SURB for contradictory data: route has len {} while there are {} delays generated", surb_route.len(), surb_delays.len())));
         }
 
-        let (header, payload_keys) = header::SphinxHeader::new(
+        #[allow(deprecated)]
+        let (header, payload_keys) = header::SphinxHeader::new_versioned(
             &surb_initial_secret,
             &surb_route,
             &surb_delays,
             &surb_destination,
+            surb_material.version,
         );
 
         Ok(SURB {

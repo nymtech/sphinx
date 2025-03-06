@@ -41,6 +41,10 @@ of this library
 
 added additional public methods on the `Version`
 
+#### v0.3.2
+
+allow constructing SURBs with legacy headers
+
 ### Benchmarks
 
 To run benchmarks, use:
