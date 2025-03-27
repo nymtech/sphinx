@@ -25,9 +25,9 @@ use subtle::{Choice, ConstantTimeEq};
 pub struct HeaderIntegrityMac(GenericArray<u8, HeaderIntegrityMacSize>);
 
 impl HeaderIntegrityMac {
-    pub(crate) fn compute(key: HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
+    pub(crate) fn compute(key: &HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
         let routing_info_mac =
-            crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(&key, header_data);
+            crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(key, header_data);
 
         // NOTE: BE EXTREMELY CAREFUL HOW YOU MANAGE THOSE BYTES
         // YOU CAN'T TREAT THEM AS NORMAL ONES
@@ -47,7 +47,7 @@ impl HeaderIntegrityMac {
 
     pub fn verify(
         &self,
-        integrity_mac_key: HeaderIntegrityMacKey,
+        integrity_mac_key: &HeaderIntegrityMacKey,
         enc_routing_info: &[u8],
     ) -> bool {
         let recomputed_integrity_mac = Self::compute(integrity_mac_key, enc_routing_info);
@@ -83,17 +83,17 @@ mod computing_integrity_mac {
     fn it_is_possible_to_verify_correct_mac() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
         let data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
-        let integrity_mac = HeaderIntegrityMac::compute(key, &data);
+        let integrity_mac = HeaderIntegrityMac::compute(&key, &data);
 
-        assert!(integrity_mac.verify(key, &data));
+        assert!(integrity_mac.verify(&key, &data));
     }
 
     #[test]
     fn it_lets_detecting_flipped_data_bits() {
         let key = [2u8; INTEGRITY_MAC_KEY_SIZE];
         let mut data = vec![3u8; ENCRYPTED_ROUTING_INFO_SIZE];
-        let integrity_mac = HeaderIntegrityMac::compute(key, &data);
+        let integrity_mac = HeaderIntegrityMac::compute(&key, &data);
         data[10] = !data[10];
-        assert!(!integrity_mac.verify(key, &data));
+        assert!(!integrity_mac.verify(&key, &data));
     }
 }

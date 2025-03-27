@@ -41,9 +41,20 @@ of this library
 
 added additional public methods on the `Version`
 
+#### v0.3.2
+
+added version method to allow constructing SURBs with legacy headers
+
 #### v0.4.0
 
 removed processing and creation of packets with undefined operations
+
+#### v0.5.0
+
+- temporarily restored processing and creation of packets with undefined operations as additional breaking changes had
+  to be added to v0.3.2 release
+- removed `RoutingKeys` in favour of `ExpandedSharedSecret` and added `ReplyTag`
+- type adjustments
 
 ### Benchmarks
 

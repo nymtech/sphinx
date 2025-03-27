@@ -17,8 +17,15 @@ extern crate sphinx_packet;
 use sphinx_packet::header::delays;
 use sphinx_packet::route::{Destination, Node};
 use sphinx_packet::SphinxPacket;
+use x25519_dalek::{PublicKey, StaticSecret};
 
 // const PAYLOAD_SIZE: usize = 1024;
+
+fn keygen() -> (StaticSecret, PublicKey) {
+    let private_key = StaticSecret::random();
+    let public_key = PublicKey::from(&private_key);
+    (private_key, public_key)
+}
 
 #[cfg(test)]
 mod create_and_process_sphinx_packet {
@@ -29,7 +36,6 @@ mod create_and_process_sphinx_packet {
     };
     use sphinx_packet::packet::ProcessedPacketData;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx_packet::test_utils::fixtures::keygen;
     use std::time::Duration;
 
     #[test]
@@ -114,7 +120,6 @@ mod converting_sphinx_packet_to_and_from_bytes {
     };
     use sphinx_packet::packet::ProcessedPacketData;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx_packet::test_utils::fixtures::keygen;
     use std::time::Duration;
 
     #[test]
@@ -232,13 +237,13 @@ mod converting_sphinx_packet_to_and_from_bytes {
 #[cfg(test)]
 mod create_and_process_surb {
     use super::*;
+    use sphinx_packet::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH};
     use sphinx_packet::packet::ProcessedPacketData;
-    use sphinx_packet::route::NodeAddressBytes;
+    use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx_packet::surb::{SURBMaterial, SURB};
     use sphinx_packet::{
         constants::{NODE_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
         packet::builder::DEFAULT_PAYLOAD_SIZE,
-        test_utils::fixtures::{destination_fixture, keygen},
     };
     use std::time::Duration;
     use x25519_dalek::StaticSecret;
@@ -262,7 +267,10 @@ mod create_and_process_surb {
         };
 
         let surb_route = vec![node1, node2, node3];
-        let surb_destination = destination_fixture();
+        let surb_destination = Destination {
+            address: DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
+            identifier: [4u8; IDENTIFIER_LENGTH],
+        };
         let surb_initial_secret = StaticSecret::random();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));

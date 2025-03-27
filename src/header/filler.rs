@@ -14,25 +14,23 @@
 
 use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INFO_SIZE};
 use crate::crypto;
-use crate::header::keys::RoutingKeys;
+use crate::header::shared_secret::ExpandedSharedSecret;
 use crate::{constants, utils};
 
 pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
 #[derive(Debug, PartialEq, Eq)]
-pub struct Filler {
-    value: Vec<u8>,
-}
+pub struct Filler(Vec<u8>);
 
 impl Filler {
-    pub fn new(routing_keys: &[RoutingKeys]) -> Self {
-        assert!(routing_keys.len() <= MAX_PATH_LENGTH);
-        let filler_value = routing_keys
+    pub(crate) fn new(expanded_shared_secrets: &[ExpandedSharedSecret]) -> Self {
+        assert!(expanded_shared_secrets.len() <= MAX_PATH_LENGTH);
+        let filler_value = expanded_shared_secrets
             .iter()
-            .map(|node_routing_keys| node_routing_keys.stream_cipher_key) // we only want the cipher key
+            .map(|ess| ess.stream_cipher_key()) // we only want the cipher key
             .map(|cipher_key| {
                 crypto::generate_pseudorandom_bytes(
-                    &cipher_key,
+                    cipher_key,
                     &crypto::STREAM_CIPHER_INIT_VECTOR,
                     constants::STREAM_CIPHER_OUTPUT_LENGTH,
                 )
@@ -45,9 +43,7 @@ impl Filler {
                     Self::filler_step(filler_string_accumulator, i, pseudorandom_bytes)
                 },
             );
-        Self {
-            value: filler_value,
-        }
+        Self(filler_value)
     }
 
     fn filler_step(
@@ -75,41 +71,44 @@ impl Filler {
 
         filler_string_accumulator
     }
+}
 
-    pub fn get_value(self) -> Vec<u8> {
-        self.value
+impl From<Vec<u8>> for Filler {
+    fn from(raw_bytes: Vec<u8>) -> Self {
+        Self(raw_bytes)
     }
+}
 
-    pub(crate) fn from_raw(raw_value: Vec<u8>) -> Self {
-        Filler { value: raw_value }
+impl From<Filler> for Vec<u8> {
+    fn from(filler: Filler) -> Self {
+        filler.0
     }
 }
 
 #[cfg(test)]
 mod test_creating_pseudorandom_bytes {
-    use crate::header::keys;
-
     use super::*;
+    use crate::header::shared_secret::ExpandSecret;
     use x25519_dalek::{PublicKey, StaticSecret};
 
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
-        let routing_keys: Vec<RoutingKeys> = vec![];
-        let filler_string = Filler::new(&routing_keys);
+        let expanded_shared_secret: Vec<_> = vec![];
+        let filler_string = Filler::new(&expanded_shared_secret);
 
-        assert_eq!(0, filler_string.value.len());
+        assert_eq!(0, filler_string.0.len());
     }
 
     #[test]
     fn with_1_key_it_generates_filler_of_length_1_times_3_times_security_parameter() {
         let shared_keys = [PublicKey::from(&StaticSecret::random())];
-        let routing_keys: Vec<_> = shared_keys
+        let expanded_shared_secret: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key))
+            .map(|&key| key.expand_shared_secret())
             .collect();
-        let filler_string = Filler::new(&routing_keys);
+        let filler_string = Filler::new(&expanded_shared_secret);
 
-        assert_eq!(FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
+        assert_eq!(FILLER_STEP_SIZE_INCREASE, filler_string.0.len());
     }
 
     #[test]
@@ -119,12 +118,12 @@ mod test_creating_pseudorandom_bytes {
             PublicKey::from(&StaticSecret::random()),
             PublicKey::from(&StaticSecret::random()),
         ];
-        let routing_keys: Vec<_> = shared_keys
+        let expanded_shared_secret: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key))
+            .map(|&key| key.expand_shared_secret())
             .collect();
-        let filler_string = Filler::new(&routing_keys);
-        assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.value.len());
+        let filler_string = Filler::new(&expanded_shared_secret);
+        assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.0.len());
     }
 
     #[test]
@@ -133,43 +132,43 @@ mod test_creating_pseudorandom_bytes {
         let shared_keys: Vec<_> = std::iter::repeat_n((), constants::MAX_PATH_LENGTH + 1)
             .map(|_| PublicKey::from(&StaticSecret::random()))
             .collect();
-        let routing_keys: Vec<_> = shared_keys
+        let expanded_shared_secrets: Vec<_> = shared_keys
             .iter()
-            .map(|&key| keys::RoutingKeys::derive(key))
+            .map(|&key| key.expand_shared_secret())
             .collect();
-        Filler::new(&routing_keys);
+        Filler::new(&expanded_shared_secrets);
     }
 }
 
 #[cfg(test)]
 mod test_new_filler_bytes {
     use super::*;
-    use crate::test_utils::fixtures::routing_keys_fixture;
+    use crate::test_utils::fixtures::expanded_shared_secret_fixture;
 
     #[test]
-    fn it_retusn_filler_bytes_of_correct_length_for_3_routing_keys() {
-        let routing_key_1 = routing_keys_fixture();
-        let routing_key_2 = routing_keys_fixture();
-        let routing_key_3 = routing_keys_fixture();
-        let routing_keys = [routing_key_1, routing_key_2, routing_key_3];
-        let filler = Filler::new(&routing_keys);
+    fn it_retusn_filler_bytes_of_correct_length_for_3_expanded_shared_secret() {
+        let routing_key_1 = expanded_shared_secret_fixture();
+        let routing_key_2 = expanded_shared_secret_fixture();
+        let routing_key_3 = expanded_shared_secret_fixture();
+        let expanded_shared_secret = [routing_key_1, routing_key_2, routing_key_3];
+        let filler = Filler::new(&expanded_shared_secret);
         assert_eq!(
-            FILLER_STEP_SIZE_INCREASE * (routing_keys.len()),
-            filler.get_value().len()
+            FILLER_STEP_SIZE_INCREASE * (expanded_shared_secret.len()),
+            filler.0.len()
         )
     }
 
     #[test]
-    fn it_retusn_filler_bytes_of_correct_length_for_4_routing_keys() {
-        let routing_key_1 = routing_keys_fixture();
-        let routing_key_2 = routing_keys_fixture();
-        let routing_key_3 = routing_keys_fixture();
-        let routing_key_4 = routing_keys_fixture();
-        let routing_keys = [routing_key_1, routing_key_2, routing_key_3, routing_key_4];
-        let filler = Filler::new(&routing_keys);
+    fn it_retusn_filler_bytes_of_correct_length_for_4_expanded_shared_secret() {
+        let routing_key_1 = expanded_shared_secret_fixture();
+        let routing_key_2 = expanded_shared_secret_fixture();
+        let routing_key_3 = expanded_shared_secret_fixture();
+        let routing_key_4 = expanded_shared_secret_fixture();
+        let expanded_shared_secret = [routing_key_1, routing_key_2, routing_key_3, routing_key_4];
+        let filler = Filler::new(&expanded_shared_secret);
         assert_eq!(
-            FILLER_STEP_SIZE_INCREASE * (routing_keys.len()),
-            filler.get_value().len()
+            FILLER_STEP_SIZE_INCREASE * (expanded_shared_secret.len()),
+            filler.0.len()
         )
     }
 }
