@@ -12,124 +12,85 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::constants::{
-    BLINDING_FACTOR_SIZE, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE,
-    ROUTING_KEYS_LENGTH,
-};
-use crate::crypto;
+use crate::constants::{INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE};
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
+use crate::header::shared_secret::{expand_shared_secret, ExpandedSharedSecret};
 use crate::route::Node;
-use hkdf::Hkdf;
-use sha2::Sha256;
-use std::convert::TryInto;
-use std::fmt;
+use curve25519_dalek::Scalar;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
-// TODO: perhaps change PayloadKey to a Vec considering it's almost 200 bytes long?
-// we will lose length assertions but won't need to copy all that data every single function call
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
-
-#[derive(Clone)]
-pub struct RoutingKeys {
-    pub stream_cipher_key: StreamCipherKey,
-    pub header_integrity_hmac_key: HeaderIntegrityMacKey,
-    pub payload_key: PayloadKey,
-    pub blinding_factor: StaticSecret,
-}
-
-impl RoutingKeys {
-    // or should this be renamed to 'new'?
-    // Given that everything here except RoutingKeys lives in the `crypto` module, I think
-    // that this one could potentially move most of its functionality there quite profitably.
-    pub fn derive(shared_key: PublicKey) -> Self {
-        let hkdf = Hkdf::<Sha256>::new(None, shared_key.as_bytes());
-
-        let mut i = 0;
-        let mut output = [0u8; ROUTING_KEYS_LENGTH];
-        // SAFETY: the length of the provided okm is within the allowed range
-        #[allow(clippy::unwrap_used)]
-        hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
-
-        let mut stream_cipher_key: [u8; crypto::STREAM_CIPHER_KEY_SIZE] = Default::default();
-        stream_cipher_key.copy_from_slice(&output[i..i + crypto::STREAM_CIPHER_KEY_SIZE]);
-        i += crypto::STREAM_CIPHER_KEY_SIZE;
-
-        let mut header_integrity_hmac_key: [u8; INTEGRITY_MAC_KEY_SIZE] = Default::default();
-        header_integrity_hmac_key.copy_from_slice(&output[i..i + INTEGRITY_MAC_KEY_SIZE]);
-        i += INTEGRITY_MAC_KEY_SIZE;
-
-        let mut payload_key: [u8; PAYLOAD_KEY_SIZE] = [0u8; PAYLOAD_KEY_SIZE];
-        payload_key.copy_from_slice(&output[i..i + PAYLOAD_KEY_SIZE]);
-        i += PAYLOAD_KEY_SIZE;
-
-        //Safety, converting a slice of size BLINDING_FACTOR_SIZE into an array of type [u8; BLINDING_FACTOR_SIZE], hence unwrap is fine
-        #[allow(clippy::unwrap_used)]
-        let blinding_factor_bytes: [u8; BLINDING_FACTOR_SIZE] =
-            output[i..i + BLINDING_FACTOR_SIZE].try_into().unwrap();
-        let blinding_factor = StaticSecret::from(blinding_factor_bytes);
-
-        Self {
-            stream_cipher_key,
-            header_integrity_hmac_key,
-            payload_key,
-            blinding_factor,
-        }
-    }
-}
-
-impl fmt::Debug for RoutingKeys {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        f.debug_struct("RoutingKeys")
-            .field("stream_cipher_key", &self.stream_cipher_key)
-            .field("header_integrity_hmac_key", &self.header_integrity_hmac_key)
-            .field("payload_key", &self.payload_key)
-            .field("blinding_factor", self.blinding_factor.as_bytes())
-            .finish()
-    }
-}
-
-impl PartialEq for RoutingKeys {
-    fn eq(&self, other: &RoutingKeys) -> bool {
-        self.stream_cipher_key == other.stream_cipher_key
-            && self.header_integrity_hmac_key == other.header_integrity_hmac_key
-            && self.payload_key.to_vec() == other.payload_key.to_vec()
-    }
-}
 
 pub struct KeyMaterial {
     pub initial_shared_secret: PublicKey,
-    // why this is here?
-    pub routing_keys: Vec<RoutingKeys>,
+    pub expanded_shared_secrets: Vec<ExpandedSharedSecret>,
 }
 
 impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
     pub fn derive(route: &[Node], initial_secret: &StaticSecret) -> Self {
         let initial_shared_secret = PublicKey::from(initial_secret);
-        let mut routing_keys = Vec::with_capacity(route.len());
+        let mut expanded_shared_secrets = Vec::with_capacity(route.len());
 
         let mut blinding_factors = vec![initial_secret.clone()];
         for (i, node) in route.iter().enumerate() {
             let shared_key = blinding_factors
                 .iter()
                 .fold(node.pub_key, |acc, blinding_factor| {
+                    // a nasty hack to convert `SharedSecret` into `PublicKey`,
+                    // so that we could call `diffie_hellman` repeatedly
                     PublicKey::from(blinding_factor.diffie_hellman(&acc).to_bytes())
                 });
-            let node_routing_keys = RoutingKeys::derive(shared_key);
+            let expanded_shared_secret = expand_shared_secret(shared_key.as_bytes());
 
             // it's not the last iteration
             if i != route.len() + 1 {
-                blinding_factors.push(node_routing_keys.blinding_factor.clone());
+                blinding_factors.push(expanded_shared_secret.blinding_factor());
             }
 
-            routing_keys.push(node_routing_keys);
+            expanded_shared_secrets.push(expanded_shared_secret);
         }
 
         Self {
             initial_shared_secret,
-            routing_keys,
+            expanded_shared_secrets,
+        }
+    }
+
+    #[deprecated]
+    pub fn derive_legacy(route: &[Node], initial_secret: &StaticSecret) -> Self {
+        let initial_secret_scalar = Scalar::from_bytes_mod_order(initial_secret.to_bytes());
+
+        let initial_shared_secret =
+            curve25519_dalek::MontgomeryPoint::mul_base(&initial_secret_scalar);
+
+        let mut expanded_shared_secrets = Vec::with_capacity(route.len());
+
+        let mut accumulator = initial_secret_scalar;
+        for (i, node) in route.iter().enumerate() {
+            // pub^{a * b * ...}
+            let pk_mt = curve25519_dalek::MontgomeryPoint(node.pub_key.to_bytes());
+            let shared_key = pk_mt * accumulator;
+
+            let expanded_shared_secret = expand_shared_secret(shared_key.as_bytes());
+
+            // it's not the last iteration
+            if i != route.len() + 1 {
+                // convert the blinding factor to a raw scalar and perform multiplication without
+                // any reduction (UNSAFE since we're not in ristretto)
+                let blinding_factor_scalar =
+                    &Scalar::from_bytes_mod_order(*expanded_shared_secret.blinding_factor_bytes());
+
+                accumulator *= blinding_factor_scalar;
+            }
+
+            expanded_shared_secrets.push(expanded_shared_secret);
+        }
+        Self {
+            initial_shared_secret: PublicKey::from(initial_shared_secret.0),
+            expanded_shared_secrets,
         }
     }
 }
@@ -148,7 +109,7 @@ mod deriving_key_material {
             let empty_route: Vec<Node> = vec![];
             let initial_secret = StaticSecret::random();
             let key_material = KeyMaterial::derive(&empty_route, &initial_secret);
-            assert_eq!(0, key_material.routing_keys.len());
+            assert_eq!(0, key_material.expanded_shared_secrets.len());
             assert_eq!(
                 PublicKey::from(&initial_secret).as_bytes(),
                 key_material.initial_shared_secret.as_bytes()
@@ -171,7 +132,7 @@ mod deriving_key_material {
         #[test]
         fn it_returns_number_of_shared_keys_equal_to_length_of_the_route() {
             let (_, _, key_material) = setup();
-            assert_eq!(3, key_material.routing_keys.len());
+            assert_eq!(3, key_material.expanded_shared_secrets.len());
         }
 
         #[test]
@@ -184,7 +145,7 @@ mod deriving_key_material {
         }
 
         #[test]
-        fn it_generates_correct_routing_keys() {
+        fn it_generates_correct_expanded_shared_secret() {
             let (route, initial_secret, key_material) = setup();
             // The accumulator is the key to our blinding factors working.
             // If the accumulator value isn't incremented correctly, we risk passing an
@@ -200,37 +161,14 @@ mod deriving_key_material {
                             PublicKey::from(blinding_factor.diffie_hellman(&acc).to_bytes())
                         });
 
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
+                let expected_expanded_ss = expand_shared_secret(expected_shared_key.as_bytes());
 
-                expected_accumulator.push(expected_routing_keys.blinding_factor);
-                let expected_routing_keys = RoutingKeys::derive(expected_shared_key);
-                assert_eq!(expected_routing_keys, key_material.routing_keys[i])
+                expected_accumulator.push(expected_expanded_ss.blinding_factor());
+                assert_eq!(
+                    expected_expanded_ss,
+                    key_material.expanded_shared_secrets[i]
+                )
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod key_derivation_function {
-    use super::*;
-
-    #[test]
-    fn it_expands_the_seed_key_to_expected_length() {
-        let initial_secret = StaticSecret::random();
-        let shared_key = PublicKey::from(&initial_secret);
-        let routing_keys = RoutingKeys::derive(shared_key);
-        assert_eq!(
-            crypto::STREAM_CIPHER_KEY_SIZE,
-            routing_keys.stream_cipher_key.len()
-        );
-    }
-
-    #[test]
-    fn it_returns_the_same_output_for_two_equal_inputs() {
-        let initial_secret = StaticSecret::random();
-        let shared_key = PublicKey::from(&initial_secret);
-        let routing_keys1 = RoutingKeys::derive(shared_key);
-        let routing_keys2 = RoutingKeys::derive(shared_key);
-        assert_eq!(routing_keys1, routing_keys2);
     }
 }

@@ -16,20 +16,20 @@ use crate::{
     constants::NODE_ADDRESS_LENGTH,
     route::{Node, NodeAddressBytes},
 };
+use rand::SeedableRng;
+use rand_chacha::ChaCha20Rng;
+use zeroize::{Zeroize, ZeroizeOnDrop};
 
 pub mod fixtures {
-
-    use x25519_dalek::{PublicKey, StaticSecret};
-
+    use crate::header::shared_secret::{expand_shared_secret, ExpandedSharedSecret};
+    use crate::test_utils::test_rng;
     use crate::{
         constants::{
-            BLINDING_FACTOR_SIZE, DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE,
-            IDENTIFIER_LENGTH, INTEGRITY_MAC_KEY_SIZE, NODE_ADDRESS_LENGTH, PAYLOAD_KEY_SIZE,
+            DESTINATION_ADDRESS_LENGTH, HEADER_INTEGRITY_MAC_SIZE, IDENTIFIER_LENGTH,
+            NODE_ADDRESS_LENGTH,
         },
-        crypto,
         header::{
             filler::{Filler, FILLER_STEP_SIZE_INCREASE},
-            keys::RoutingKeys,
             mac::HeaderIntegrityMac,
             routing::{
                 nodes::EncryptedRoutingInformation, EncapsulatedRoutingInformation,
@@ -38,6 +38,22 @@ pub mod fixtures {
         },
         route::{Destination, DestinationAddressBytes, NodeAddressBytes, SURBIdentifier},
     };
+    use rand_chacha::ChaCha20Rng;
+    use x25519_dalek::{PublicKey, SharedSecret, StaticSecret};
+
+    pub(crate) fn mock_shared_secret(mut rng: &mut ChaCha20Rng) -> SharedSecret {
+        let sk1 = StaticSecret::random_from_rng(&mut rng);
+        let pk1 = PublicKey::from(&sk1);
+
+        let sk2 = StaticSecret::random_from_rng(&mut rng);
+        sk2.diffie_hellman(&pk1)
+    }
+
+    pub fn expanded_shared_secret_fixture() -> ExpandedSharedSecret {
+        let mut rng = test_rng();
+        let ss = mock_shared_secret(&mut rng);
+        expand_shared_secret(ss.as_bytes())
+    }
 
     pub fn destination_address_fixture() -> DestinationAddressBytes {
         DestinationAddressBytes::from_bytes([1u8; DESTINATION_ADDRESS_LENGTH])
@@ -58,17 +74,8 @@ pub mod fixtures {
         }
     }
 
-    pub fn routing_keys_fixture() -> RoutingKeys {
-        RoutingKeys {
-            stream_cipher_key: [1u8; crypto::STREAM_CIPHER_KEY_SIZE],
-            header_integrity_hmac_key: [2u8; INTEGRITY_MAC_KEY_SIZE],
-            payload_key: [3u8; PAYLOAD_KEY_SIZE],
-            blinding_factor: [4u8; BLINDING_FACTOR_SIZE].into(),
-        }
-    }
-
     pub fn filler_fixture(i: usize) -> Filler {
-        Filler::from_raw(vec![9u8; FILLER_STEP_SIZE_INCREASE * i])
+        Filler::from(vec![9u8; FILLER_STEP_SIZE_INCREASE * i])
     }
 
     pub fn encrypted_routing_information_fixture() -> EncryptedRoutingInformation {
@@ -100,3 +107,17 @@ pub fn random_node() -> Node {
         pub_key: (&random_private_key).into(),
     }
 }
+
+// make sure output is deterministic
+pub(super) fn test_rng() -> ChaCha20Rng {
+    let dummy_seed = [42u8; 32];
+    seeded_rng(dummy_seed)
+}
+
+pub(super) fn seeded_rng(seed: [u8; 32]) -> ChaCha20Rng {
+    ChaCha20Rng::from_seed(seed)
+}
+
+pub(crate) fn assert_zeroize_on_drop<T: ZeroizeOnDrop>() {}
+
+pub(crate) fn assert_zeroize<T: Zeroize>() {}

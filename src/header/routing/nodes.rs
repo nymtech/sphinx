@@ -19,12 +19,13 @@ use crate::constants::{
 use crate::crypto;
 use crate::crypto::STREAM_CIPHER_INIT_VECTOR;
 use crate::header::delays::Delay;
-use crate::header::keys::{HeaderIntegrityMacKey, RoutingKeys, StreamCipherKey};
+use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::mac::HeaderIntegrityMac;
 use crate::header::routing::{
     EncapsulatedRoutingInformation, RoutingFlag, ENCRYPTED_ROUTING_INFO_SIZE, FINAL_HOP,
     FORWARD_HOP, TRUNCATED_ROUTING_INFO_SIZE,
 };
+use crate::header::shared_secret::ExpandedSharedSecret;
 use crate::header::{ProcessedHeader, ProcessedHeaderData, SphinxHeader};
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
@@ -78,12 +79,12 @@ impl RoutingInformation {
             .collect()
     }
 
-    pub(super) fn encrypt(self, key: StreamCipherKey) -> EncryptedRoutingInformation {
+    pub(super) fn encrypt(self, key: &StreamCipherKey) -> EncryptedRoutingInformation {
         let routing_info_components = self.concatenate_components();
         assert_eq!(ENCRYPTED_ROUTING_INFO_SIZE, routing_info_components.len());
 
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-            &key,
+            key,
             &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
@@ -136,7 +137,7 @@ impl EncryptedRoutingInformation {
 
     pub(super) fn encapsulate_with_mac(
         self,
-        key: HeaderIntegrityMacKey,
+        key: &HeaderIntegrityMacKey,
     ) -> EncapsulatedRoutingInformation {
         let integrity_mac = HeaderIntegrityMac::compute(key, &self.value);
         EncapsulatedRoutingInformation {
@@ -212,7 +213,7 @@ impl ParsedRawRoutingInformation {
     pub(crate) fn into_processed_header(
         self,
         shared_secret: PublicKey,
-        routing_keys: RoutingKeys,
+        expanded_shared_secret: &ExpandedSharedSecret,
     ) -> ProcessedHeader {
         match self.data {
             ParsedRawRoutingInformationData::ForwardHop {
@@ -221,13 +222,10 @@ impl ParsedRawRoutingInformation {
                 new_routing_information,
             } => {
                 // blind the shared_secret in the header
-                let new_shared_secret = SphinxHeader::blind_the_shared_secret(
-                    shared_secret,
-                    routing_keys.blinding_factor,
-                );
+                let new_shared_secret = expanded_shared_secret.blind_shared_secret(shared_secret);
 
                 ProcessedHeader {
-                    payload_key: routing_keys.payload_key,
+                    payload_key: *expanded_shared_secret.payload_key(),
                     version: self.version,
                     data: ProcessedHeaderData::ForwardHop {
                         updated_header: SphinxHeader {
@@ -243,7 +241,51 @@ impl ParsedRawRoutingInformation {
                 destination,
                 identifier,
             } => ProcessedHeader {
-                payload_key: routing_keys.payload_key,
+                payload_key: *expanded_shared_secret.payload_key(),
+                version: self.version,
+                data: ProcessedHeaderData::FinalHop {
+                    destination,
+                    identifier,
+                },
+            },
+        }
+    }
+
+    #[deprecated]
+    #[allow(deprecated)]
+    pub(crate) fn legacy_into_processed_header(
+        self,
+        shared_secret: PublicKey,
+        expanded_shared_secret: &ExpandedSharedSecret,
+    ) -> ProcessedHeader {
+        match self.data {
+            ParsedRawRoutingInformationData::ForwardHop {
+                next_hop_address,
+                delay,
+                new_routing_information,
+            } => {
+                // blind the shared_secret in the header
+                let new_shared_secret =
+                    expanded_shared_secret.legacy_blind_share_secret(shared_secret);
+
+                ProcessedHeader {
+                    payload_key: *expanded_shared_secret.payload_key(),
+                    version: self.version,
+                    data: ProcessedHeaderData::ForwardHop {
+                        updated_header: SphinxHeader {
+                            shared_secret: new_shared_secret,
+                            routing_info: new_routing_information,
+                        },
+                        next_hop_address,
+                        delay,
+                    },
+                }
+            }
+            ParsedRawRoutingInformationData::FinalHop {
+                destination,
+                identifier,
+            } => ProcessedHeader {
+                payload_key: *expanded_shared_secret.payload_key(),
                 version: self.version,
                 data: ProcessedHeaderData::FinalHop {
                     destination,
@@ -345,11 +387,10 @@ type TruncatedRoutingInformation = [u8; TRUNCATED_ROUTING_INFO_SIZE];
 mod preparing_header_layer {
     use super::*;
     use crate::constants::HeaderIntegrityHmacAlgorithm;
+    use crate::test_utils::fixtures::expanded_shared_secret_fixture;
     use crate::{
         constants::HEADER_INTEGRITY_MAC_SIZE,
-        test_utils::fixtures::{
-            encapsulated_routing_information_fixture, node_address_fixture, routing_keys_fixture,
-        },
+        test_utils::fixtures::{encapsulated_routing_information_fixture, node_address_fixture},
     };
 
     #[test]
@@ -357,7 +398,7 @@ mod preparing_header_layer {
     {
         let node_address = node_address_fixture();
         let delay = Delay::new_from_nanos(10);
-        let previous_node_routing_keys = routing_keys_fixture();
+        let previous_node_routing_keys = expanded_shared_secret_fixture();
         let inner_layer_routing = encapsulated_routing_information_fixture();
 
         let version = Version::default();
@@ -380,7 +421,7 @@ mod preparing_header_layer {
         .concat();
 
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
-            &previous_node_routing_keys.stream_cipher_key,
+            previous_node_routing_keys.stream_cipher_key(),
             &STREAM_CIPHER_INIT_VECTOR,
             STREAM_CIPHER_OUTPUT_LENGTH,
         );
@@ -391,7 +432,7 @@ mod preparing_header_layer {
         );
 
         let expected_routing_mac = crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(
-            &previous_node_routing_keys.header_integrity_hmac_key,
+            previous_node_routing_keys.header_integrity_hmac_key(),
             &expected_encrypted_routing_info_vec,
         );
         let mut expected_routing_mac = expected_routing_mac.into_bytes().to_vec();
@@ -399,8 +440,8 @@ mod preparing_header_layer {
 
         let next_layer_routing =
             RoutingInformation::new(node_address, delay, inner_layer_routing, Version::default())
-                .encrypt(previous_node_routing_keys.stream_cipher_key)
-                .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key);
+                .encrypt(previous_node_routing_keys.stream_cipher_key())
+                .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key());
 
         assert_eq!(
             expected_encrypted_routing_info_vec,
@@ -450,7 +491,7 @@ mod encrypting_routing_information {
             next_routing_information: next_routing,
         };
 
-        let encrypted_data = routing_information.encrypt(key);
+        let encrypted_data = routing_information.encrypt(&key);
         let decryption_key_source = crypto::generate_pseudorandom_bytes(
             &key,
             &STREAM_CIPHER_INIT_VECTOR,

@@ -1,4 +1,4 @@
-use crate::header::keys::RoutingKeys;
+use crate::header::shared_secret::ExpandedSharedSecret;
 use crate::version::Version;
 use crate::{
     header::{self, delays::Delay, HEADER_SIZE},
@@ -67,21 +67,16 @@ impl SphinxPacket {
         HEADER_SIZE + self.payload.len()
     }
 
-    /// Processes the header with the provided derived keys.
-    /// It could be useful in the situation where sender is re-using initial secret
-    /// and we could cache processing results.
-    ///
-    /// However, unless you know exactly what you are doing, you should NEVER use this method!
-    /// Prefer normal [process] instead.
-    #[deprecated]
-    pub fn process_with_derived_keys(
+    /// Processes the packet with the provided expanded secret.
+    /// It could be useful in the situation where caller has already derived the value,
+    /// because, for example, he had to obtain the reply tag.
+    pub fn process_with_expanded_secret(
         self,
-        new_blinded_secret: &Option<PublicKey>,
-        routing_keys: &RoutingKeys,
+        expanded_shared_secret: &ExpandedSharedSecret,
     ) -> Result<ProcessedPacket> {
         let unwrapped_header = self
             .header
-            .process_with_derived_keys(new_blinded_secret, routing_keys)?;
+            .process_with_expanded_secret(expanded_shared_secret)?;
         let unwrapped_payload = self.payload.unwrap(unwrapped_header.payload_key())?;
 
         Ok(unwrapped_header.attach_payload(unwrapped_payload))

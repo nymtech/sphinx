@@ -28,6 +28,8 @@ mod utils;
 
 // cleaned-up modules + imports here:
 pub mod error;
+
+#[cfg(test)]
 pub mod test_utils;
 pub mod version;
 
