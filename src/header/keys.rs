@@ -31,24 +31,24 @@ impl KeyMaterial {
     // derive shared keys, group elements, blinding factors
     pub fn derive(route: &[Node], initial_secret: &StaticSecret) -> Self {
         let initial_shared_secret = PublicKey::from(initial_secret);
-        let mut expanded_shared_secrets = Vec::with_capacity(route.len());
 
-        let mut blinding_factors = vec![initial_secret.clone()];
+        let mut expanded_shared_secrets = Vec::new();
+        let mut blinding_factors = Vec::new();
+
         for (i, node) in route.iter().enumerate() {
-            let shared_key = blinding_factors
-                .iter()
-                .fold(node.pub_key, |acc, blinding_factor| {
-                    // a nasty hack to convert `SharedSecret` into `PublicKey`,
-                    // so that we could call `diffie_hellman` repeatedly
-                    PublicKey::from(blinding_factor.diffie_hellman(&acc).to_bytes())
-                });
-            let expanded_shared_secret = expand_shared_secret(shared_key.as_bytes());
+            let mut acc = node.pub_key;
 
-            // it's not the last iteration
-            if i != route.len() + 1 {
-                blinding_factors.push(expanded_shared_secret.blinding_factor());
+            // avoid having to clone the initial secret by just chaining iterators
+            for blinding_factor in std::iter::once(initial_secret).chain(&blinding_factors) {
+                let shared_secret = blinding_factor.diffie_hellman(&acc);
+                acc = PublicKey::from(shared_secret.to_bytes());
             }
 
+            let expanded_shared_secret = expand_shared_secret(acc.as_bytes());
+
+            if i != route.len() - 1 {
+                blinding_factors.push(expanded_shared_secret.blinding_factor());
+            }
             expanded_shared_secrets.push(expanded_shared_secret);
         }
 
