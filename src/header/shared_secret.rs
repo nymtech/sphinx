@@ -13,11 +13,14 @@
 // limitations under the License.
 
 use crate::constants::{
-    BLINDING_FACTOR_SIZE, EXPANDED_SHARED_SECRET_LENGTH, HKDF_INPUT_SEED, INTEGRITY_MAC_KEY_SIZE,
-    PAYLOAD_KEY_SIZE, REPLAY_TAG_SIZE,
+    BLINDING_FACTOR_SIZE, EXPANDED_SHARED_SECRET_HKDF_INFO, EXPANDED_SHARED_SECRET_HKDF_SALT,
+    EXPANDED_SHARED_SECRET_LENGTH, INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SEED_SIZE, PAYLOAD_KEY_SIZE,
+    REPLAY_TAG_SIZE,
 };
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
+use crate::header::keys::{HeaderIntegrityMacKey, StreamCipherKey};
 use crate::header::SphinxHeader;
+use crate::payload::key::PayloadKey;
 use arrayref::array_ref;
 use hkdf::Hkdf;
 use sha2::Sha256;
@@ -54,22 +57,31 @@ impl ExpandedSharedSecret {
     // replay tag has not been used before so it **has to** be created last
 
     /// Output of the hρ random oracle
-    pub(crate) fn stream_cipher_key(&self) -> &[u8; STREAM_CIPHER_KEY_SIZE] {
+    pub(crate) fn stream_cipher_key(&self) -> &StreamCipherKey {
         array_ref!(&self.0, 0, STREAM_CIPHER_KEY_SIZE)
     }
 
     /// Output of the hμ random oracle
-    pub(crate) fn header_integrity_hmac_key(&self) -> &[u8; INTEGRITY_MAC_KEY_SIZE] {
+    pub(crate) fn header_integrity_hmac_key(&self) -> &HeaderIntegrityMacKey {
         array_ref!(&self.0, STREAM_CIPHER_KEY_SIZE, INTEGRITY_MAC_KEY_SIZE)
     }
 
-    /// Output of the hπ random oracle
+    /// Legacy output of the hπ random oracle
     // NOTE: currently we expand it to full PRP key
-    pub(crate) fn payload_key(&self) -> &[u8; PAYLOAD_KEY_SIZE] {
+    pub(crate) fn legacy_payload_key(&self) -> &PayloadKey {
         array_ref!(
             &self.0,
             STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE,
             PAYLOAD_KEY_SIZE
+        )
+    }
+
+    /// Output of the hπ random oracle
+    pub(crate) fn payload_key_seed(&self) -> &[u8; PAYLOAD_KEY_SEED_SIZE] {
+        array_ref!(
+            &self.0,
+            STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE,
+            PAYLOAD_KEY_SEED_SIZE
         )
     }
 
@@ -110,12 +122,13 @@ impl ExpandedSharedSecret {
 }
 
 pub(crate) fn expand_shared_secret(shared_secret: &[u8; 32]) -> ExpandedSharedSecret {
-    let hkdf = Hkdf::<Sha256>::new(None, shared_secret);
+    let hkdf = Hkdf::<Sha256>::new(Some(EXPANDED_SHARED_SECRET_HKDF_SALT), shared_secret);
 
     let mut output = [0u8; EXPANDED_SHARED_SECRET_LENGTH];
     // SAFETY: the length of the provided okm is within the allowed range
     #[allow(clippy::unwrap_used)]
-    hkdf.expand(HKDF_INPUT_SEED, &mut output).unwrap();
+    hkdf.expand(EXPANDED_SHARED_SECRET_HKDF_INFO, &mut output)
+        .unwrap();
 
     ExpandedSharedSecret(output)
 }
@@ -165,7 +178,7 @@ mod expanding_shared_secret {
         let expanded = expand_shared_secret(ss.as_bytes());
         assert_eq!(expanded.stream_cipher_key(), &expected_sck);
         assert_eq!(expanded.header_integrity_hmac_key(), &expected_hihk);
-        assert_eq!(expanded.payload_key(), &expected_pk);
+        assert_eq!(expanded.legacy_payload_key(), &expected_pk);
         assert_eq!(expanded.blinding_factor_bytes(), &expected_bf);
     }
 }

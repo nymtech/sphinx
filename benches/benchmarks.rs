@@ -18,12 +18,17 @@ use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use sphinx_packet::constants::{
     DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
 };
-
 use sphinx_packet::header::delays;
 use sphinx_packet::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes};
-use sphinx_packet::test_utils::fixtures::keygen;
 use sphinx_packet::SphinxPacket;
 use std::time::Duration;
+use x25519_dalek::{PublicKey, StaticSecret};
+
+fn keygen() -> (StaticSecret, PublicKey) {
+    let private_key = StaticSecret::random();
+    let public_key = PublicKey::from(&private_key);
+    (private_key, public_key)
+}
 
 fn make_packet_copy(packet: &SphinxPacket) -> SphinxPacket {
     SphinxPacket::from_bytes(&packet.to_bytes()).unwrap()

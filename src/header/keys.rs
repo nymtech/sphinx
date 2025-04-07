@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::constants::{INTEGRITY_MAC_KEY_SIZE, PAYLOAD_KEY_SIZE};
+use crate::constants::INTEGRITY_MAC_KEY_SIZE;
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::header::shared_secret::{expand_shared_secret, ExpandedSharedSecret};
 use crate::route::Node;
@@ -21,7 +21,6 @@ use x25519_dalek::{PublicKey, StaticSecret};
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
 pub type HeaderIntegrityMacKey = [u8; INTEGRITY_MAC_KEY_SIZE];
-pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 
 pub struct KeyMaterial {
     pub initial_shared_secret: PublicKey,

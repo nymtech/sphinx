@@ -27,6 +27,7 @@ use crate::header::routing::{
 };
 use crate::header::shared_secret::ExpandedSharedSecret;
 use crate::header::{ProcessedHeader, ProcessedHeaderData, SphinxHeader};
+use crate::payload::key::derive_payload_key;
 use crate::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
 use crate::utils;
 use crate::version::Version;
@@ -72,7 +73,7 @@ impl RoutingInformation {
     fn concatenate_components(self) -> Vec<u8> {
         std::iter::once(self.flag)
             .chain(self.version.to_bytes().iter().copied())
-            .chain(self.node_address.as_bytes_ref().iter().copied())
+            .chain(self.node_address.as_bytes().iter().copied())
             .chain(self.delay.to_bytes().iter().copied())
             .chain(self.header_integrity_mac.into_inner())
             .chain(self.next_routing_information.iter().copied())
@@ -215,6 +216,13 @@ impl ParsedRawRoutingInformation {
         shared_secret: PublicKey,
         expanded_shared_secret: &ExpandedSharedSecret,
     ) -> ProcessedHeader {
+        let version = self.version;
+        let payload_key = if version.expects_legacy_full_payload_keys() {
+            *expanded_shared_secret.legacy_payload_key()
+        } else {
+            derive_payload_key(expanded_shared_secret.payload_key_seed())
+        };
+
         match self.data {
             ParsedRawRoutingInformationData::ForwardHop {
                 next_hop_address,
@@ -225,8 +233,8 @@ impl ParsedRawRoutingInformation {
                 let new_shared_secret = expanded_shared_secret.blind_shared_secret(shared_secret);
 
                 ProcessedHeader {
-                    payload_key: *expanded_shared_secret.payload_key(),
-                    version: self.version,
+                    payload_key,
+                    version,
                     data: ProcessedHeaderData::ForwardHop {
                         updated_header: SphinxHeader {
                             shared_secret: new_shared_secret,
@@ -241,8 +249,8 @@ impl ParsedRawRoutingInformation {
                 destination,
                 identifier,
             } => ProcessedHeader {
-                payload_key: *expanded_shared_secret.payload_key(),
-                version: self.version,
+                payload_key,
+                version,
                 data: ProcessedHeaderData::FinalHop {
                     destination,
                     identifier,
@@ -258,6 +266,10 @@ impl ParsedRawRoutingInformation {
         shared_secret: PublicKey,
         expanded_shared_secret: &ExpandedSharedSecret,
     ) -> ProcessedHeader {
+        // legacy processing only ever used old key derivation
+        let version = self.version;
+        let payload_key = *expanded_shared_secret.legacy_payload_key();
+
         match self.data {
             ParsedRawRoutingInformationData::ForwardHop {
                 next_hop_address,
@@ -269,8 +281,8 @@ impl ParsedRawRoutingInformation {
                     expanded_shared_secret.legacy_blind_share_secret(shared_secret);
 
                 ProcessedHeader {
-                    payload_key: *expanded_shared_secret.payload_key(),
-                    version: self.version,
+                    payload_key,
+                    version,
                     data: ProcessedHeaderData::ForwardHop {
                         updated_header: SphinxHeader {
                             shared_secret: new_shared_secret,
@@ -285,8 +297,8 @@ impl ParsedRawRoutingInformation {
                 destination,
                 identifier,
             } => ProcessedHeader {
-                payload_key: *expanded_shared_secret.payload_key(),
-                version: self.version,
+                payload_key,
+                version,
                 data: ProcessedHeaderData::FinalHop {
                     destination,
                     identifier,
@@ -406,7 +418,7 @@ mod preparing_header_layer {
         let concatenated_materials: Vec<u8> = [
             vec![FORWARD_HOP],
             version.to_bytes().to_vec(),
-            node_address.as_bytes().to_vec(),
+            node_address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             inner_layer_routing.integrity_mac.as_bytes().to_vec(),
             inner_layer_routing
@@ -475,7 +487,7 @@ mod encrypting_routing_information {
         let encryption_data = [
             vec![flag],
             version.to_bytes().to_vec(),
-            address.as_bytes().to_vec(),
+            address.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             mac.as_bytes().to_vec(),
             next_routing.to_vec(),
@@ -539,7 +551,7 @@ mod parse_decrypted_routing_information {
         let data = [
             vec![flag],
             version.to_bytes().to_vec(),
-            address_fixture.as_bytes().to_vec(),
+            address_fixture.to_bytes().to_vec(),
             delay.to_bytes().to_vec(),
             integrity_mac.as_bytes().to_vec(),
             next_routing_information.to_vec(),

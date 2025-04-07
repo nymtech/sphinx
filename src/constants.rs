@@ -29,7 +29,6 @@ pub const EXPANDED_SHARED_SECRET_LENGTH: usize = crypto::STREAM_CIPHER_KEY_SIZE
     + BLINDING_FACTOR_SIZE
     + REPLAY_TAG_SIZE;
 
-pub const HKDF_INPUT_SEED: &[u8; 97] = b"Dwste mou enan moxlo arketa makru kai ena upomoxlio gia na ton topothetisw kai tha kinisw thn gh.";
 pub const STREAM_CIPHER_OUTPUT_LENGTH: usize =
     (NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE) * (MAX_PATH_LENGTH + 1);
 pub const DESTINATION_ADDRESS_LENGTH: usize = 2 * SECURITY_PARAMETER;
@@ -37,6 +36,7 @@ pub const NODE_ADDRESS_LENGTH: usize = 2 * SECURITY_PARAMETER;
 pub const IDENTIFIER_LENGTH: usize = SECURITY_PARAMETER;
 pub const INTEGRITY_MAC_KEY_SIZE: usize = SECURITY_PARAMETER;
 pub const HEADER_INTEGRITY_MAC_SIZE: usize = SECURITY_PARAMETER;
+pub const PAYLOAD_KEY_SEED_SIZE: usize = SECURITY_PARAMETER;
 pub const PAYLOAD_KEY_SIZE: usize = 192; // must be 192 because of the Lioness implementation we're using
 pub const DELAY_LENGTH: usize = 8; // how many bytes we will use to encode the delay
 pub const NODE_META_INFO_SIZE: usize =
@@ -47,6 +47,21 @@ pub const FLAG_LENGTH: usize = 1;
 pub const PAYLOAD_SIZE: usize = 1024;
 pub const VERSION_LENGTH: usize = 3; // since version is represented as 3 u8 values: major, minor and patch
                                      // we need the single byte to detect padding length
+
+#[deprecated(note = "use EXPANDED_SHARED_SECRET_HKDF_INFO instead")]
+pub const HKDF_INPUT_SEED: &[u8] = EXPANDED_SHARED_SECRET_HKDF_INFO;
+
+// content due to legacy reasons
+pub const EXPANDED_SHARED_SECRET_HKDF_INFO: &[u8] =
+    b"Dwste mou enan moxlo arketa makru kai ena upomoxlio gia na ton topothetisw kai tha kinisw thn gh.";
+
+// unfortunately for legacy compatibility reasons, we have to be used en empty salt
+// (nodes need to be able to unconditionally recover version information from the header in order to
+// decide on further processing. this value is behind the initial hkdf
+pub const EXPANDED_SHARED_SECRET_HKDF_SALT: &[u8] = b"";
+
+pub const PAYLOAD_KEY_HKDF_INFO: &[u8] = b"sphinx-payload-key-V01-CS01-HKDF:SHA256-INFO";
+pub const PAYLOAD_KEY_HKDF_SALT: &[u8] = b"sphinx-payload-key-V01-CS01-HKDF:SHA256-SALT";
 
 pub type HeaderIntegrityMacSize = U16;
 

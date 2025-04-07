@@ -56,6 +56,11 @@ removed processing and creation of packets with undefined operations
 - removed `RoutingKeys` in favour of `ExpandedSharedSecret` and added `ReplyTag`
 - type adjustments
 
+#### v0.6.0
+
+- new way of deriving `PayloadKey` that uses seed obtained from the `ExpandedSharedSecret` to reduce sizes of `SURB`s
+- API changes
+
 ### Benchmarks
 
 To run benchmarks, use:

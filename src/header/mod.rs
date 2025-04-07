@@ -15,13 +15,14 @@
 use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
-use crate::header::keys::{KeyMaterial, PayloadKey};
+use crate::header::keys::KeyMaterial;
 use crate::header::routing::{EncapsulatedRoutingInformation, ENCRYPTED_ROUTING_INFO_SIZE};
 use crate::header::shared_secret::{ExpandSecret, ExpandedSharedSecret};
 use crate::packet::ProcessedPacketData;
+use crate::payload::key::{derive_payload_key, PayloadKey, PayloadKeySeed};
 use crate::payload::Payload;
 use crate::route::{Destination, DestinationAddressBytes, Node, NodeAddressBytes, SURBIdentifier};
-use crate::version::{Version, CURRENT_VERSION, UPDATED_LEGACY_VERSION};
+use crate::version::Version;
 use crate::{Error, ErrorKind, ProcessedPacket, Result, SphinxPacket};
 use x25519_dalek::{PublicKey, StaticSecret};
 
@@ -99,44 +100,50 @@ impl ProcessedHeader {
 }
 
 impl SphinxHeader {
-    // needs client's secret key, how should we inject this?
-    // needs to deal with SURBs too at some point
-    pub fn new(
+    #[cfg(test)]
+    pub(crate) fn new_current(
         initial_secret: &StaticSecret,
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
-    ) -> (Self, Vec<PayloadKey>) {
+    ) -> BuiltHeader {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
-        Self::build_header(key_material, route, delays, destination, CURRENT_VERSION)
+        Self::build_header(
+            key_material,
+            route,
+            delays,
+            destination,
+            crate::version::CURRENT_VERSION,
+        )
     }
 
+    #[cfg(test)]
     #[deprecated]
     #[allow(deprecated)]
-    pub fn new_legacy(
+    pub(crate) fn new_legacy(
         initial_secret: &StaticSecret,
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
-    ) -> (Self, Vec<PayloadKey>) {
+    ) -> BuiltHeader {
         let key_material = keys::KeyMaterial::derive_legacy(route, initial_secret);
         Self::build_header(
             key_material,
             route,
             delays,
             destination,
-            UPDATED_LEGACY_VERSION,
+            crate::version::UPDATED_LEGACY_VERSION,
         )
     }
 
     #[allow(deprecated)]
-    pub fn new_versioned(
+    pub(crate) fn new_versioned(
         initial_secret: &StaticSecret,
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
         version: Version,
-    ) -> (Self, Vec<PayloadKey>) {
+    ) -> BuiltHeader {
         let key_material = if version.is_legacy() {
             keys::KeyMaterial::derive_legacy(route, initial_secret)
         } else {
@@ -151,29 +158,19 @@ impl SphinxHeader {
         delays: &[Delay],
         destination: &Destination,
         version: Version,
-    ) -> (Self, Vec<PayloadKey>) {
+    ) -> BuiltHeader {
         let filler_string = Filler::new(&key_material.expanded_shared_secrets[..route.len() - 1]);
-        let routing_info = Box::new(routing::EncapsulatedRoutingInformation::new(
+        let routing_info = EncapsulatedRoutingInformation::new(
             route,
             destination,
             delays,
             &key_material.expanded_shared_secrets,
             filler_string,
             version,
-        ));
+        );
 
         // encapsulate header.routing information, compute MACs
-        (
-            SphinxHeader {
-                shared_secret: key_material.initial_shared_secret,
-                routing_info,
-            },
-            key_material
-                .expanded_shared_secrets
-                .iter()
-                .map(|expanded| *expanded.payload_key())
-                .collect(),
-        )
+        BuiltHeader::new(version, key_material, routing_info)
     }
 
     // note: this method is currently removed because there's too many branches to support
@@ -389,6 +386,60 @@ impl SphinxHeader {
     }
 }
 
+pub(crate) struct BuiltHeader {
+    header: SphinxHeader,
+    version: Version,
+    expanded_secrets: Vec<ExpandedSharedSecret>,
+}
+
+impl BuiltHeader {
+    fn new(
+        version: Version,
+        key_material: KeyMaterial,
+        routing_information: EncapsulatedRoutingInformation,
+    ) -> Self {
+        BuiltHeader {
+            header: SphinxHeader {
+                shared_secret: key_material.initial_shared_secret,
+                routing_info: Box::new(routing_information),
+            },
+            version,
+            expanded_secrets: key_material.expanded_shared_secrets,
+        }
+    }
+
+    // depending on the version either use the initial hkdf output as payload keys
+    // or extract the seed and run it through another hkdf
+    pub(crate) fn derive_payload_keys(&self) -> Vec<PayloadKey> {
+        if self.version.expects_legacy_full_payload_keys() {
+            self.legacy_full_payload_keys()
+        } else {
+            self.expanded_secrets
+                .iter()
+                .map(|s| derive_payload_key(s.payload_key_seed()))
+                .collect()
+        }
+    }
+
+    pub(crate) fn legacy_full_payload_keys(&self) -> Vec<PayloadKey> {
+        self.expanded_secrets
+            .iter()
+            .map(|s| *s.legacy_payload_key())
+            .collect()
+    }
+
+    pub(crate) fn payload_key_seeds(&self) -> Vec<PayloadKeySeed> {
+        self.expanded_secrets
+            .iter()
+            .map(|s| *s.payload_key_seed())
+            .collect()
+    }
+
+    pub(crate) fn into_header(self) -> SphinxHeader {
+        self.header
+    }
+}
+
 #[cfg(test)]
 mod create_and_process_sphinx_packet_header {
     use super::*;
@@ -422,8 +473,9 @@ mod create_and_process_sphinx_packet_header {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let (sphinx_header, _) =
-            SphinxHeader::new(&initial_secret, &route, &delays, &route_destination);
+        let sphinx_header =
+            SphinxHeader::new_current(&initial_secret, &route, &delays, &route_destination)
+                .into_header();
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header.process(&node1_sk).unwrap().data {
@@ -521,8 +573,9 @@ mod create_and_process_sphinx_packet_header {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let (sphinx_header, _) =
-            SphinxHeader::new_legacy(&initial_secret, &route, &delays, &route_destination);
+        let sphinx_header =
+            SphinxHeader::new_legacy(&initial_secret, &route, &delays, &route_destination)
+                .into_header();
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
         let new_header = match sphinx_header
@@ -632,7 +685,7 @@ mod unwrap_routing_information {
                 } => {
                     assert_eq!(
                         routing_info[2..2 + NODE_ADDRESS_LENGTH],
-                        next_hop_address.as_bytes()
+                        next_hop_address.to_bytes()
                     );
                     assert_eq!(
                         routing_info
@@ -683,7 +736,8 @@ mod unwrapping_using_previously_expanded_shared_secret {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
+        let sphinx_header =
+            SphinxHeader::new_current(&initial_secret, &route, &delays, &destination).into_header();
         let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap().data {
@@ -727,7 +781,8 @@ mod unwrapping_using_previously_expanded_shared_secret {
         let average_delay = 1;
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
-        let (sphinx_header, _) = SphinxHeader::new(&initial_secret, &route, &delays, &destination);
+        let sphinx_header =
+            SphinxHeader::new_current(&initial_secret, &route, &delays, &destination).into_header();
         let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = sphinx_header.clone().process(&node1_sk).unwrap();
