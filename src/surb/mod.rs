@@ -99,7 +99,7 @@ impl SURBMaterial {
     }
 
     #[allow(non_snake_case)]
-    pub fn construct_legacy_SURB(self) -> Result<SURB> {
+    pub fn construct_SURB(self) -> Result<SURB> {
         let surb_initial_secret = StaticSecret::random();
         SURB::new(surb_initial_secret, self)
     }
@@ -223,6 +223,21 @@ impl SURB {
             first_hop_address,
             payload_keys_material,
         })
+    }
+
+    pub fn first_hop(&self) -> NodeAddressBytes {
+        self.first_hop_address
+    }
+
+    pub fn materials_count(&self) -> usize {
+        match &self.payload_keys_material {
+            PayloadKeysMaterial::DerivedKeys(keys) => keys.len(),
+            PayloadKeysMaterial::KeySeeds(seeds) => seeds.len(),
+        }
+    }
+
+    pub fn uses_key_seeds(&self) -> bool {
+        matches!(self.payload_keys_material, PayloadKeysMaterial::KeySeeds(_))
     }
 }
 

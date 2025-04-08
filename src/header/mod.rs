@@ -352,11 +352,7 @@ impl SphinxHeader {
         let shared_secret = PublicKey::from(shared_secret_bytes);
 
         // the rest are for the encapsulated routing info
-        let encapsulated_routing_info_bytes = bytes[32..HEADER_SIZE].to_vec();
-
-        let routing_info = Box::new(EncapsulatedRoutingInformation::from_bytes(
-            &encapsulated_routing_info_bytes,
-        )?);
+        let routing_info = Box::new(EncapsulatedRoutingInformation::from_bytes(&bytes[32..])?);
 
         Ok(SphinxHeader {
             shared_secret,
