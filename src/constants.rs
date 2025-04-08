@@ -55,7 +55,7 @@ pub const HKDF_INPUT_SEED: &[u8] = EXPANDED_SHARED_SECRET_HKDF_INFO;
 pub const EXPANDED_SHARED_SECRET_HKDF_INFO: &[u8] =
     b"Dwste mou enan moxlo arketa makru kai ena upomoxlio gia na ton topothetisw kai tha kinisw thn gh.";
 
-// unfortunately for legacy compatibility reasons, we have to be used en empty salt
+// unfortunately for legacy compatibility reasons, we have to be using an empty salt
 // (nodes need to be able to unconditionally recover version information from the header in order to
 // decide on further processing. this value is behind the initial hkdf
 pub const EXPANDED_SHARED_SECRET_HKDF_SALT: &[u8] = b"";
