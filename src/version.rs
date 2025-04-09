@@ -20,12 +20,16 @@ use crate::constants::VERSION_LENGTH;
 
 pub const INITIAL_LEGACY_VERSION: Version = Version(1);
 pub const UPDATED_LEGACY_VERSION: Version = Version(257);
-pub const CURRENT_VERSION: Version = Version(258);
+pub const X25519_WITH_EXPLICIT_PAYLOAD_KEYS_VERSION: Version = Version(258);
+pub const PAYLOAD_KEYS_SEEDS_VERSION: Version = Version(259);
+
+pub const CURRENT_VERSION: Version = PAYLOAD_KEYS_SEEDS_VERSION;
 
 pub const KNOWN_VERSIONS: &[Version] = &[
     INITIAL_LEGACY_VERSION,
     UPDATED_LEGACY_VERSION,
-    CURRENT_VERSION,
+    X25519_WITH_EXPLICIT_PAYLOAD_KEYS_VERSION,
+    PAYLOAD_KEYS_SEEDS_VERSION,
 ];
 
 #[derive(Debug, Copy, Clone, PartialEq)]
@@ -42,6 +46,11 @@ impl Version {
 
     pub fn is_legacy(&self) -> bool {
         self == &INITIAL_LEGACY_VERSION || self == &UPDATED_LEGACY_VERSION
+    }
+
+    // as opposed to using payload key seed to derive the keys
+    pub fn expects_legacy_full_payload_keys(&self) -> bool {
+        self.is_legacy() || self == &X25519_WITH_EXPLICIT_PAYLOAD_KEYS_VERSION
     }
 
     // extra byte comes from the legacy interpretation

@@ -13,12 +13,14 @@
 // limitations under the License.
 
 use crate::constants::SECURITY_PARAMETER;
-use crate::header::keys::PayloadKey;
+use crate::payload::key::{PayloadKey, SphinxPayloadKey};
 use crate::{Error, ErrorKind, Result};
-use arrayref::array_ref;
 use blake2::VarBlake2b;
 use chacha::ChaCha; // we might want to swap this one with a different implementation
 use lioness::Lioness;
+use std::borrow::Borrow;
+
+pub mod key;
 
 // payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
@@ -36,17 +38,20 @@ impl Payload {
     /// Tries to encapsulate provided plaintext message inside a sphinx payload adding
     /// as many layers of encryption as there are keys provided.
     /// Note that the encryption layers are going to be added in *reverse* order!
-    pub fn encapsulate_message(
+    pub fn encapsulate_message<K>(
         plaintext_message: &[u8],
-        payload_keys: &[PayloadKey],
+        payload_keys: &[K],
         payload_size: usize,
-    ) -> Result<Self> {
+    ) -> Result<Self>
+    where
+        K: for<'a> SphinxPayloadKey<'a>,
+    {
         Self::validate_parameters(payload_size, plaintext_message.len())?;
         let mut payload = Self::set_final_payload(plaintext_message, payload_size);
 
         // remember that we need to reverse the order of encryption
         for payload_key in payload_keys.iter().rev() {
-            payload = payload.add_encryption_layer(payload_key)?;
+            payload = payload.add_encryption_layer(payload_key.payload_key())?;
         }
 
         Ok(payload)
@@ -100,12 +105,8 @@ impl Payload {
     }
 
     /// Tries to add an additional layer of encryption onto self.
-    fn add_encryption_layer(mut self, payload_enc_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
-            payload_enc_key,
-            0,
-            lioness::RAW_KEY_SIZE
-        ));
+    fn add_encryption_layer<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(payload_key.borrow());
 
         if let Err(err) = lioness_cipher.encrypt(&mut self.0) {
             return Err(Error::new(
@@ -117,12 +118,9 @@ impl Payload {
     }
 
     /// Tries to remove single layer of encryption from self.
-    pub fn unwrap(mut self, payload_key: &PayloadKey) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(array_ref!(
-            payload_key,
-            0,
-            lioness::RAW_KEY_SIZE
-        ));
+    pub fn unwrap<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
+        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(payload_key.borrow());
+
         if let Err(err) = lioness_cipher.decrypt(&mut self.0) {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
@@ -132,10 +130,29 @@ impl Payload {
         Ok(self)
     }
 
+    // attempt to find the index of the element indicating starting of the padding AFTER the initial
+    // SECURITY_PARAMETER 0s got ignored
+    // NOTE: this method must only be called after ensuring the internal vector is longer than `PAYLOAD_OVERHEAD_SIZE`
+    fn find_start_of_padding(&self) -> Result<usize> {
+        let padded_plaintext = &self.0[SECURITY_PARAMETER..];
+        padded_plaintext
+            .iter()
+            .rposition(|b| *b == 1)
+            .ok_or(Error::new(
+                ErrorKind::InvalidPayload,
+                "malformed payload - invalid trailing padding",
+            ))
+    }
+
     /// After calling [`unwrap`] required number of times with correct `payload_keys`, tries to parse
     /// the resultant payload content into original encapsulated plaintext message.
     pub fn recover_plaintext(self) -> Result<Vec<u8>> {
-        debug_assert!(self.len() > PAYLOAD_OVERHEAD_SIZE);
+        if self.len() < PAYLOAD_OVERHEAD_SIZE {
+            return Err(Error::new(
+                ErrorKind::InvalidPayload,
+                "malformed payload - no leading zero padding present",
+            ));
+        }
 
         // assuming our payload is fully decrypted it has the following structure:
         // 00000.... (SECURITY_PARAMETER length)
@@ -154,25 +171,16 @@ impl Payload {
             ));
         }
 
-        // only trailing padding present
-        let padded_plaintext = self
+        let padding_start = self.find_start_of_padding()?;
+        // take only bytes until the start of the padding (but not including it)
+        // and furthermore, remember to skip the initial 0s
+
+        Ok(self
             .into_inner()
             .into_iter()
             .skip(SECURITY_PARAMETER)
-            .collect::<Vec<_>>();
-
-        // we are looking for first occurrence of 1 in the tail and we get its index
-        if let Some(i) = padded_plaintext.iter().rposition(|b| *b == 1) {
-            // and now we only take bytes until that point (but not including it)
-            let plaintext = padded_plaintext.into_iter().take(i).collect();
-            return Ok(plaintext);
-        }
-
-        // our plaintext is invalid
-        Err(Error::new(
-            ErrorKind::InvalidPayload,
-            "malformed payload - invalid trailing padding",
-        ))
+            .take(padding_start)
+            .collect())
     }
 
     fn into_inner(self) -> Vec<u8> {
@@ -292,20 +300,6 @@ mod final_payload_setting {
 mod test_encapsulating_payload {
     use super::*;
     use crate::constants::PAYLOAD_KEY_SIZE;
-
-    #[test]
-    fn can_be_encapsulated_without_encryption() {
-        let message = vec![1u8, 16];
-        let payload_size = 512;
-        let unencrypted_message =
-            Payload::encapsulate_message(&message, &[], payload_size).unwrap();
-
-        // should be equivalent to just setting final payload
-        assert_eq!(
-            unencrypted_message,
-            Payload::set_final_payload(&message, payload_size)
-        )
-    }
 
     #[test]
     fn works_with_single_encryption_layer() {

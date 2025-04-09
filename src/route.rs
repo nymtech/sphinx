@@ -136,12 +136,12 @@ impl NodeAddressBytes {
     }
 
     /// View this `NodeAddressBytes` as an array of bytes.
-    pub fn as_bytes_ref(&self) -> &[u8; NODE_ADDRESS_LENGTH] {
+    pub fn as_bytes(&self) -> &[u8; NODE_ADDRESS_LENGTH] {
         &self.0
     }
 
     /// Convert this `NodeAddressBytes` to an array of bytes.
-    pub fn as_bytes(&self) -> [u8; NODE_ADDRESS_LENGTH] {
+    pub fn to_bytes(&self) -> [u8; NODE_ADDRESS_LENGTH] {
         self.0
     }
 }

@@ -106,7 +106,7 @@ impl EncapsulatedRoutingInformation {
         route
             .iter()
             .skip(1) // we don't want the first element as person creating the packet knows the address of the first hop
-            .map(|node| node.address.as_bytes()) // we only care about the address field
+            .map(|node| node.address.to_bytes()) // we only care about the address field
             .zip(
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 expanded_shared_secrets

@@ -45,22 +45,16 @@ impl<'a> SphinxPacketBuilder<'a> {
         destination: &Destination,
         delays: &[Delay],
     ) -> Result<SphinxPacket> {
-        let (header, payload_keys) = match self.initial_secret.as_ref() {
-            Some(initial_secret) => SphinxHeader::new_versioned(
-                initial_secret,
-                route,
-                delays,
-                destination,
-                self.version,
-            ),
-            None => SphinxHeader::new_versioned(
-                &StaticSecret::random(),
-                route,
-                delays,
-                destination,
-                self.version,
-            ),
+        let initial_secret = match self.initial_secret.as_ref() {
+            Some(initial_secret) => initial_secret,
+            None => &StaticSecret::random(),
         };
+
+        let built_header =
+            SphinxHeader::new_versioned(initial_secret, route, delays, destination, self.version);
+
+        let payload_keys = built_header.derive_payload_keys();
+        let header = built_header.into_header();
 
         // no need to check if plaintext has correct length as this check is already performed in payload encapsulation
         let payload =
