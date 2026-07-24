@@ -16,7 +16,6 @@ use crate::constants::INTEGRITY_MAC_KEY_SIZE;
 use crate::crypto::STREAM_CIPHER_KEY_SIZE;
 use crate::header::shared_secret::{expand_shared_secret, ExpandedSharedSecret};
 use crate::route::Node;
-use curve25519_dalek::Scalar;
 use x25519_dalek::{PublicKey, StaticSecret};
 
 pub type StreamCipherKey = [u8; STREAM_CIPHER_KEY_SIZE];
@@ -54,41 +53,6 @@ impl KeyMaterial {
 
         Self {
             initial_shared_secret,
-            expanded_shared_secrets,
-        }
-    }
-
-    #[deprecated]
-    pub fn derive_legacy(route: &[Node], initial_secret: &StaticSecret) -> Self {
-        let initial_secret_scalar = Scalar::from_bytes_mod_order(initial_secret.to_bytes());
-
-        let initial_shared_secret =
-            curve25519_dalek::MontgomeryPoint::mul_base(&initial_secret_scalar);
-
-        let mut expanded_shared_secrets = Vec::with_capacity(route.len());
-
-        let mut accumulator = initial_secret_scalar;
-        for (i, node) in route.iter().enumerate() {
-            // pub^{a * b * ...}
-            let pk_mt = curve25519_dalek::MontgomeryPoint(node.pub_key.to_bytes());
-            let shared_key = pk_mt * accumulator;
-
-            let expanded_shared_secret = expand_shared_secret(shared_key.as_bytes());
-
-            // it's not the last iteration
-            if i != route.len() + 1 {
-                // convert the blinding factor to a raw scalar and perform multiplication without
-                // any reduction (UNSAFE since we're not in ristretto)
-                let blinding_factor_scalar =
-                    &Scalar::from_bytes_mod_order(*expanded_shared_secret.blinding_factor_bytes());
-
-                accumulator *= blinding_factor_scalar;
-            }
-
-            expanded_shared_secrets.push(expanded_shared_secret);
-        }
-        Self {
-            initial_shared_secret: PublicKey::from(initial_shared_secret.0),
             expanded_shared_secrets,
         }
     }

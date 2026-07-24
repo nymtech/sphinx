@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use rand::{CryptoRng, RngCore};
+use rand::CryptoRng;
 
 // xor produces new Vector with the XOR result
 pub fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
@@ -33,23 +33,11 @@ pub fn xor_with(a: &mut [u8], b: &[u8]) {
 
 pub fn random<R>(rng: &mut R, number: usize) -> Vec<u8>
 where
-    R: RngCore + CryptoRng,
+    R: CryptoRng,
 {
     let mut scalar_bytes = vec![0u8; number];
     rng.fill_bytes(&mut scalar_bytes);
-    scalar_bytes.to_vec()
-}
-
-#[cfg(test)]
-mod test_random {
-    use super::*;
-    use rand::rngs::OsRng;
-
-    #[test]
-    fn test_generating_specified_number_of_bytes() {
-        let random_bytes = random(&mut OsRng, 10);
-        assert_eq!(10, random_bytes.len());
-    }
+    scalar_bytes
 }
 
 #[cfg(test)]

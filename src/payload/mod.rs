@@ -15,12 +15,17 @@
 use crate::constants::SECURITY_PARAMETER;
 use crate::payload::key::{PayloadKey, SphinxPayloadKey};
 use crate::{Error, ErrorKind, Result};
-use blake2::VarBlake2b;
-use chacha::ChaCha; // we might want to swap this one with a different implementation
-use lioness::Lioness;
+use blake2::Blake2bMac;
+use chacha20::ChaCha20;
+use digest::consts::U32;
+use digest::OutputSizeUser;
+use lioness_rs::{KeyInit, Lioness};
 use std::borrow::Borrow;
 
 pub mod key;
+
+type NymLionessDigest = Blake2bMac<U32>;
+pub type NymLioness = Lioness<ChaCha20, NymLionessDigest>;
 
 // payload consists of security parameter long zero-padding, plaintext and '1' byte to indicate start of padding
 // (it can optionally be followed by zero-padding
@@ -69,7 +74,7 @@ impl Payload {
         // lioness blocksize is 32 bytes (in this implementation)
         // Technically this check shouldn't happen if you're not going to add any
         // encryption layers to the payload, but then why are you even using sphinx?
-        } else if payload_size < lioness::DIGEST_RESULT_SIZE {
+        } else if payload_size < NymLionessDigest::output_size() {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
                 "specified payload_size is smaller lioness block size",
@@ -81,9 +86,7 @@ impl Payload {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
                 format!(
-                    "too long message provided. Message was: {}B long, maximum_plaintext_length is: {}B",
-                    plaintext_len,
-                    maximum_plaintext_length
+                    "too long message provided. Message was: {plaintext_len}B long, maximum_plaintext_length is: {maximum_plaintext_length}B",
                 ),
             ));
         }
@@ -106,12 +109,12 @@ impl Payload {
 
     /// Tries to add an additional layer of encryption onto self.
     fn add_encryption_layer<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(payload_key.borrow());
+        let lioness_cipher = NymLioness::new(payload_key.borrow().into());
 
-        if let Err(err) = lioness_cipher.encrypt(&mut self.0) {
+        if let Err(err) = lioness_cipher.encrypt_block(&mut self.0) {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
-                format!("error while encrypting payload - {}", err),
+                format!("error while encrypting payload: {err}"),
             ));
         };
         Ok(self)
@@ -119,12 +122,12 @@ impl Payload {
 
     /// Tries to remove single layer of encryption from self.
     pub fn unwrap<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
-        let lioness_cipher = Lioness::<VarBlake2b, ChaCha>::new_raw(payload_key.borrow());
+        let lioness_cipher = NymLioness::new(payload_key.borrow().into());
 
-        if let Err(err) = lioness_cipher.decrypt(&mut self.0) {
+        if let Err(err) = lioness_cipher.decrypt_block(&mut self.0) {
             return Err(Error::new(
                 ErrorKind::InvalidPayload,
-                format!("error while unwrapping payload - {}", err),
+                format!("error while unwrapping payload: {err}"),
             ));
         };
         Ok(self)
@@ -470,5 +473,23 @@ mod plaintext_recovery {
         let zero_payload = Payload(vec![0u8; DEFAULT_PAYLOAD_SIZE]);
 
         assert!(zero_payload.recover_plaintext().is_err());
+    }
+
+    #[test]
+    fn lioness_output_matches_legacy_dep() {
+        let mut message = [69u8; 1000];
+        let mut message2 = message;
+        let key = [42u8; PAYLOAD_KEY_SIZE];
+
+        // generating the output with the old 'lioness' dep
+        let legacy_lioness =
+            lioness::Lioness::<blake2_08::VarBlake2b, chacha_03::ChaCha>::new_raw(&key);
+        legacy_lioness.encrypt(&mut message).unwrap();
+
+        // updated dep
+        let lioness = NymLioness::new((&key).into());
+        lioness.encrypt_block(&mut message2).unwrap();
+
+        assert_eq!(message, message2);
     }
 }

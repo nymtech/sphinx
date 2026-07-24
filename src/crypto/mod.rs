@@ -16,15 +16,8 @@ use aes::{
     cipher::{KeyIvInit, StreamCipher},
     Aes128,
 };
-use digest::{
-    block_buffer::Eager,
-    consts::U256,
-    core_api::{BlockSizeUser, BufferKindUser, CoreProxy, FixedOutputCore},
-    generic_array::GenericArray,
-    typenum::{IsLess, Le, NonZero},
-    CtOutput, HashMarker,
-};
-use hmac::{Hmac, Mac};
+use digest::CtOutput;
+use hmac::{EagerHash, Hmac, KeyInit, Mac};
 
 //type export and aliasing to keep compatibility
 pub use x25519_dalek::PublicKey;
@@ -44,11 +37,8 @@ pub fn generate_pseudorandom_bytes(
     iv: &[u8; STREAM_CIPHER_KEY_SIZE],
     length: usize,
 ) -> Vec<u8> {
-    let cipher_key = GenericArray::from_slice(&key[..]);
-    let cipher_nonce = GenericArray::from_slice(&iv[..]);
-
     // generate a random string as an output of a PRNG, which we implement using stream cipher AES_CTR
-    let mut cipher = Aes128Ctr::new(cipher_key, cipher_nonce);
+    let mut cipher = Aes128Ctr::new(key.into(), iv.into());
     let mut data = vec![0u8; length];
     cipher.apply_keystream(&mut data);
     data
@@ -57,10 +47,7 @@ pub fn generate_pseudorandom_bytes(
 /// Compute keyed hmac
 pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> HmacOutput<D>
 where
-    D: CoreProxy,
-    D::Core: HashMarker + FixedOutputCore + BufferKindUser<BufferKind = Eager> + Default + Clone,
-    <D::Core as BlockSizeUser>::BlockSize: IsLess<U256>,
-    Le<<D::Core as BlockSizeUser>::BlockSize, U256>: NonZero,
+    D: EagerHash,
 {
     #[allow(clippy::expect_used)]
     let mut hmac =

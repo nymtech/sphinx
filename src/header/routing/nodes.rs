@@ -258,54 +258,6 @@ impl ParsedRawRoutingInformation {
             },
         }
     }
-
-    #[deprecated]
-    #[allow(deprecated)]
-    pub(crate) fn legacy_into_processed_header(
-        self,
-        shared_secret: PublicKey,
-        expanded_shared_secret: &ExpandedSharedSecret,
-    ) -> ProcessedHeader {
-        // legacy processing only ever used old key derivation
-        let version = self.version;
-        let payload_key = *expanded_shared_secret.legacy_payload_key();
-
-        match self.data {
-            ParsedRawRoutingInformationData::ForwardHop {
-                next_hop_address,
-                delay,
-                new_routing_information,
-            } => {
-                // blind the shared_secret in the header
-                let new_shared_secret =
-                    expanded_shared_secret.legacy_blind_share_secret(shared_secret);
-
-                ProcessedHeader {
-                    payload_key,
-                    version,
-                    data: ProcessedHeaderData::ForwardHop {
-                        updated_header: SphinxHeader {
-                            shared_secret: new_shared_secret,
-                            routing_info: new_routing_information,
-                        },
-                        next_hop_address,
-                        delay,
-                    },
-                }
-            }
-            ParsedRawRoutingInformationData::FinalHop {
-                destination,
-                identifier,
-            } => ProcessedHeader {
-                payload_key,
-                version,
-                data: ProcessedHeaderData::FinalHop {
-                    destination,
-                    identifier,
-                },
-            },
-        }
-    }
 }
 
 impl RawRoutingInformation {

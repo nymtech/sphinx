@@ -13,7 +13,7 @@
 // limitations under the License.
 
 use crate::crypto;
-use digest::generic_array::typenum::U16;
+use digest::consts::U16;
 use sha2::Sha256;
 
 pub const SECURITY_PARAMETER: usize = 16; // k in the Sphinx paper. Measured in bytes; 128 bits.
@@ -71,7 +71,7 @@ pub type HeaderIntegrityHmacAlgorithm = Sha256;
 #[cfg(test)]
 mod tests {
     use super::*;
-    use digest::generic_array::typenum::Unsigned;
+    use digest::typenum::Unsigned;
 
     #[test]
     fn generic_type_sizes_are_consistent_with_defined_constants() {
