@@ -24,7 +24,7 @@ impl PayloadKeysMaterial {
         // a single key, and thus we can use this information in order to determine which variant we should attempt to parse
         if bytes.len() < PAYLOAD_KEY_SIZE {
             // seeds
-            if bytes.len() % PAYLOAD_KEY_SEED_SIZE != 0 {
+            if !bytes.len().is_multiple_of(PAYLOAD_KEY_SEED_SIZE) {
                 return Err(Error::new(
                     ErrorKind::InvalidSURB,
                     "bytes of invalid length provided",
@@ -42,7 +42,7 @@ impl PayloadKeysMaterial {
             Ok(PayloadKeysMaterial::KeySeeds(payload_key_seeds))
         } else {
             // full keys
-            if bytes.len() % PAYLOAD_KEY_SIZE != 0 {
+            if !bytes.len().is_multiple_of(PAYLOAD_KEY_SIZE) {
                 return Err(Error::new(
                     ErrorKind::InvalidSURB,
                     "bytes of invalid length provided",

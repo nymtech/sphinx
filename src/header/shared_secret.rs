@@ -102,12 +102,6 @@ impl ExpandedSharedSecret {
         SphinxHeader::blind_the_shared_secret(shared_secret, self.blinding_factor())
     }
 
-    #[deprecated]
-    #[allow(deprecated)]
-    pub(crate) fn legacy_blind_share_secret(&self, shared_secret: PublicKey) -> PublicKey {
-        SphinxHeader::legacy_blind_shared_secret(shared_secret, self.blinding_factor())
-    }
-
     /// Output of the h𝜏 random oracle
     pub fn replay_tag(&self) -> &[u8; REPLAY_TAG_SIZE] {
         array_ref!(

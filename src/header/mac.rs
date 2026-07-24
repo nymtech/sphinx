@@ -17,12 +17,12 @@ use crate::constants::{
 };
 use crate::crypto;
 use crate::header::keys::HeaderIntegrityMacKey;
-use digest::generic_array::GenericArray;
+use digest::array::Array;
 use subtle::{Choice, ConstantTimeEq};
 
 // In paper gamma
 #[derive(Clone, Debug)]
-pub struct HeaderIntegrityMac(GenericArray<u8, HeaderIntegrityMacSize>);
+pub struct HeaderIntegrityMac(Array<u8, HeaderIntegrityMacSize>);
 
 impl HeaderIntegrityMac {
     pub(crate) fn compute(key: &HeaderIntegrityMacKey, header_data: &[u8]) -> Self {
@@ -54,7 +54,7 @@ impl HeaderIntegrityMac {
         self.ct_eq(&recomputed_integrity_mac).into()
     }
 
-    pub fn into_inner(self) -> GenericArray<u8, HeaderIntegrityMacSize> {
+    pub fn into_inner(self) -> Array<u8, HeaderIntegrityMacSize> {
         self.0
     }
 

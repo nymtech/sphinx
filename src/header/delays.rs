@@ -123,7 +123,7 @@ fn generate_delays(number: usize, average_delay: f64) -> Vec<Delay> {
     for _ in 0..number {
         // for now I just assume we will express it in nano-seconds to have an integer
         delays.push(Delay::new_from_nanos(
-            exp.sample(&mut rand::thread_rng()).round() as u64,
+            exp.sample(&mut rand::rng()).round() as u64
         ));
     }
     delays
