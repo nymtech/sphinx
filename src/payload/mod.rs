@@ -108,7 +108,14 @@ impl Payload {
     }
 
     /// Tries to add an additional layer of encryption onto self.
-    fn add_encryption_layer<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
+    ///
+    /// Besides being used internally by [`Self::encapsulate_message`], this is also what lets a
+    /// SURB's original creator undo the layers each mix node added to a SURB reply's payload as
+    /// it transited the network: since every hop always *removes* a layer with its own key
+    /// regardless of whether the packet is a forward packet or a SURB reply, re-*adding* those
+    /// same layers (in the same, per-hop order) with the independently re-derived hop keys
+    /// exactly reverses that transit-time processing.
+    pub fn add_encryption_layer<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
         let lioness_cipher = NymLioness::new(payload_key.borrow().into());
 
         if let Err(err) = lioness_cipher.encrypt_block(&mut self.0) {

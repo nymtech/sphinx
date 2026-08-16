@@ -367,11 +367,31 @@ impl BuiltHeader {
             .collect()
     }
 
-    pub(crate) fn payload_key_seeds(&self) -> Vec<PayloadKeySeed> {
+    /// Returns the key used to add the innermost layer of payload encryption,
+    /// i.e. the layer belonging to the last hop of the route.
+    ///
+    /// This is the only payload key material a SURB may hand out to whoever uses it: the
+    /// remaining layers get added by each hop processing, and
+    /// only the SURB's original creator - who retains every derived key locally - can remove
+    /// them all again. Handing out every layer's key would let the SURB user precompute every
+    /// intermediate ciphertext and, by colluding with the last hop, deanonymize the reply route.
+    pub(crate) fn legacy_first_layer_payload_key(&self) -> PayloadKey {
+        *self.last_hop_secret().legacy_payload_key()
+    }
+
+    /// Seed variant of [`Self::legacy_first_layer_payload_key`].
+    pub(crate) fn first_layer_payload_key_seed(&self) -> PayloadKeySeed {
+        *self.last_hop_secret().payload_key_seed()
+    }
+
+    #[allow(clippy::expect_used)]
+    fn last_hop_secret(&self) -> &ExpandedSharedSecret {
+        // `build_header` already panics on an empty route (slicing `expanded_shared_secrets`
+        // by `route.len() - 1` to build the filler), so a `BuiltHeader` is never constructed
+        // with an empty `expanded_secrets` in the first place
         self.expanded_secrets
-            .iter()
-            .map(|s| *s.payload_key_seed())
-            .collect()
+            .last()
+            .expect("BuiltHeader is always constructed with a non-empty route")
     }
 
     pub(crate) fn into_header(self) -> SphinxHeader {
