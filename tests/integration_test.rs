@@ -238,7 +238,9 @@ mod converting_sphinx_packet_to_and_from_bytes {
 mod create_and_process_surb {
     use super::*;
     use sphinx_packet::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH};
+    use sphinx_packet::header::keys::KeyMaterial;
     use sphinx_packet::packet::ProcessedPacketData;
+    use sphinx_packet::payload::key::derive_payload_key;
     use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
     use sphinx_packet::surb::{SURBMaterial, SURB};
     use sphinx_packet::{
@@ -274,6 +276,20 @@ mod create_and_process_surb {
         let surb_initial_secret = StaticSecret::random();
         let surb_delays =
             delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
+
+        // the SURB's creator (the eventual receiver of the reply) is the only party that ever
+        // has both the route and the initial secret together, so it - and only it - can
+        // re-derive every hop's payload key for itself in order to undo, layer by layer, what
+        // each mix node added to the payload while relaying it back.
+        //
+        // SURBMaterial defaults to the current (seed-based) version, so hops derive their
+        // payload key from the HKDF-expanded seed rather than using the legacy full key.
+        let receiver_key_material = KeyMaterial::derive(&surb_route, &surb_initial_secret);
+        let hop_payload_keys: Vec<_> = receiver_key_material
+            .expanded_shared_secrets
+            .iter()
+            .map(|s| derive_payload_key(s.payload_key_seed()))
+            .collect();
 
         let pre_surb = SURB::new(
             surb_initial_secret,
@@ -324,12 +340,37 @@ mod create_and_process_surb {
 
         match next_sphinx_packet_2.process(&node3_sk).unwrap().data {
             ProcessedPacketData::FinalHop { payload, .. } => {
+                // at this point `payload` has been through 3 hops, each of which *added* a layer
+                // of encryption with its own key (node1's, then node2's, then node3's) on top of
+                // the single innermost layer the SURB user added with node3's key (the last hop
+                // in the route) - it is not yet the plaintext. Only the SURB's original creator,
+                // who alone knows every hop's key, can undo this.
+                //
+                // undo the 3 hops' added layers, in the reverse order they were added
+                let payload = payload
+                    .add_encryption_layer(hop_payload_keys[2])
+                    .unwrap()
+                    .add_encryption_layer(hop_payload_keys[1])
+                    .unwrap()
+                    .add_encryption_layer(hop_payload_keys[0])
+                    .unwrap();
+
+                // and finally remove the SURB user's own innermost layer, which was added with
+                // node3's (the last hop's) key
+                let payload = payload.unwrap(hop_payload_keys[2]).unwrap();
+
                 let zero_bytes = vec![0u8; SECURITY_PARAMETER];
                 let additional_padding =
                     vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - plaintext_message.len() - 1];
-                let expected_payload =
-                    [zero_bytes, plaintext_message, vec![1], additional_padding].concat();
+                let expected_payload = [
+                    zero_bytes,
+                    plaintext_message.clone(),
+                    vec![1],
+                    additional_padding,
+                ]
+                .concat();
                 assert_eq!(expected_payload, payload.as_bytes());
+                assert_eq!(plaintext_message, payload.recover_plaintext().unwrap());
             }
             _ => panic!(),
         };
