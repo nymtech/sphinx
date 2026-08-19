@@ -61,6 +61,10 @@ removed processing and creation of packets with undefined operations
 - new way of deriving `PayloadKey` that uses seed obtained from the `ExpandedSharedSecret` to reduce sizes of `SURB`s
 - API changes
 
+#### v0.7.0
+
+- updated dependencies to their most recent versions available
+
 ### Benchmarks
 
 To run benchmarks, use:
