@@ -16,6 +16,7 @@ use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH, NODE_META_INF
 use crate::crypto;
 use crate::header::shared_secret::ExpandedSharedSecret;
 use crate::{constants, utils};
+use crate::{Error, ErrorKind, Result};
 
 pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_SIZE + HEADER_INTEGRITY_MAC_SIZE;
 
@@ -23,8 +24,16 @@ pub const FILLER_STEP_SIZE_INCREASE: usize = NODE_META_INFO_SIZE + HEADER_INTEGR
 pub struct Filler(Vec<u8>);
 
 impl Filler {
-    pub(crate) fn new(expanded_shared_secrets: &[ExpandedSharedSecret]) -> Self {
-        assert!(expanded_shared_secrets.len() <= MAX_PATH_LENGTH);
+    pub(crate) fn new(expanded_shared_secrets: &[ExpandedSharedSecret]) -> Result<Self> {
+        if expanded_shared_secrets.len() > MAX_PATH_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidHeader,
+                format!(
+                    "filler for {} hops exceeds the maximum path length of {MAX_PATH_LENGTH}",
+                    expanded_shared_secrets.len()
+                ),
+            ));
+        }
         let filler_value = expanded_shared_secrets
             .iter()
             .map(|ess| ess.stream_cipher_key()) // we only want the cipher key
@@ -43,7 +52,7 @@ impl Filler {
                     Self::filler_step(filler_string_accumulator, i, pseudorandom_bytes)
                 },
             );
-        Self(filler_value)
+        Ok(Self(filler_value))
     }
 
     fn filler_step(
@@ -51,13 +60,15 @@ impl Filler {
         i: usize,
         pseudorandom_bytes: Vec<u8>,
     ) -> Vec<u8> {
-        assert_eq!(
+        // both are invariants of the fold in `new`: the PRNG output length is what `new`
+        // requested, and the accumulator grows by exactly one step per iteration
+        debug_assert_eq!(
             pseudorandom_bytes.len(),
             constants::STREAM_CIPHER_OUTPUT_LENGTH
         );
-        assert_eq!(
+        debug_assert_eq!(
             filler_string_accumulator.len(),
-            FILLER_STEP_SIZE_INCREASE * (i - 1) // make sure it has length of the previous step
+            FILLER_STEP_SIZE_INCREASE * i.saturating_sub(1) // make sure it has length of the previous step
         );
         let zero_bytes = vec![0u8; FILLER_STEP_SIZE_INCREASE];
         filler_string_accumulator.extend(&zero_bytes);
@@ -66,7 +77,9 @@ impl Filler {
         // and xor it with the current filler string
         utils::bytes::xor_with(
             &mut filler_string_accumulator,
-            &pseudorandom_bytes[pseudorandom_bytes.len() - i * FILLER_STEP_SIZE_INCREASE..],
+            &pseudorandom_bytes[pseudorandom_bytes
+                .len()
+                .saturating_sub(i * FILLER_STEP_SIZE_INCREASE)..],
         );
 
         filler_string_accumulator
@@ -94,7 +107,7 @@ mod test_creating_pseudorandom_bytes {
     #[test]
     fn with_no_keys_it_generates_empty_filler_string() {
         let expanded_shared_secret: Vec<_> = vec![];
-        let filler_string = Filler::new(&expanded_shared_secret);
+        let filler_string = Filler::new(&expanded_shared_secret).unwrap();
 
         assert_eq!(0, filler_string.0.len());
     }
@@ -106,7 +119,7 @@ mod test_creating_pseudorandom_bytes {
             .iter()
             .map(|&key| key.expand_shared_secret())
             .collect();
-        let filler_string = Filler::new(&expanded_shared_secret);
+        let filler_string = Filler::new(&expanded_shared_secret).unwrap();
 
         assert_eq!(FILLER_STEP_SIZE_INCREASE, filler_string.0.len());
     }
@@ -122,13 +135,12 @@ mod test_creating_pseudorandom_bytes {
             .iter()
             .map(|&key| key.expand_shared_secret())
             .collect();
-        let filler_string = Filler::new(&expanded_shared_secret);
+        let filler_string = Filler::new(&expanded_shared_secret).unwrap();
         assert_eq!(3 * FILLER_STEP_SIZE_INCREASE, filler_string.0.len());
     }
 
     #[test]
-    #[should_panic]
-    fn panics_with_more_keys_than_the_maximum_path_length() {
+    fn errors_with_more_keys_than_the_maximum_path_length() {
         let shared_keys: Vec<_> = std::iter::repeat_n((), constants::MAX_PATH_LENGTH + 1)
             .map(|_| PublicKey::from(&StaticSecret::random()))
             .collect();
@@ -136,7 +148,7 @@ mod test_creating_pseudorandom_bytes {
             .iter()
             .map(|&key| key.expand_shared_secret())
             .collect();
-        Filler::new(&expanded_shared_secrets);
+        assert!(Filler::new(&expanded_shared_secrets).is_err());
     }
 }
 
@@ -151,7 +163,7 @@ mod test_new_filler_bytes {
         let routing_key_2 = expanded_shared_secret_fixture();
         let routing_key_3 = expanded_shared_secret_fixture();
         let expanded_shared_secret = [routing_key_1, routing_key_2, routing_key_3];
-        let filler = Filler::new(&expanded_shared_secret);
+        let filler = Filler::new(&expanded_shared_secret).unwrap();
         assert_eq!(
             FILLER_STEP_SIZE_INCREASE * (expanded_shared_secret.len()),
             filler.0.len()
@@ -165,7 +177,7 @@ mod test_new_filler_bytes {
         let routing_key_3 = expanded_shared_secret_fixture();
         let routing_key_4 = expanded_shared_secret_fixture();
         let expanded_shared_secret = [routing_key_1, routing_key_2, routing_key_3, routing_key_4];
-        let filler = Filler::new(&expanded_shared_secret);
+        let filler = Filler::new(&expanded_shared_secret).unwrap();
         assert_eq!(
             FILLER_STEP_SIZE_INCREASE * (expanded_shared_secret.len()),
             filler.0.len()
@@ -208,6 +220,7 @@ mod test_generating_filler_bytes {
             use super::*;
 
             #[test]
+            #[cfg(debug_assertions)]
             #[should_panic]
             fn it_panics() {
                 let pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];
@@ -220,6 +233,7 @@ mod test_generating_filler_bytes {
         use super::*;
 
         #[test]
+        #[cfg(debug_assertions)]
         #[should_panic]
         fn panics_for_incorrectly_sized_pseudorandom_bytes_vector_and_accumulator_vector() {
             let pseudorandom_bytes = vec![0; 1];
@@ -227,6 +241,7 @@ mod test_generating_filler_bytes {
         }
 
         #[test]
+        #[cfg(debug_assertions)]
         #[should_panic]
         fn panics_with_incorrect_length_filler_accumulator() {
             let good_pseudorandom_bytes = vec![0; constants::STREAM_CIPHER_OUTPUT_LENGTH];

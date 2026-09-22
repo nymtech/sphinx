@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-use crate::constants::HEADER_INTEGRITY_MAC_SIZE;
+use crate::constants::{HEADER_INTEGRITY_MAC_SIZE, MAX_PATH_LENGTH};
 use crate::header::delays::Delay;
 use crate::header::filler::Filler;
 use crate::header::keys::KeyMaterial;
@@ -106,10 +106,9 @@ impl SphinxHeader {
         route: &[Node],
         delays: &[Delay],
         destination: &Destination,
-    ) -> BuiltHeader {
-        let key_material = keys::KeyMaterial::derive(route, initial_secret);
-        Self::build_header(
-            key_material,
+    ) -> Result<BuiltHeader> {
+        Self::new_versioned(
+            initial_secret,
             route,
             delays,
             destination,
@@ -123,7 +122,7 @@ impl SphinxHeader {
         delays: &[Delay],
         destination: &Destination,
         version: Version,
-    ) -> BuiltHeader {
+    ) -> Result<BuiltHeader> {
         let key_material = keys::KeyMaterial::derive(route, initial_secret);
         Self::build_header(key_material, route, delays, destination, version)
     }
@@ -134,8 +133,39 @@ impl SphinxHeader {
         delays: &[Delay],
         destination: &Destination,
         version: Version,
-    ) -> BuiltHeader {
-        let filler_string = Filler::new(&key_material.expanded_shared_secrets[..route.len() - 1]);
+    ) -> Result<BuiltHeader> {
+        let route_len = route.len();
+        if route_len == 0 {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                "tried to build a header for an empty route",
+            ));
+        }
+        if route_len > MAX_PATH_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "route of {route_len} hops exceeds the maximum path length of {MAX_PATH_LENGTH}"
+                ),
+            ));
+        }
+        if delays.len() != route_len {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "route has {route_len} hops but {} delays were provided",
+                    delays.len()
+                ),
+            ));
+        }
+        // the filler is built from every hop's secret except the last one's
+        let Some(filler_secrets) = key_material.expanded_shared_secrets.get(..route_len - 1) else {
+            return Err(Error::new(
+                ErrorKind::InvalidHeader,
+                "fewer hop secrets were derived than the route has hops",
+            ));
+        };
+        let filler_string = Filler::new(filler_secrets)?;
         let routing_info = EncapsulatedRoutingInformation::new(
             route,
             destination,
@@ -143,10 +173,10 @@ impl SphinxHeader {
             &key_material.expanded_shared_secrets,
             filler_string,
             version,
-        );
+        )?;
 
         // encapsulate header.routing information, compute MACs
-        BuiltHeader::new(version, key_material, routing_info)
+        Ok(BuiltHeader::new(version, key_material, routing_info))
     }
 
     // note: this method is currently removed because there's too many branches to support
@@ -254,7 +284,7 @@ impl SphinxHeader {
         if !self.routing_info.integrity_mac.verify(
             expanded_shared_secret.header_integrity_hmac_key(),
             self.routing_info.enc_routing_information.as_ref(),
-        ) {
+        )? {
             return Err(Error::new(
                 ErrorKind::InvalidHeader,
                 "failed to verify integrity MAC",
@@ -367,6 +397,7 @@ impl BuiltHeader {
             .collect()
     }
 
+    /// One payload key seed per hop, in route order.
     pub(crate) fn payload_key_seeds(&self) -> Vec<PayloadKeySeed> {
         self.expanded_secrets
             .iter()
@@ -413,6 +444,7 @@ mod create_and_process_sphinx_packet_header {
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
         let sphinx_header =
             SphinxHeader::new_current(&initial_secret, &route, &delays, &route_destination)
+                .unwrap()
                 .into_header();
 
         //let (new_header, next_hop_address, _) = sphinx_header.process(node1_sk).unwrap();
@@ -563,7 +595,9 @@ mod unwrapping_using_previously_expanded_shared_secret {
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
         let sphinx_header =
-            SphinxHeader::new_current(&initial_secret, &route, &delays, &destination).into_header();
+            SphinxHeader::new_current(&initial_secret, &route, &delays, &destination)
+                .unwrap()
+                .into_header();
         let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = match sphinx_header.clone().process(&node1_sk).unwrap().data {
@@ -608,7 +642,9 @@ mod unwrapping_using_previously_expanded_shared_secret {
         let delays =
             delays::generate_from_average_duration(route.len(), Duration::from_secs(average_delay));
         let sphinx_header =
-            SphinxHeader::new_current(&initial_secret, &route, &delays, &destination).into_header();
+            SphinxHeader::new_current(&initial_secret, &route, &delays, &destination)
+                .unwrap()
+                .into_header();
         let initial_secret = sphinx_header.shared_secret;
 
         let normally_unwrapped = sphinx_header.clone().process(&node1_sk).unwrap();

@@ -19,6 +19,8 @@ use aes::{
 use digest::CtOutput;
 use hmac::{EagerHash, Hmac, KeyInit, Mac};
 
+use crate::{Error, ErrorKind, Result};
+
 //type export and aliasing to keep compatibility
 pub use x25519_dalek::PublicKey;
 pub type PrivateKey = x25519_dalek::StaticSecret;
@@ -45,15 +47,18 @@ pub fn generate_pseudorandom_bytes(
 }
 
 /// Compute keyed hmac
-pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> HmacOutput<D>
+pub fn compute_keyed_hmac<D>(key: &[u8], data: &[u8]) -> Result<HmacOutput<D>>
 where
     D: EagerHash,
 {
-    #[allow(clippy::expect_used)]
-    let mut hmac =
-        Hmac::<D>::new_from_slice(key).expect("HMAC should be able to take key of any size!");
+    let mut hmac = Hmac::<D>::new_from_slice(key).map_err(|err| {
+        Error::new(
+            ErrorKind::InvalidHeader,
+            format!("failed to initialise hmac: {err}"),
+        )
+    })?;
     hmac.update(data);
-    hmac.finalize()
+    Ok(hmac.finalize())
 }
 
 #[cfg(test)]

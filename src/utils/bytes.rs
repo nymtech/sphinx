@@ -16,14 +16,16 @@ use rand::CryptoRng;
 
 // xor produces new Vector with the XOR result
 pub fn xor(a: &[u8], b: &[u8]) -> Vec<u8> {
-    assert_eq!(a.len(), b.len());
+    // every caller slices both operands to the same constant length; `zip` never reads past the
+    // shorter one, so a mismatch is a programming error rather than a runtime condition
+    debug_assert_eq!(a.len(), b.len(), "xor operands must have equal length");
 
     a.iter().zip(b.iter()).map(|(&x1, &x2)| x1 ^ x2).collect()
 }
 
 // xor_with xors assigns the result of xor to the first argument
 pub fn xor_with(a: &mut [u8], b: &[u8]) {
-    assert_eq!(a.len(), b.len());
+    debug_assert_eq!(a.len(), b.len(), "xor operands must have equal length");
 
     a.iter_mut()
         .zip(b.iter())
@@ -82,6 +84,7 @@ mod test_xor_with {
         use super::*;
 
         #[test]
+        #[cfg(debug_assertions)]
         #[should_panic]
         fn panics_for_inputs_of_different_lengths() {
             let mut a: Vec<u8> = vec![1, 2, 3];
@@ -124,6 +127,7 @@ mod test_xor {
         use super::*;
 
         #[test]
+        #[cfg(debug_assertions)]
         #[should_panic]
         fn panics_for_inputs_of_different_lengths() {
             let a: Vec<u8> = vec![1, 2, 3];

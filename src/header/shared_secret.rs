@@ -68,7 +68,11 @@ impl ExpandedSharedSecret {
 
     /// Legacy output of the hπ random oracle
     // NOTE: currently we expand it to full PRP key
-    pub(crate) fn legacy_payload_key(&self) -> &PayloadKey {
+    //
+    // Public because a SURB's original creator has to be able to re-derive every hop's payload
+    // key for itself (e.g. via `KeyMaterial::derive`) in order to remove the layers that got
+    // added to the payload as it transited the network.
+    pub fn legacy_payload_key(&self) -> &PayloadKey {
         array_ref!(
             &self.0,
             STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE,
@@ -77,7 +81,9 @@ impl ExpandedSharedSecret {
     }
 
     /// Output of the hπ random oracle
-    pub(crate) fn payload_key_seed(&self) -> &[u8; PAYLOAD_KEY_SEED_SIZE] {
+    ///
+    /// Public for the same reason as [`Self::legacy_payload_key`].
+    pub fn payload_key_seed(&self) -> &[u8; PAYLOAD_KEY_SEED_SIZE] {
         array_ref!(
             &self.0,
             STREAM_CIPHER_KEY_SIZE + INTEGRITY_MAC_KEY_SIZE,
@@ -115,14 +121,18 @@ impl ExpandedSharedSecret {
     }
 }
 
+// HKDF-SHA256 can expand to at most 255 * 32 bytes; the `expect` below relies on this.
+const _: () = assert!(EXPANDED_SHARED_SECRET_LENGTH <= 255 * 32);
+
 pub(crate) fn expand_shared_secret(shared_secret: &[u8; 32]) -> ExpandedSharedSecret {
     let hkdf = Hkdf::<Sha256>::new(Some(EXPANDED_SHARED_SECRET_HKDF_SALT), shared_secret);
 
     let mut output = [0u8; EXPANDED_SHARED_SECRET_LENGTH];
-    // SAFETY: the length of the provided okm is within the allowed range
-    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
     hkdf.expand(EXPANDED_SHARED_SECRET_HKDF_INFO, &mut output)
-        .unwrap();
+        .expect(
+        "EXPANDED_SHARED_SECRET_LENGTH is within HKDF-SHA256's output limit (const-asserted above)",
+    );
 
     ExpandedSharedSecret(output)
 }
