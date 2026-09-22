@@ -109,12 +109,11 @@ impl Payload {
 
     /// Tries to add an additional layer of encryption onto self.
     ///
-    /// Besides being used internally by [`Self::encapsulate_message`], this is also what lets a
-    /// SURB's original creator undo the layers each mix node added to a SURB reply's payload as
-    /// it transited the network: since every hop always *removes* a layer with its own key
-    /// regardless of whether the packet is a forward packet or a SURB reply, re-*adding* those
-    /// same layers (in the same, per-hop order) with the independently re-derived hop keys
-    /// exactly reverses that transit-time processing.
+    /// Besides [`Self::encapsulate_message`], this is what
+    /// [`crate::surb::SurbReplyRecovery::unseal`] uses to undo a single-seed SURB reply's
+    /// transit: each hop *removed* one layer with its own key, first hop first, so the SURB's
+    /// creator re-adds them **last hop first** and then removes the one layer the reply's
+    /// sender added with the last hop's key.
     pub fn add_encryption_layer<P: Borrow<PayloadKey>>(mut self, payload_key: P) -> Result<Self> {
         let lioness_cipher = NymLioness::new(payload_key.borrow().into());
 
@@ -154,7 +153,7 @@ impl Payload {
             ))
     }
 
-    /// After calling [`unwrap`] required number of times with correct `payload_keys`, tries to parse
+    /// After calling [`Self::unwrap`] required number of times with correct `payload_keys`, tries to parse
     /// the resultant payload content into original encapsulated plaintext message.
     pub fn recover_plaintext(self) -> Result<Vec<u8>> {
         if self.len() < PAYLOAD_OVERHEAD_SIZE {

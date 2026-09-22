@@ -51,7 +51,7 @@ impl<'a> SphinxPacketBuilder<'a> {
         };
 
         let built_header =
-            SphinxHeader::new_versioned(initial_secret, route, delays, destination, self.version);
+            SphinxHeader::new_versioned(initial_secret, route, delays, destination, self.version)?;
 
         let payload_keys = built_header.derive_payload_keys();
         let header = built_header.into_header();
@@ -70,5 +70,66 @@ impl Default for SphinxPacketBuilder<'_> {
             initial_secret: None,
             version: Default::default(),
         }
+    }
+}
+
+#[cfg(test)]
+mod degenerate_routes {
+    use super::*;
+    use crate::constants::MAX_PATH_LENGTH;
+    use crate::header::delays::Delay;
+    use crate::route::Node;
+    use crate::test_utils::{fixtures::destination_fixture, random_node};
+
+    fn delays(n: usize) -> Vec<Delay> {
+        (0..n).map(|_| Delay::new_from_nanos(10)).collect()
+    }
+
+    #[test]
+    fn empty_route_is_an_error_not_a_panic() {
+        let route: Vec<Node> = vec![];
+        let result = SphinxPacketBuilder::new().build_packet(
+            b"hello",
+            &route,
+            &destination_fixture(),
+            &delays(0),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn route_longer_than_max_path_length_is_an_error() {
+        let route: Vec<Node> = (0..=MAX_PATH_LENGTH).map(|_| random_node()).collect();
+        let result = SphinxPacketBuilder::new().build_packet(
+            b"hello",
+            &route,
+            &destination_fixture(),
+            &delays(route.len()),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn mismatched_delays_are_an_error() {
+        let route: Vec<Node> = (0..3).map(|_| random_node()).collect();
+        let result = SphinxPacketBuilder::new().build_packet(
+            b"hello",
+            &route,
+            &destination_fixture(),
+            &delays(2),
+        );
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn max_path_length_route_still_builds() {
+        let route: Vec<Node> = (0..MAX_PATH_LENGTH).map(|_| random_node()).collect();
+        let result = SphinxPacketBuilder::new().build_packet(
+            b"hello",
+            &route,
+            &destination_fixture(),
+            &delays(route.len()),
+        );
+        assert!(result.is_ok());
     }
 }

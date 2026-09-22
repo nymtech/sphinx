@@ -82,7 +82,8 @@ impl RoutingInformation {
 
     pub(super) fn encrypt(self, key: &StreamCipherKey) -> EncryptedRoutingInformation {
         let routing_info_components = self.concatenate_components();
-        assert_eq!(ENCRYPTED_ROUTING_INFO_SIZE, routing_info_components.len());
+        // `concatenate_components` joins fixed-size parts that sum to exactly this length
+        debug_assert_eq!(ENCRYPTED_ROUTING_INFO_SIZE, routing_info_components.len());
 
         let pseudorandom_bytes = crypto::generate_pseudorandom_bytes(
             key,
@@ -139,12 +140,12 @@ impl EncryptedRoutingInformation {
     pub(super) fn encapsulate_with_mac(
         self,
         key: &HeaderIntegrityMacKey,
-    ) -> EncapsulatedRoutingInformation {
-        let integrity_mac = HeaderIntegrityMac::compute(key, &self.value);
-        EncapsulatedRoutingInformation {
+    ) -> Result<EncapsulatedRoutingInformation> {
+        let integrity_mac = HeaderIntegrityMac::compute(key, &self.value)?;
+        Ok(EncapsulatedRoutingInformation {
             enc_routing_information: self,
             integrity_mac,
-        }
+        })
     }
 
     fn add_zero_padding(self) -> PaddedEncryptedRoutingInformation {
@@ -152,7 +153,8 @@ impl EncryptedRoutingInformation {
         let padded_enc_routing_info: Vec<u8> =
             self.value.iter().copied().chain(zero_bytes).collect();
 
-        assert_eq!(
+        // a fixed-size array plus a fixed number of zero bytes
+        debug_assert_eq!(
             PADDED_ENCRYPTED_ROUTING_INFO_SIZE,
             padded_enc_routing_info.len()
         );
@@ -398,14 +400,16 @@ mod preparing_header_layer {
         let expected_routing_mac = crypto::compute_keyed_hmac::<HeaderIntegrityHmacAlgorithm>(
             previous_node_routing_keys.header_integrity_hmac_key(),
             &expected_encrypted_routing_info_vec,
-        );
+        )
+        .unwrap();
         let mut expected_routing_mac = expected_routing_mac.into_bytes().to_vec();
         expected_routing_mac.truncate(HEADER_INTEGRITY_MAC_SIZE);
 
         let next_layer_routing =
             RoutingInformation::new(node_address, delay, inner_layer_routing, Version::default())
                 .encrypt(previous_node_routing_keys.stream_cipher_key())
-                .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key());
+                .encapsulate_with_mac(previous_node_routing_keys.header_integrity_hmac_key())
+                .unwrap();
 
         assert_eq!(
             expected_encrypted_routing_info_vec,

@@ -12,10 +12,16 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#![warn(clippy::expect_used)]
-#![warn(clippy::unwrap_used)]
-#![warn(clippy::todo)]
-#![warn(clippy::dbg_macro)]
+// the deny-level lint set lives in `[workspace.lints.clippy]`; tests are allowed to panic
+#![cfg_attr(
+    test,
+    allow(
+        clippy::unwrap_used,
+        clippy::expect_used,
+        clippy::panic,
+        clippy::unreachable
+    )
+)]
 
 pub mod constants;
 pub mod crypto;
@@ -37,4 +43,4 @@ pub use crate::error::{Error, ErrorKind, Result};
 pub use crate::packet::{
     builder::SphinxPacketBuilder, ProcessedPacket, ProcessedPacketData, SphinxPacket,
 };
-pub use crate::surb::{SURBMaterial, SURB};
+pub use crate::surb::{SURBMaterial, SurbReplyRecovery, SURB};

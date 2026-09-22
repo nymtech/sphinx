@@ -25,6 +25,8 @@ use crate::route::{Destination, DestinationAddressBytes, SURBIdentifier};
 use crate::utils;
 use rand::rng;
 
+use crate::{Error, ErrorKind, Result};
+
 // this is going through the following transformations:
 /*
     FinalRoutingInformation -> PaddedFinalRoutingInformation -> EncryptedPaddedFinalRoutingInformation ->
@@ -45,46 +47,66 @@ pub(super) struct FinalRoutingInformation {
 }
 
 impl FinalRoutingInformation {
-    // TODO: this should really return a Result in case the assertion failed
-    pub fn new(dest: &Destination, route_len: usize, version: Version) -> Self {
-        assert!(dest.address.as_bytes_ref().len() <= Self::max_destination_length(route_len));
+    pub fn new(dest: &Destination, route_len: usize, version: Version) -> Result<Self> {
+        if route_len == 0 || route_len > MAX_PATH_LENGTH {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "final routing information requires a route of 1 to {MAX_PATH_LENGTH} hops, got {route_len}"
+                ),
+            ));
+        }
+        let max_destination_length = Self::max_destination_length(route_len);
+        if dest.address.as_bytes_ref().len() > max_destination_length {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "destination address of {} bytes does not fit the {max_destination_length} bytes available on a {route_len}-hop route",
+                    dest.address.as_bytes_ref().len()
+                ),
+            ));
+        }
 
-        Self {
+        Ok(Self {
             flag: FINAL_HOP,
             version,
             destination: dest.address,
             identifier: dest.identifier,
-        }
+        })
     }
 
     fn max_destination_length(route_len: usize) -> usize {
-        (3 * (MAX_PATH_LENGTH - route_len) + 2) * SECURITY_PARAMETER
+        (3 * MAX_PATH_LENGTH.saturating_sub(route_len) + 2) * SECURITY_PARAMETER
     }
 
     fn max_padded_destination_identifier_length(route_len: usize) -> usize {
-        // this should evaluate to (3 * (MAX_PATH_LENGTH - route_len) + 3) * SECURITY_PARAMETER
-        ENCRYPTED_ROUTING_INFO_SIZE - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
+        ENCRYPTED_ROUTING_INFO_SIZE
+            .saturating_sub(FILLER_STEP_SIZE_INCREASE * route_len.saturating_sub(1))
     }
 
-    pub(super) fn add_padding(self, route_len: usize) -> PaddedFinalRoutingInformation {
+    pub(super) fn add_padding(self, route_len: usize) -> Result<PaddedFinalRoutingInformation> {
         // paper uses 0 bytes for this, however, we use random instead so that we would not be affected by the
         // attack on sphinx described by Kuhn et al.
-        let padding = utils::bytes::random(
-            &mut rng(),
-            ENCRYPTED_ROUTING_INFO_SIZE
-                - (FILLER_STEP_SIZE_INCREASE * (route_len - 1))
-                - FINAL_NODE_META_INFO_LENGTH,
-        );
+        let padding_len = ENCRYPTED_ROUTING_INFO_SIZE
+            .checked_sub(FILLER_STEP_SIZE_INCREASE * route_len.saturating_sub(1))
+            .and_then(|remaining| remaining.checked_sub(FINAL_NODE_META_INFO_LENGTH))
+            .ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidRouting,
+                    format!("no room for final routing information on a {route_len}-hop route"),
+                )
+            })?;
+        let padding = utils::bytes::random(&mut rng(), padding_len);
 
         // return D || I || PAD
-        PaddedFinalRoutingInformation {
+        Ok(PaddedFinalRoutingInformation {
             value: std::iter::once(self.flag)
                 .chain(self.version.to_bytes())
                 .chain(self.destination.as_bytes().iter().cloned())
                 .chain(self.identifier.iter().cloned())
                 .chain(padding.iter().cloned())
                 .collect(),
-        }
+        })
     }
 }
 
@@ -136,7 +158,7 @@ impl EncryptedPaddedFinalRoutingInformation {
         let filler_bytes: Vec<u8> = filler.into();
         debug_assert_eq!(
             filler_bytes.len(),
-            FILLER_STEP_SIZE_INCREASE * (route_len - 1)
+            FILLER_STEP_SIZE_INCREASE * route_len.saturating_sub(1)
         );
 
         let final_routing_info_vec: Vec<u8> = self.value.into_iter().chain(filler_bytes).collect();
@@ -180,7 +202,8 @@ mod test_encapsulating_final_routing_information_and_mac {
             filler,
             route.len(),
             Version::default(),
-        );
+        )
+        .unwrap();
 
         let expected_mac = HeaderIntegrityMac::compute(
             expanded_shared_secret
@@ -188,7 +211,8 @@ mod test_encapsulating_final_routing_information_and_mac {
                 .unwrap()
                 .header_integrity_hmac_key(),
             final_routing_info.enc_routing_information.as_ref(),
-        );
+        )
+        .unwrap();
         assert_eq!(
             expected_mac.into_inner(),
             final_routing_info.integrity_mac.into_inner()
@@ -213,7 +237,9 @@ mod test_encapsulating_final_routing_information {
 
         let final_routing_header =
             FinalRoutingInformation::new(&destination, route_len, Version::default())
+                .unwrap()
                 .add_padding(route_len)
+                .unwrap()
                 .encrypt(final_keys.stream_cipher_key(), route_len)
                 .combine_with_filler(filler, route_len);
 
@@ -235,7 +261,9 @@ mod test_encapsulating_final_routing_information {
 
         let final_routing_header =
             FinalRoutingInformation::new(&destination, route_len, Version::default())
+                .unwrap()
                 .add_padding(route_len)
+                .unwrap()
                 .encrypt(final_keys.stream_cipher_key(), route_len)
                 .combine_with_filler(filler, route_len);
 
@@ -257,7 +285,9 @@ mod test_encapsulating_final_routing_information {
 
         let final_routing_header =
             FinalRoutingInformation::new(&destination, route_len, Version::default())
+                .unwrap()
                 .add_padding(route_len)
+                .unwrap()
                 .encrypt(final_keys.stream_cipher_key(), route_len)
                 .combine_with_filler(filler, route_len);
 
@@ -269,7 +299,9 @@ mod test_encapsulating_final_routing_information {
         );
     }
 
+    // relies on a `debug_assert_eq!` inside `combine_with_filler`
     #[test]
+    #[cfg(debug_assertions)]
     #[should_panic]
     fn it_panics_if_it_receives_filler_different_than_filler_step_multiplied_with_i() {
         let final_keys = expanded_shared_secret_fixture();
@@ -278,7 +310,9 @@ mod test_encapsulating_final_routing_information {
         let destination = destination_fixture();
 
         FinalRoutingInformation::new(&destination, route_len, Version::default())
+            .unwrap()
             .add_padding(route_len)
+            .unwrap()
             .encrypt(final_keys.stream_cipher_key(), route_len)
             .combine_with_filler(filler, route_len);
     }

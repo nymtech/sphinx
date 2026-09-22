@@ -22,14 +22,17 @@ use std::borrow::Borrow;
 pub type PayloadKey = [u8; PAYLOAD_KEY_SIZE];
 pub type PayloadKeySeed = [u8; PAYLOAD_KEY_SEED_SIZE];
 
+// HKDF-SHA256 can expand to at most 255 * 32 bytes; the `expect` below relies on this.
+const _: () = assert!(PAYLOAD_KEY_SIZE <= 255 * 32);
+
 pub fn derive_payload_key(seed: &[u8; PAYLOAD_KEY_SEED_SIZE]) -> PayloadKey {
     let hkdf = Hkdf::<Sha256>::new(Some(PAYLOAD_KEY_HKDF_SALT), seed);
 
     let mut output = [0u8; PAYLOAD_KEY_SIZE];
 
-    // SAFETY: the length of the provided okm is within the allowed range
-    #[allow(clippy::unwrap_used)]
-    hkdf.expand(PAYLOAD_KEY_HKDF_INFO, &mut output).unwrap();
+    #[allow(clippy::expect_used)]
+    hkdf.expand(PAYLOAD_KEY_HKDF_INFO, &mut output)
+        .expect("PAYLOAD_KEY_SIZE is within HKDF-SHA256's output limit (const-asserted above)");
 
     output
 }

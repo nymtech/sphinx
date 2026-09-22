@@ -60,17 +60,36 @@ impl EncapsulatedRoutingInformation {
         expanded_shared_secrets: &[ExpandedSharedSecret],
         filler: Filler,
         version: Version,
-    ) -> Self {
-        assert_eq!(route.len(), expanded_shared_secrets.len());
-        assert_eq!(delays.len(), route.len());
-
-        let final_keys = match expanded_shared_secrets.last() {
-            Some(k) => k,
-            None => panic!("empty keys"),
+    ) -> Result<Self> {
+        if route.len() != expanded_shared_secrets.len() {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "route has {} hops but {} hop secrets were derived",
+                    route.len(),
+                    expanded_shared_secrets.len()
+                ),
+            ));
+        }
+        if delays.len() != route.len() {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                format!(
+                    "route has {} hops but {} delays were provided",
+                    route.len(),
+                    delays.len()
+                ),
+            ));
+        }
+        let Some(final_keys) = expanded_shared_secrets.last() else {
+            return Err(Error::new(
+                ErrorKind::InvalidRouting,
+                "tried to encapsulate routing information for an empty route",
+            ));
         };
 
         let encapsulated_destination_routing_info =
-            Self::for_final_hop(destination, final_keys, filler, route.len(), version);
+            Self::for_final_hop(destination, final_keys, filler, route.len(), version)?;
 
         Self::for_forward_hops(
             encapsulated_destination_routing_info,
@@ -87,9 +106,9 @@ impl EncapsulatedRoutingInformation {
         filler: Filler,
         route_len: usize,
         version: Version,
-    ) -> Self {
-        FinalRoutingInformation::new(dest, route_len, version)
-            .add_padding(route_len) // add padding to obtain correct destination length
+    ) -> Result<Self> {
+        FinalRoutingInformation::new(dest, route_len, version)?
+            .add_padding(route_len)? // add padding to obtain correct destination length
             .encrypt(expanded_shared_secret.stream_cipher_key(), route_len) // encrypt with the key of final node (in our case service provider)
             .combine_with_filler(filler, route_len) // add filler to get header of correct length
             .encapsulate_with_mac(expanded_shared_secret.header_integrity_hmac_key())
@@ -102,7 +121,7 @@ impl EncapsulatedRoutingInformation {
         route: &[Node], // [Mix0, Mix1, Mix2, ..., Mix_{v-1}, Mix_v]
         expanded_shared_secrets: &[ExpandedSharedSecret], // [Keys0, Keys1, Keys2, ..., Keys_{v-1}, Keys_v]
         version: Version,
-    ) -> Self {
+    ) -> Result<Self> {
         route
             .iter()
             .skip(1) // we don't want the first element as person creating the packet knows the address of the first hop
@@ -111,13 +130,13 @@ impl EncapsulatedRoutingInformation {
                 // we need both route (i.e. address field) and corresponding keys of the PREVIOUS hop
                 expanded_shared_secrets
                     .iter()
-                    .take(expanded_shared_secrets.len() - 1), // we don't want last element - it was already used to encrypt the destination
+                    .take(expanded_shared_secrets.len().saturating_sub(1)), // we don't want last element - it was already used to encrypt the destination
             )
-            .zip(delays.iter().take(delays.len() - 1)) // no need for the delay for the final node
+            .zip(delays.iter().take(delays.len().saturating_sub(1))) // no need for the delay for the final node
             .rev() // we are working from the 'inside'
             // we should be getting here
             // [(Mix_v, Keys_{v-1}, Delay_{v-1}), (Mix_{v-1}, Keys_{v-2}, Delay_{v-2}), ..., (Mix2, Keys1, Delay1), (Mix1, Keys0, Delay0)]
-            .fold(
+            .try_fold(
                 // we start from the already created encrypted final routing info and mac for the destination
                 // (encrypted with Keys_v)
                 encapsulated_destination_routing_info,
@@ -187,8 +206,7 @@ mod encapsulating_all_routing_information {
     };
 
     #[test]
-    #[should_panic]
-    fn it_panics_if_route_is_longer_than_keys() {
+    fn it_errors_if_route_is_longer_than_keys() {
         let route = [random_node(), random_node(), random_node()];
         let destination = destination_fixture();
         let delays = [
@@ -202,19 +220,19 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(
+        assert!(EncapsulatedRoutingInformation::new(
             &route,
             &destination,
             &delays,
             &keys,
             filler,
             Version::default(),
-        );
+        )
+        .is_err());
     }
 
     #[test]
-    #[should_panic]
-    fn it_panics_if_keys_are_longer_than_route() {
+    fn it_errors_if_keys_are_longer_than_route() {
         let route = [random_node(), random_node()];
         let destination = destination_fixture();
         let delays = [
@@ -229,20 +247,20 @@ mod encapsulating_all_routing_information {
         ];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(
+        assert!(EncapsulatedRoutingInformation::new(
             &route,
             &destination,
             &delays,
             &keys,
             filler,
             Version::default(),
-        );
+        )
+        .is_err());
     }
 
     #[test]
-    #[should_panic]
-    fn it_panics_if_empty_route_is_provided() {
-        let route = vec![];
+    fn it_errors_if_empty_route_is_provided() {
+        let route: Vec<Node> = vec![];
         let destination = destination_fixture();
         let delays = [
             Delay::new_from_nanos(10),
@@ -254,21 +272,21 @@ mod encapsulating_all_routing_information {
             expanded_shared_secret_fixture(),
             expanded_shared_secret_fixture(),
         ];
-        let filler = filler_fixture(route.len() - 1);
+        let filler = filler_fixture(0);
 
-        EncapsulatedRoutingInformation::new(
+        assert!(EncapsulatedRoutingInformation::new(
             &route,
             &destination,
             &delays,
             &keys,
             filler,
             Version::default(),
-        );
+        )
+        .is_err());
     }
 
     #[test]
-    #[should_panic]
-    fn it_panic_if_empty_keys_are_provided() {
+    fn it_errors_if_empty_keys_are_provided() {
         let route = [random_node(), random_node()];
         let destination = destination_fixture();
         let delays = [
@@ -279,14 +297,15 @@ mod encapsulating_all_routing_information {
         let keys = vec![];
         let filler = filler_fixture(route.len() - 1);
 
-        EncapsulatedRoutingInformation::new(
+        assert!(EncapsulatedRoutingInformation::new(
             &route,
             &destination,
             &delays,
             &keys,
             filler,
             Version::default(),
-        );
+        )
+        .is_err());
     }
 }
 
@@ -322,7 +341,8 @@ mod encapsulating_forward_routing_information {
             filler,
             route.len(),
             Version::default(),
-        );
+        )
+        .unwrap();
 
         let destination_routing_info_copy = destination_routing_info.clone();
 
@@ -351,7 +371,8 @@ mod encapsulating_forward_routing_information {
             &route,
             &routing_keys,
             Version::default(),
-        );
+        )
+        .unwrap();
 
         let layer_1_routing = RoutingInformation::new(
             route[2].address,
@@ -360,7 +381,8 @@ mod encapsulating_forward_routing_information {
             Version::default(),
         )
         .encrypt(routing_keys[1].stream_cipher_key())
-        .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key());
+        .encapsulate_with_mac(routing_keys[1].header_integrity_hmac_key())
+        .unwrap();
 
         // this is what first mix should receive
         let layer_0_routing = RoutingInformation::new(
@@ -370,7 +392,8 @@ mod encapsulating_forward_routing_information {
             Version::default(),
         )
         .encrypt(routing_keys[0].stream_cipher_key())
-        .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key());
+        .encapsulate_with_mac(routing_keys[0].header_integrity_hmac_key())
+        .unwrap();
 
         assert_eq!(
             routing_info.enc_routing_information.as_ref().to_vec(),

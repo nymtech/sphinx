@@ -12,6 +12,13 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#![allow(
+    clippy::unwrap_used,
+    clippy::expect_used,
+    clippy::panic,
+    clippy::unreachable
+)]
+
 extern crate sphinx_packet;
 
 use sphinx_packet::header::delays;
@@ -237,142 +244,241 @@ mod converting_sphinx_packet_to_and_from_bytes {
 #[cfg(test)]
 mod create_and_process_surb {
     use super::*;
-    use sphinx_packet::constants::{DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH};
-    use sphinx_packet::header::keys::KeyMaterial;
-    use sphinx_packet::packet::ProcessedPacketData;
-    use sphinx_packet::payload::key::derive_payload_key;
-    use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes};
-    use sphinx_packet::surb::{SURBMaterial, SURB};
-    use sphinx_packet::{
-        constants::{NODE_ADDRESS_LENGTH, PAYLOAD_SIZE, SECURITY_PARAMETER},
-        packet::builder::DEFAULT_PAYLOAD_SIZE,
+    use sphinx_packet::constants::{
+        DESTINATION_ADDRESS_LENGTH, IDENTIFIER_LENGTH, NODE_ADDRESS_LENGTH,
     };
+    use sphinx_packet::packet::builder::DEFAULT_PAYLOAD_SIZE;
+    use sphinx_packet::packet::{ProcessedPacket, ProcessedPacketData};
+    use sphinx_packet::route::{DestinationAddressBytes, NodeAddressBytes, SURBIdentifier};
+    use sphinx_packet::surb::{SURBMaterial, SurbReplyRecovery, SURB};
+    use sphinx_packet::version::{PAYLOAD_KEYS_SEEDS_VERSION, SINGLE_SEED_SURB_VERSION};
     use std::time::Duration;
-    use x25519_dalek::StaticSecret;
+
+    fn node(address_byte: u8, pub_key: PublicKey) -> Node {
+        Node::new(
+            NodeAddressBytes::from_bytes([address_byte; NODE_ADDRESS_LENGTH]),
+            pub_key,
+        )
+    }
+
+    /// Processes `packet` as `node_sk`'s hop, asserting it is a forward hop towards `expected_next`.
+    fn forward(packet: SphinxPacket, node_sk: &StaticSecret, expected_next: u8) -> SphinxPacket {
+        match packet.process(node_sk).unwrap().data {
+            ProcessedPacketData::ForwardHop {
+                next_hop_packet,
+                next_hop_address,
+                ..
+            } => {
+                assert_eq!(
+                    NodeAddressBytes::from_bytes([expected_next; NODE_ADDRESS_LENGTH]),
+                    next_hop_address
+                );
+                next_hop_packet
+            }
+            ProcessedPacketData::FinalHop { .. } => panic!("expected a forward hop"),
+        }
+    }
+
+    fn final_hop(packet: SphinxPacket, node_sk: &StaticSecret) -> ProcessedPacket {
+        let processed = packet.process(node_sk).unwrap();
+        assert!(
+            matches!(processed.data, ProcessedPacketData::FinalHop { .. }),
+            "expected the final hop"
+        );
+        processed
+    }
 
     #[test]
-    fn returns_the_correct_data_at_each_hop_for_route_of_3_mixnodes() {
-        let (node1_sk, node1_pk) = keygen();
-        let node1 = Node {
-            address: NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH]),
-            pub_key: node1_pk,
-        };
-        let (node2_sk, node2_pk) = keygen();
-        let node2 = Node {
-            address: NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
-            pub_key: node2_pk,
-        };
-        let (node3_sk, node3_pk) = keygen();
-        let node3 = Node {
-            address: NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
-            pub_key: node3_pk,
-        };
-
-        let surb_route = vec![node1, node2, node3];
-        let surb_destination = Destination {
-            address: DestinationAddressBytes::from_bytes([3u8; DESTINATION_ADDRESS_LENGTH]),
-            identifier: [4u8; IDENTIFIER_LENGTH],
-        };
-        let surb_initial_secret = StaticSecret::random();
-        let surb_delays =
-            delays::generate_from_average_duration(surb_route.len(), Duration::from_secs(3));
-
-        // the SURB's creator (the eventual receiver of the reply) is the only party that ever
-        // has both the route and the initial secret together, so it - and only it - can
-        // re-derive every hop's payload key for itself in order to undo, layer by layer, what
-        // each mix node added to the payload while relaying it back.
-        //
-        // SURBMaterial defaults to the current (seed-based) version, so hops derive their
-        // payload key from the HKDF-expanded seed rather than using the legacy full key.
-        let receiver_key_material = KeyMaterial::derive(&surb_route, &surb_initial_secret);
-        let hop_payload_keys: Vec<_> = receiver_key_material
-            .expanded_shared_secrets
-            .iter()
-            .map(|s| derive_payload_key(s.payload_key_seed()))
-            .collect();
-
-        let pre_surb = SURB::new(
-            surb_initial_secret,
-            SURBMaterial::new(surb_route, surb_delays.clone(), surb_destination),
-        )
-        .unwrap();
-
-        let plaintext_message = vec![42u8; 160];
-        let (surb_sphinx_packet, first_hop) =
-            SURB::use_surb(pre_surb, &plaintext_message, DEFAULT_PAYLOAD_SIZE).unwrap();
-
-        assert_eq!(
-            first_hop,
-            NodeAddressBytes::from_bytes([5u8; NODE_ADDRESS_LENGTH])
+    fn seeded_surb_reply_is_recovered_by_the_last_hop() {
+        // legacy (259): mix, mix, gateway - the gateway is the final hop and gets the plaintext
+        let (mix1_sk, mix1_pk) = keygen();
+        let (mix2_sk, mix2_pk) = keygen();
+        let (gateway_sk, gateway_pk) = keygen();
+        let route = vec![node(1, mix1_pk), node(2, mix2_pk), node(3, gateway_pk)];
+        let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+        let destination = Destination::new(
+            DestinationAddressBytes::from_bytes([9u8; DESTINATION_ADDRESS_LENGTH]),
+            [0u8; IDENTIFIER_LENGTH],
         );
 
-        let next_sphinx_packet_1 = match surb_sphinx_packet.process(&node1_sk).unwrap().data {
-            ProcessedPacketData::ForwardHop {
-                next_hop_packet,
-                next_hop_address,
-                delay,
-            } => {
-                assert_eq!(
-                    NodeAddressBytes::from_bytes([4u8; NODE_ADDRESS_LENGTH]),
-                    next_hop_address
-                );
-                assert_eq!(delay, surb_delays[0]);
-                next_hop_packet
-            }
-            _ => panic!(),
+        let surb = SURBMaterial::new(route, delays, destination, PAYLOAD_KEYS_SEEDS_VERSION)
+            .construct_SURB()
+            .unwrap();
+        assert_eq!(3, surb.materials_count());
+        let surb = SURB::from_bytes(&surb.to_bytes()).unwrap();
+
+        let message = vec![42u8; 160];
+        let (packet, first_hop) = surb.use_surb(&message, DEFAULT_PAYLOAD_SIZE).unwrap();
+        assert_eq!(
+            NodeAddressBytes::from_bytes([1u8; NODE_ADDRESS_LENGTH]),
+            first_hop
+        );
+
+        let packet = forward(packet, &mix1_sk, 2);
+        let packet = forward(packet, &mix2_sk, 3);
+        let processed = final_hop(packet, &gateway_sk);
+        assert_eq!(PAYLOAD_KEYS_SEEDS_VERSION, processed.version);
+        let ProcessedPacketData::FinalHop { payload, .. } = processed.data else {
+            unreachable!()
         };
+        assert_eq!(message, payload.recover_plaintext().unwrap());
+    }
 
-        let next_sphinx_packet_2 = match next_sphinx_packet_1.process(&node2_sk).unwrap().data {
-            ProcessedPacketData::ForwardHop {
-                next_hop_packet,
-                next_hop_address,
-                delay,
-            } => {
-                assert_eq!(
-                    NodeAddressBytes::from_bytes([2u8; NODE_ADDRESS_LENGTH]),
-                    next_hop_address
-                );
-                assert_eq!(delay, surb_delays[1]);
-                next_hop_packet
-            }
-            _ => panic!(),
+    #[test]
+    fn single_seed_surb_reply_is_recovered_by_its_creator() {
+        // new (260): mix, mix, gateway, recipient - the recipient is the final hop; the gateway
+        // only ever sees a forward hop
+        let (mix1_sk, mix1_pk) = keygen();
+        let (mix2_sk, mix2_pk) = keygen();
+        let (gateway_sk, gateway_pk) = keygen();
+        let (recipient_sk, recipient_pk) = keygen();
+        let route = vec![
+            node(1, mix1_pk),
+            node(2, mix2_pk),
+            node(3, gateway_pk),
+            node(4, recipient_pk),
+        ];
+        let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+        let identifier: SURBIdentifier = [7u8; IDENTIFIER_LENGTH];
+        let destination = Destination::new(
+            DestinationAddressBytes::from_bytes([4u8; DESTINATION_ADDRESS_LENGTH]),
+            identifier,
+        );
+
+        let (surb, recovery) =
+            SURBMaterial::new(route, delays, destination, SINGLE_SEED_SURB_VERSION)
+                .construct_recoverable_SURB()
+                .unwrap();
+        assert_eq!(1, surb.materials_count());
+        assert_eq!(4, recovery.num_hops());
+        assert_eq!(&identifier, recovery.identifier());
+
+        // the SURB travels to the reply's sender as bytes, the recovery stays with the creator
+        let surb = SURB::from_bytes(&surb.to_bytes()).unwrap();
+        let recovery = SurbReplyRecovery::from_bytes(&recovery.to_bytes()).unwrap();
+
+        let message = vec![42u8; 160];
+        let (packet, first_hop) = surb.use_surb(&message, DEFAULT_PAYLOAD_SIZE).unwrap();
+        assert_eq!(
+            NodeAddressBytes::from_bytes([1u8; NODE_ADDRESS_LENGTH]),
+            first_hop
+        );
+
+        let packet = forward(packet, &mix1_sk, 2);
+        let packet = forward(packet, &mix2_sk, 3);
+        let packet = forward(packet, &gateway_sk, 4);
+        let processed = final_hop(packet, &recipient_sk);
+        assert_eq!(SINGLE_SEED_SURB_VERSION, processed.version);
+        let ProcessedPacketData::FinalHop {
+            identifier: received_identifier,
+            payload,
+            ..
+        } = processed.data
+        else {
+            unreachable!()
         };
+        // the identifier is what the recipient looks the recovery material up by
+        assert_eq!(identifier, received_identifier);
+        assert_eq!(message, recovery.recover_plaintext(payload).unwrap());
+    }
 
-        match next_sphinx_packet_2.process(&node3_sk).unwrap().data {
-            ProcessedPacketData::FinalHop { payload, .. } => {
-                // at this point `payload` has been through 3 hops, each of which *added* a layer
-                // of encryption with its own key (node1's, then node2's, then node3's) on top of
-                // the single innermost layer the SURB user added with node3's key (the last hop
-                // in the route) - it is not yet the plaintext. Only the SURB's original creator,
-                // who alone knows every hop's key, can undo this.
-                //
-                // undo the 3 hops' added layers, in the reverse order they were added
-                let payload = payload
-                    .add_encryption_layer(hop_payload_keys[2])
-                    .unwrap()
-                    .add_encryption_layer(hop_payload_keys[1])
-                    .unwrap()
-                    .add_encryption_layer(hop_payload_keys[0])
-                    .unwrap();
+    #[test]
+    fn single_seed_surb_reply_is_not_plaintext_at_the_final_hop_without_recovery() {
+        let (mix_sk, mix_pk) = keygen();
+        let (recipient_sk, recipient_pk) = keygen();
+        let route = vec![node(1, mix_pk), node(2, recipient_pk)];
+        let delays = delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+        let destination = Destination::new(
+            DestinationAddressBytes::from_bytes([2u8; DESTINATION_ADDRESS_LENGTH]),
+            [7u8; IDENTIFIER_LENGTH],
+        );
+        let (surb, _recovery) =
+            SURBMaterial::new(route, delays, destination, SINGLE_SEED_SURB_VERSION)
+                .construct_recoverable_SURB()
+                .unwrap();
 
-                // and finally remove the SURB user's own innermost layer, which was added with
-                // node3's (the last hop's) key
-                let payload = payload.unwrap(hop_payload_keys[2]).unwrap();
-
-                let zero_bytes = vec![0u8; SECURITY_PARAMETER];
-                let additional_padding =
-                    vec![0u8; PAYLOAD_SIZE - SECURITY_PARAMETER - plaintext_message.len() - 1];
-                let expected_payload = [
-                    zero_bytes,
-                    plaintext_message.clone(),
-                    vec![1],
-                    additional_padding,
-                ]
-                .concat();
-                assert_eq!(expected_payload, payload.as_bytes());
-                assert_eq!(plaintext_message, payload.recover_plaintext().unwrap());
-            }
-            _ => panic!(),
+        let (packet, _) = surb.use_surb(&[42u8; 160], DEFAULT_PAYLOAD_SIZE).unwrap();
+        let packet = forward(packet, &mix_sk, 2);
+        let ProcessedPacketData::FinalHop { payload, .. } = final_hop(packet, &recipient_sk).data
+        else {
+            unreachable!()
         };
+        assert!(payload.recover_plaintext().is_err());
+    }
+
+    /// Relays `packet` through every forward hop in `hops` (hop `i` sits at address `i + 1`)
+    /// and processes the final hop with `recipient_sk`, returning the delivered payload.
+    fn deliver(
+        packet: SphinxPacket,
+        hops: &[&StaticSecret],
+        recipient_sk: &StaticSecret,
+    ) -> sphinx_packet::payload::Payload {
+        let mut packet = packet;
+        for (i, hop_sk) in hops.iter().enumerate() {
+            packet = forward(packet, hop_sk, (i + 2) as u8);
+        }
+        match final_hop(packet, recipient_sk).data {
+            ProcessedPacketData::FinalHop { payload, .. } => payload,
+            ProcessedPacketData::ForwardHop { .. } => {
+                unreachable!("final_hop already asserted a final hop")
+            }
+        }
+    }
+
+    #[test]
+    fn single_seed_surb_reply_is_recovered_on_a_max_length_route() {
+        use sphinx_packet::constants::MAX_PATH_LENGTH;
+
+        // 3 mixes + gateway + recipient = MAX_PATH_LENGTH: the route 260 traffic will actually
+        // use, and the one on which the final-hop header padding is smallest
+        let (mix1_sk, mix1_pk) = keygen();
+        let (mix2_sk, mix2_pk) = keygen();
+        let (mix3_sk, mix3_pk) = keygen();
+        let (gateway_sk, gateway_pk) = keygen();
+        let (recipient_sk, recipient_pk) = keygen();
+        let hops = [&mix1_sk, &mix2_sk, &mix3_sk, &gateway_sk];
+
+        // two SURBs for the same route, so one's reply can be tried against the other's material
+        let material = || {
+            let route = vec![
+                node(1, mix1_pk),
+                node(2, mix2_pk),
+                node(3, mix3_pk),
+                node(4, gateway_pk),
+                node(5, recipient_pk),
+            ];
+            assert_eq!(MAX_PATH_LENGTH, route.len());
+            let delays =
+                delays::generate_from_average_duration(route.len(), Duration::from_millis(10));
+            let destination = Destination::new(
+                DestinationAddressBytes::from_bytes([5u8; DESTINATION_ADDRESS_LENGTH]),
+                [9u8; IDENTIFIER_LENGTH],
+            );
+            SURBMaterial::new(route, delays, destination, SINGLE_SEED_SURB_VERSION)
+        };
+        let (surb_a, recovery_a) = material().construct_recoverable_SURB().unwrap();
+        let (surb_b, recovery_b) = material().construct_recoverable_SURB().unwrap();
+        assert_eq!(1, surb_a.materials_count());
+        assert_eq!(MAX_PATH_LENGTH, recovery_a.num_hops());
+        assert_eq!(MAX_PATH_LENGTH, recovery_b.num_hops());
+        // same identifier, different initial secrets - so different hop seeds
+        assert_eq!(recovery_a.identifier(), recovery_b.identifier());
+        assert_ne!(recovery_a.to_bytes(), recovery_b.to_bytes());
+
+        let message = vec![42u8; 160];
+
+        // a reply through A cannot be unsealed with B's material, and the mismatch is detected
+        let (packet, _) = surb_a.use_surb(&message, DEFAULT_PAYLOAD_SIZE).unwrap();
+        let sealed = deliver(packet, &hops, &recipient_sk);
+        assert!(recovery_b.recover_plaintext(sealed).is_err());
+
+        // a reply through B is recovered with B's material after a full-length transit
+        let (packet, first_hop) = surb_b.use_surb(&message, DEFAULT_PAYLOAD_SIZE).unwrap();
+        assert_eq!(
+            NodeAddressBytes::from_bytes([1u8; NODE_ADDRESS_LENGTH]),
+            first_hop
+        );
+        let sealed = deliver(packet, &hops, &recipient_sk);
+        assert_eq!(message, recovery_b.recover_plaintext(sealed).unwrap());
     }
 }

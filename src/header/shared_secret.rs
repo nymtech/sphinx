@@ -121,14 +121,18 @@ impl ExpandedSharedSecret {
     }
 }
 
+// HKDF-SHA256 can expand to at most 255 * 32 bytes; the `expect` below relies on this.
+const _: () = assert!(EXPANDED_SHARED_SECRET_LENGTH <= 255 * 32);
+
 pub(crate) fn expand_shared_secret(shared_secret: &[u8; 32]) -> ExpandedSharedSecret {
     let hkdf = Hkdf::<Sha256>::new(Some(EXPANDED_SHARED_SECRET_HKDF_SALT), shared_secret);
 
     let mut output = [0u8; EXPANDED_SHARED_SECRET_LENGTH];
-    // SAFETY: the length of the provided okm is within the allowed range
-    #[allow(clippy::unwrap_used)]
+    #[allow(clippy::expect_used)]
     hkdf.expand(EXPANDED_SHARED_SECRET_HKDF_INFO, &mut output)
-        .unwrap();
+        .expect(
+        "EXPANDED_SHARED_SECRET_LENGTH is within HKDF-SHA256's output limit (const-asserted above)",
+    );
 
     ExpandedSharedSecret(output)
 }

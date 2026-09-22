@@ -16,8 +16,7 @@ A [Sphinx](https://cypherpunks.ca/~iang/pubs/Sphinx_Oakland09.pdf) packet implem
 
 ### Versioning
 
-Whilst this crate hasn't been strictly following the semver versioning conventions, the following changes have been
-made:
+Whilst this crate hasn't been strictly following the semver versioning conventions, the following changes have been made:
 
 #### v0.1.0
 
@@ -33,9 +32,7 @@ fixes uses of undefined scalar multiplications and transitions to using pure x25
 
 #### v0.3.0
 
-allows using the library with either the v0.2.0 or v0.1.1 crypto (for backwards compatibility reasons). it also changes
-the public API to expose version information which has further been reinterpreted to no longer map to the semver version
-of this library
+allows using the library with either the v0.2.0 or v0.1.1 crypto (for backwards compatibility reasons). it also changes the public API to expose version information which has further been reinterpreted to no longer map to the semver version of this library
 
 #### v0.3.1
 
@@ -51,8 +48,7 @@ removed processing and creation of packets with undefined operations
 
 #### v0.5.0
 
-- temporarily restored processing and creation of packets with undefined operations as additional breaking changes had
-  to be added to v0.3.2 release
+- temporarily restored processing and creation of packets with undefined operations as additional breaking changes had to be added to v0.3.2 release
 - removed `RoutingKeys` in favour of `ExpandedSharedSecret` and added `ReplyTag`
 - type adjustments
 
@@ -65,6 +61,12 @@ removed processing and creation of packets with undefined operations
 
 - updated dependencies to their most recent versions available
 
+#### v0.8.0
+
+- new packet Version (`260`) whose SURBs hand out only the last hop's payload-key seed and return a `SurbReplyRecovery` that only the creator (now the route's final hop) can unseal the reply with, while `259` SURBs stay byte-identical to 0.7.0, `258` leaves the SURB module
+- `SURBMaterial::new` takes the version explicitly
+- every panic in the header-construction chain becomes a `Result`
+
 ### Benchmarks
 
 To run benchmarks, use:
@@ -73,8 +75,7 @@ To run benchmarks, use:
 cargo bench
 ```
 
-Rust benchmarks run the operation multiple times to give a consistent output and report back in the number of
-nanoseconds (billionths of a second) per iteration. `1000000000 / result` gives you the number of operations per second.
+Rust benchmarks run the operation multiple times to give a consistent output and report back in the number of nanoseconds (billionths of a second) per iteration. `1000000000 / result` gives you the number of operations per second.
 
 For later reference, on Dave's i7 Dell XPS-13 (2018) laptop (our test reference machine :)) output is as follows.
 
@@ -86,6 +87,6 @@ test tests::bench_process ... bench:     157.322 us/iter
 * `1000000 / 386.348` = ~2588 packet creations per second
 * `1000000 / 157.322` = ~6356 packet unwrappings per second
 
+### Acknowledgments
 
-### Acknowledgments 
-This code has received partial funding from the Next Generation Internet POINTER programme of the European Commission, as part of the Horizon 2020 Research and Innovation Programme, under Grant Agreement Nº  871528.
+This code has received partial funding from the Next Generation Internet POINTER programme of the European Commission, as part of the Horizon 2020 Research and Innovation Programme, under Grant Agreement Nº 871528.
